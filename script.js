@@ -52,77 +52,54 @@ function getAjudante(id) { return loadData(DB_KEYS.AJUDANTES).find(a => String(a
 function getAtividade(id) { return loadData(DB_KEYS.ATIVIDADES).find(a => String(a.id) === String(id)); }
 function getMinhaEmpresa(){ return loadData(DB_KEYS.MINHA_EMPRESA); }
 
-// --- INTELIGÊNCIA DE CÁLCULO (NOVA) ---
-
+// --- INTELEGÊNCIA DE CÁLCULO DE FROTA ---
 /**
- * Calcula métricas avançadas do veículo.
- * Retorna um objeto com:
- * - mediaMensalKmL: Eficiência de combustível no mês específico.
- * - custoKmGeral: Custo total por KM (considerando manutenção, pneus, etc) em todo histórico.
+ * Calcula a média histórica de consumo (KM/L) de um veículo
+ * baseada em todos os lançamentos feitos até hoje.
  */
-function calcularMetricasVeiculo(placa, dataReferencia) {
-    const ops = loadData(DB_KEYS.OPERACOES).filter(o => o.veiculoPlaca === placa);
-    const despesasGerais = loadData(DB_KEYS.DESPESAS_GERAIS).filter(d => d.veiculoPlaca === placa);
+function calcularMediaHistoricaVeiculo(placa) {
+    const todasOps = loadData(DB_KEYS.OPERACOES).filter(op => op.veiculoPlaca === placa);
+    
+    let totalKmAcumulado = 0;
+    let totalLitrosAbastecidos = 0;
 
-    // 1. CÁLCULO DA MÉDIA DE COMBUSTÍVEL DO MÊS (KM/L)
-    const refDate = new Date(dataReferencia + 'T00:00:00');
-    const mesRef = refDate.getMonth();
-    const anoRef = refDate.getFullYear();
-
-    const opsMes = ops.filter(o => {
-        const d = new Date(o.data + 'T00:00:00');
-        return d.getMonth() === mesRef && d.getFullYear() === anoRef;
-    });
-
-    let kmMes = 0;
-    let litrosMes = 0;
-
-    opsMes.forEach(o => {
-        kmMes += (Number(o.kmRodado) || 0);
-        if (o.combustivel > 0 && o.precoLitro > 0) {
-            litrosMes += (Number(o.combustivel) / Number(o.precoLitro));
+    todasOps.forEach(op => {
+        // Soma KM
+        if(op.kmRodado) totalKmAcumulado += Number(op.kmRodado);
+        
+        // Soma Litros (Se houve abastecimento neste dia)
+        // Se abasteceu R$ 500,00 a R$ 5,00/L = 100 Litros entraram no tanque
+        if (op.combustivel > 0 && op.precoLitro > 0) {
+            totalLitrosAbastecidos += (Number(op.combustivel) / Number(op.precoLitro));
         }
     });
 
-    // Se não tiver dados suficientes no mês, tenta pegar a média geral do veículo para não quebrar o calculo
-    let mediaKmL = (litrosMes > 0) ? (kmMes / litrosMes) : 0;
-    if (mediaKmL === 0) {
-        // Fallback: média geral histórica
-        let kG = 0, lG = 0;
-        ops.forEach(o => {
-            kG += (Number(o.kmRodado) || 0);
-            if(o.combustivel > 0 && o.precoLitro > 0) lG += (o.combustivel/o.precoLitro);
-        });
-        if(lG > 0) mediaKmL = kG / lG;
-    }
-    
-    // Proteção contra divisão por zero se for o primeiro lançamento
-    if (mediaKmL === 0) mediaKmL = 1; // Evita erro, assume 1km/l temporariamente
+    // Evita divisão por zero
+    if (totalLitrosAbastecidos === 0) return 0;
 
-    // 2. CÁLCULO DO CUSTO GERAL POR KM (R$/KM) - Histórico Completo
-    // Soma: Combustivel + Comissao + Pedagios + Ajudantes + Despesas Gerais do Veículo
-    let custoTotalVida = 0;
-    let kmTotalVida = 0;
-
-    ops.forEach(o => {
-        kmTotalVida += (Number(o.kmRodado) || 0);
-        const ajudantesCost = (o.ajudantes || []).reduce((s,a)=>s+(Number(a.diaria)||0),0);
-        custoTotalVida += (Number(o.combustivel)||0) + (Number(o.comissao)||0) + (Number(o.despesas)||0) + ajudantesCost;
-    });
-
-    despesasGerais.forEach(d => {
-        custoTotalVida += (Number(d.valor)||0);
-    });
-
-    const custoPorKmGeral = kmTotalVida > 0 ? (custoTotalVida / kmTotalVida) : 0;
-
-    return {
-        mediaMensalKmL: mediaKmL,
-        custoKmGeral: custoPorKmGeral,
-        kmTotalVida: kmTotalVida,
-        totalLitrosMes: litrosMes
-    };
+    // Retorna KM/L (Ex: 3.5 km/l)
+    return totalKmAcumulado / totalLitrosAbastecidos; 
 }
+
+/**
+ * Calcula o custo estimado de combustível para UMA operação específica
+ * baseada na média histórica do veículo e no KM que ele rodou naquele dia.
+ */
+function calcularCustoConsumoViagem(op) {
+    const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca);
+    
+    // Se o veículo não tem média (nunca abasteceu ou rodou), não conseguimos estimar custo
+    if (mediaKmL === 0 || !op.kmRodado || !op.precoLitro) return 0;
+
+    // Litros que o caminhão "bebeu" para rodar essa distância
+    const litrosConsumidos = Number(op.kmRodado) / mediaKmL;
+    
+    // Custo financeiro desses litros
+    const custoEstimado = litrosConsumidos * Number(op.precoLitro);
+    
+    return custoEstimado;
+}
+
 
 // --- FORMATTERS ---
 function formatCPF_CNPJ(value) {
@@ -714,17 +691,20 @@ function renderOperacaoTable() {
         const atividade = getAtividade(op.atividadeId)?.nome || 'N/A';
         const totalDiarias = (op.ajudantes || []).reduce((s,a)=> s + (Number(a.diaria)||0), 0);
         
-        // CALCULO INTELIGENTE DE CUSTO
-        const metricas = calcularMetricasVeiculo(op.veiculoPlaca, op.data);
-        const mediaVeiculo = metricas.mediaMensalKmL;
-        let custoCombustivelEstimado = 0;
-        if (mediaVeiculo > 0 && op.kmRodado > 0 && op.precoLitro > 0) {
-            const litrosEstimados = op.kmRodado / mediaVeiculo;
-            custoCombustivelEstimado = litrosEstimados * op.precoLitro;
+        // --- CÁLCULO DO LÍQUIDO DIÁRIO USANDO MÉDIA HISTÓRICA ---
+        // 1. Descobrir média histórica do veículo
+        const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca);
+        
+        // 2. Estimar custo do combustível para ESTA viagem
+        let custoDieselEstimado = 0;
+        if (mediaKmL > 0 && op.kmRodado > 0 && op.precoLitro > 0) {
+            const litrosEstimados = Number(op.kmRodado) / mediaKmL;
+            custoDieselEstimado = litrosEstimados * Number(op.precoLitro);
         }
 
-        // CUSTO OPERACIONAL (COMISSÃO + PEDAGIO + AJUDANTES + COMBUSTIVEL ESTIMADO)
-        const custosOperacionais = (op.comissao||0) + totalDiarias + (op.despesas||0) + custoCombustivelEstimado;
+        // 3. Subtrair do faturamento (Custo Operacional Estimado)
+        //    Note que NÃO subtraímos op.combustivel (que é o abastecimento do tanque cheio)
+        const custosOperacionais = (op.comissao||0) + totalDiarias + (op.despesas||0) + custoDieselEstimado;
         const liquido = op.faturamento - custosOperacionais;
 
         const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
@@ -752,26 +732,33 @@ function viewOperacaoDetails(id) {
     const atividade = getAtividade(op.atividadeId)?.nome || 'N/A';
     const totalDiarias = (op.ajudantes || []).reduce((s,a)=> s + (Number(a.diaria)||0), 0);
     
-    // CÁLCULO INTELIGENTE DE CUSTO
-    const metricas = calcularMetricasVeiculo(op.veiculoPlaca, op.data);
-    const mediaVeiculo = metricas.mediaMensalKmL;
-    const custoKmGeral = metricas.custoKmGeral;
-
-    let custoCombustivelEstimado = 0;
+    // --- CÁLCULOS DE CUSTO ---
+    const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca);
+    let custoDieselEstimado = 0;
     let litrosEstimados = 0;
-    let infoConsumo = '';
+    let infoConsumoHTML = '';
 
-    if (mediaVeiculo > 0 && op.kmRodado > 0 && op.precoLitro > 0) {
-        litrosEstimados = op.kmRodado / mediaVeiculo;
-        custoCombustivelEstimado = litrosEstimados * op.precoLitro;
-        infoConsumo = `<p><strong>MÉDIA CONSUMO DO MÊS:</strong> ${mediaVeiculo.toFixed(2)} KM/L</p>
-                       <p><strong>CONSUMO ESTIMADO NESTA VIAGEM:</strong> ${litrosEstimados.toFixed(2)} LITROS (${formatCurrency(custoCombustivelEstimado)})</p>`;
+    if (mediaKmL > 0 && op.kmRodado > 0 && op.precoLitro > 0) {
+        litrosEstimados = Number(op.kmRodado) / mediaKmL;
+        custoDieselEstimado = litrosEstimados * Number(op.precoLitro);
+        
+        infoConsumoHTML = `
+            <div class="modal-operation-block">
+                <p><strong>MÉDIA HISTÓRICA DO VEÍCULO:</strong> ${mediaKmL.toFixed(2)} KM/L</p>
+                <p><strong>CONSUMO ESTIMADO NA VIAGEM:</strong> ${litrosEstimados.toFixed(1)} L</p>
+                <p><strong>CUSTO DIESEL (CALCULADO):</strong> ${formatCurrency(custoDieselEstimado)}</p>
+            </div>
+        `;
     } else {
-        infoConsumo = `<p style="color:orange; font-size:0.8rem;">DADOS INSUFICIENTES PARA CALCULAR MÉDIA DE CONSUMO</p>`;
+        infoConsumoHTML = `<p style="font-size:0.8rem; color:orange;">DADOS INSUFICIENTES PARA CALCULAR CONSUMO (NECESSÁRIO HISTÓRICO DE ABASTECIMENTOS E KM)</p>`;
     }
-    
-    const custosViagemTotal = (op.comissao||0) + totalDiarias + (op.despesas||0) + custoCombustivelEstimado;
-    const liquidoTotal = op.faturamento - custosViagemTotal;
+
+    // Líquido Operacional
+    const custosOperacionais = (op.comissao||0) + totalDiarias + (op.despesas||0) + custoDieselEstimado;
+    const liquidoOperacional = op.faturamento - custosOperacionais;
+
+    // Abastecimento Real (Caixa)
+    const abastecimentoReal = op.combustivel || 0;
 
     const ajudantesHtml = (op.ajudantes || []).map(a=>{
         const aj = getAjudante(a.id) || {};
@@ -785,15 +772,21 @@ function viewOperacaoDetails(id) {
             <p><strong>CONTRATANTE:</strong> ${contratante}</p>
             <p><strong>ATIVIDADE:</strong> ${atividade}</p>
             <p><strong>FATURAMENTO:</strong> ${formatCurrency(op.faturamento)}</p>
+            
             <hr style="margin:10px 0; border:0; border-top:1px solid #eee;">
+            
             <p><strong>COMISSÃO MOTORISTA:</strong> ${formatCurrency(op.comissao||0)}</p>
-            <p><strong>ABASTECIMENTO REAL (REF):</strong> ${formatCurrency(op.combustivel||0)}</p>
             <p><strong>PEDÁGIOS:</strong> ${formatCurrency(op.despesas||0)}</p>
             <p><strong>TOTAL DE DIÁRIAS (AJUDANTES):</strong> ${formatCurrency(totalDiarias)}</p>
+            <p><strong>ABASTECIMENTO NO DIA (CAIXA):</strong> ${formatCurrency(abastecimentoReal)}</p>
+
+            ${infoConsumoHTML}
+
             <hr style="margin:10px 0; border:0; border-top:1px solid #eee;">
-            ${infoConsumo}
-            <p><strong>CUSTO GERAL DO KM (VIDA ÚTIL):</strong> ${formatCurrency(custoKmGeral)} / KM</p>
-            <p style="margin-top:8px; font-size:1.1rem;"><strong>LUCRO LÍQUIDO (CALCULADO):</strong> ${formatCurrency(liquidoTotal)}</p>
+
+            <p style="font-size:1.1rem;"><strong>RESULTADO OPERACIONAL (LUCRO):</strong> <span style="color:${liquidoOperacional>=0?'var(--success-color)':'var(--danger-color)'}">${formatCurrency(liquidoOperacional)}</span></p>
+            <p style="font-size:0.8rem; color:#666;">(FATURAMENTO - CUSTOS DA VIAGEM, INCLUINDO DIESEL ESTIMADO)</p>
+
             <div style="margin-top:10px;">
                 <strong>AJUDANTES:</strong>
                 <ul style="margin-top:6px;">${ajudantesHtml}</ul>
@@ -886,17 +879,15 @@ function showOperationDetails(date) {
         const ajudantesHtml = (op.ajudantes||[]).map(a=> `<li>${(getAjudante(a.id)?.nome)||'ID:'+a.id} — ${formatCurrency(Number(a.diaria)||0)}</li>`).join('') || '<li>NENHUM</li>';
         const totalDiarias = (op.ajudantes||[]).reduce((s,a)=>s+(Number(a.diaria)||0),0);
         
-        // CALCULO INTELIGENTE PARA O MODAL DO CALENDARIO TAMBEM
-        const metricas = calcularMetricasVeiculo(op.veiculoPlaca, op.data);
-        const mediaVeiculo = metricas.mediaMensalKmL;
-        
-        let custoCombustivelEstimado = 0;
-        if (mediaVeiculo > 0 && op.kmRodado > 0 && op.precoLitro > 0) {
-            const litrosEstimados = op.kmRodado / mediaVeiculo;
-            custoCombustivelEstimado = litrosEstimados * op.precoLitro;
+        // CÁLCULO INTELIGENTE (O MESMO DA TABELA PRINCIPAL)
+        const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca);
+        let custoDieselEstimado = 0;
+        if (mediaKmL > 0 && op.kmRodado > 0 && op.precoLitro > 0) {
+            const litrosEstimados = Number(op.kmRodado) / mediaKmL;
+            custoDieselEstimado = litrosEstimados * Number(op.precoLitro);
         }
 
-        const custosViagem = (op.comissao||0) + totalDiarias + (op.despesas||0) + custoCombustivelEstimado;
+        const custosViagem = (op.comissao||0) + totalDiarias + (op.despesas||0) + custoDieselEstimado;
         const liquido = op.faturamento - custosViagem;
 
         html += `<div class="card" style="margin-bottom:10px;">
@@ -904,11 +895,8 @@ function showOperationDetails(date) {
             <p><strong>VEÍCULO:</strong> ${op.veiculoPlaca}</p>
             <p><strong>CONTRATANTE:</strong> ${getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ}</p>
             <p><strong>FATURAMENTO:</strong> ${formatCurrency(op.faturamento)}</p>
-            <p><strong>COMISSÃO/DIÁRIA:</strong> ${formatCurrency(op.comissao||0)}</p>
-            <p><strong>PEDÁGIOS:</strong> ${formatCurrency(op.despesas||0)}</p>
-            <p><strong>TOTAL DIÁRIAS AJUDANTES:</strong> ${formatCurrency(totalDiarias)}</p>
-            <p style="font-size:0.85rem; color:#666;">MÉDIA ESTIMADA: ${mediaVeiculo.toFixed(2)} KM/L -> CUSTO COMB.: ${formatCurrency(custoCombustivelEstimado)}</p>
-            <p style="font-weight:700;color:${liquido>=0?'var(--success-color)':'var(--danger-color)'}">LÍQUIDO (DIA): ${formatCurrency(liquido)}</p>
+            <p style="font-size:0.9rem; color:#555;">MÉDIA VEÍCULO: ${mediaKmL.toFixed(2)} KM/L (CUSTO DIESEL EST.: ${formatCurrency(custoDieselEstimado)})</p>
+            <p style="font-weight:700;color:${liquido>=0?'var(--success-color)':'var(--danger-color)'}">LUCRO OPERACIONAL: ${formatCurrency(liquido)}</p>
             <div><strong>AJUDANTES:</strong><ul>${ajudantesHtml}</ul></div>
             <div style="text-align:right;">
                 <button class="btn-action edit-btn" onclick="editOperacaoItem(${op.id})"><i class="fas fa-edit"></i> EDITAR</button>
@@ -930,10 +918,10 @@ function updateDashboardStats() {
     
     const totalFaturamento = opsMes.reduce((s,o)=>s+o.faturamento,0);
     
-    // DASHBOARD: FLUXO DE CAIXA REAL (O QUE SAIU DO BOLSO)
+    // DASHBOARD: FLUXO DE CAIXA REAL (O QUE SAIU DO BOLSO NA BOMBA)
+    // No dashboard geral, mantemos o fluxo de caixa para controle financeiro de "quanto dinheiro tenho".
     const custoOp = opsMes.reduce((s,o)=> {
         const diarias = (o.ajudantes||[]).reduce((ss,a)=>ss+(Number(a.diaria)||0),0);
-        // Aqui usamos o COMBUSTIVEL REAL abastecido, pois é fluxo de caixa
         return s + (o.comissao||0) + diarias + (o.combustivel||0) + (o.despesas||0);
     }, 0);
 
@@ -962,7 +950,6 @@ function renderCharts() {
     const dataLucro = [];
     const dataKm = [];
 
-    // Histórico total
     let totalReceitaHistorica = 0;
     ops.forEach(o => totalReceitaHistorica += (o.faturamento || 0));
     document.getElementById('receitaTotalHistorico').textContent = formatCurrency(totalReceitaHistorica);
@@ -1115,34 +1102,35 @@ function gerarRelatorio(e) {
         return true;
     });
 
+    // VARIÁVEIS TOTAIS
     let receitaTotal = 0;
     let custoMotoristas = 0;
     let custoAjudantes = 0;
-    let custoCombustivel = 0;
-    let totalLitros = 0;
-    let custoOutrosOp = 0;
-    let kmTotal = 0;
+    let custoPedagios = 0;
+    let custoDieselEstimadoTotal = 0; // Soma dos custos estimados viagem a viagem
+    let kmTotalNoPeriodo = 0;
 
     ops.forEach(op => {
         receitaTotal += (op.faturamento || 0);
         custoMotoristas += (op.comissao || 0);
-        custoCombustivel += (op.combustivel || 0);
-        custoOutrosOp += (op.despesas || 0);
-        kmTotal += (op.kmRodado || 0);
-        if(op.combustivel && op.precoLitro) totalLitros += (op.combustivel/op.precoLitro);
+        custoPedagios += (op.despesas || 0);
+        kmTotalNoPeriodo += (op.kmRodado || 0);
         if (op.ajudantes) op.ajudantes.forEach(a => custoAjudantes += (Number(a.diaria) || 0));
+
+        // Custo Diesel desta operação específica (Estimado)
+        const media = calcularMediaHistoricaVeiculo(op.veiculoPlaca);
+        if(media > 0 && op.kmRodado > 0 && op.precoLitro > 0) {
+            custoDieselEstimadoTotal += (Number(op.kmRodado) / media) * Number(op.precoLitro);
+        }
     });
 
     let custoGeral = despesasGerais.reduce((acc, d) => acc + (d.valor || 0), 0);
-    const gastosTotais = custoMotoristas + custoAjudantes + custoCombustivel + custoOutrosOp + custoGeral;
+    
+    const gastosTotais = custoMotoristas + custoAjudantes + custoDieselEstimadoTotal + custoPedagios + custoGeral;
     const lucroLiquido = receitaTotal - gastosTotais;
 
-    const receitaPorKm = kmTotal > 0 ? receitaTotal / kmTotal : 0;
-    const custoPorKm = kmTotal > 0 ? gastosTotais / kmTotal : 0;
-    const lucroPorKm = kmTotal > 0 ? lucroLiquido / kmTotal : 0;
-    const autonomiaMedia = totalLitros > 0 ? kmTotal / totalLitros : 0;
-
-    const textoWhatsapp = `*RELATÓRIO LOGIMASTER*\nPERÍODO: ${ini.toLocaleDateString('pt-BR')} A ${fim.toLocaleDateString('pt-BR')}\n\n*FINANCEIRO:*\nRECEITA: ${formatCurrency(receitaTotal)}\nGASTOS: ${formatCurrency(gastosTotais)}\n*LUCRO LÍQUIDO: ${formatCurrency(lucroLiquido)}*\n\n*AUTONOMIA:*\nKM TOTAL: ${kmTotal} KM\nCONSUMO MÉDIO: ${autonomiaMedia.toFixed(2)} KM/L`;
+    // TEXTO ZAP
+    const textoWhatsapp = `*RELATÓRIO LOGIMASTER*\nPERÍODO: ${ini.toLocaleDateString('pt-BR')} A ${fim.toLocaleDateString('pt-BR')}\n\n*FINANCEIRO:*\nRECEITA: ${formatCurrency(receitaTotal)}\nGASTOS: ${formatCurrency(gastosTotais)}\n*LUCRO LÍQUIDO: ${formatCurrency(lucroLiquido)}*\n\n*DETALHES:*\nCOMBUSTÍVEL (ESTIMADO): ${formatCurrency(custoDieselEstimadoTotal)}\nMOTORISTAS/AJUDANTES: ${formatCurrency(custoMotoristas + custoAjudantes)}\nOUTROS: ${formatCurrency(custoPedagios + custoGeral)}\n\nKM TOTAL: ${kmTotalNoPeriodo} KM`;
 
     const btnZap = document.getElementById('btnWhatsappReport');
     if(btnZap) {
@@ -1162,35 +1150,21 @@ function gerarRelatorio(e) {
                     <h2 style="color:var(--success-color);">${formatCurrency(receitaTotal)}</h2>
                 </div>
                 <div style="background:#ffebee; padding:15px; border-radius:8px; border:1px solid #ffcdd2;">
-                    <h4>GASTOS TOTAIS</h4>
+                    <h4>GASTOS TOTAIS (OPERACIONAIS)</h4>
                     <h2 style="color:var(--danger-color);">${formatCurrency(gastosTotais)}</h2>
                 </div>
             </div>
             <h4 style="border-left:4px solid var(--primary-color); padding-left:10px; margin-bottom:10px; background:#f0f0f0; padding:5px;">DETALHAMENTO DE GASTOS</h4>
             <table class="report-table" style="width:100%; border-collapse:collapse; font-size:0.9rem; margin-bottom:20px;">
-                <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">COMBUSTÍVEL</td><td style="text-align:right; color:var(--danger-color); font-weight:bold;">${formatCurrency(custoCombustivel)}</td></tr>
+                <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">COMBUSTÍVEL (ESTIMADO PELO KM)</td><td style="text-align:right; color:var(--danger-color); font-weight:bold;">${formatCurrency(custoDieselEstimadoTotal)}</td></tr>
                 <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">PAGAMENTO MOTORISTAS (COMISSÕES)</td><td style="text-align:right; color:var(--danger-color);">${formatCurrency(custoMotoristas)}</td></tr>
                 <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">PAGAMENTO AJUDANTES (DIÁRIAS)</td><td style="text-align:right; color:var(--danger-color);">${formatCurrency(custoAjudantes)}</td></tr>
-                <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">PEDÁGIOS</td><td style="text-align:right; color:var(--danger-color);">${formatCurrency(custoOutrosOp)}</td></tr>
+                <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">PEDÁGIOS</td><td style="text-align:right; color:var(--danger-color);">${formatCurrency(custoPedagios)}</td></tr>
                 <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">DESPESAS GERAIS/ADMINISTRATIVAS</td><td style="text-align:right; color:var(--danger-color);">${formatCurrency(custoGeral)}</td></tr>
             </table>
             <div style="margin-top:20px; padding:15px; background:#e0f7fa; border-radius:8px; text-align:center; border:1px solid #b2ebf2;">
                 <h3>RESULTADO LÍQUIDO: <span style="color:${lucroLiquido>=0?'green':'red'}">${formatCurrency(lucroLiquido)}</span></h3>
             </div>
-            <h4 style="border-left:4px solid var(--warning-color); padding-left:10px; margin-top:20px; margin-bottom:10px; background:#f0f0f0; padding:5px;">AUTONOMIA E PERFORMANCE</h4>
-            <p style="font-size:0.9rem; color:#666;">QUILOMETRAGEM TOTAL: <strong>${kmTotal} KM</strong> | LITROS ESTIMADOS: <strong>${totalLitros.toFixed(1)} L</strong></p>
-            <table style="width:100%; margin-top:10px; text-align:center; border:1px solid #eee;">
-                <thead style="background:#f9f9f9;">
-                    <tr><th style="padding:10px;">AUTONOMIA MÉDIA</th><th style="padding:10px;">CUSTO TOTAL / KM</th><th style="padding:10px;">LUCRO / KM</th></tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td style="color:blue; font-weight:bold; font-size:1.1rem; padding:10px;">${autonomiaMedia.toFixed(2)} KM/L</td>
-                        <td style="color:red; font-weight:bold; font-size:1.1rem; padding:10px;">${formatCurrency(custoPorKm)}</td>
-                        <td style="color:green; font-weight:bold; font-size:1.1rem; padding:10px;">${formatCurrency(lucroPorKm)}</td>
-                    </tr>
-                </tbody>
-            </table>
             <div style="margin-top:30px; font-size:0.7rem; text-align:center; color:#aaa;">GERADO POR LOGIMASTER EM ${new Date().toLocaleString()}</div>
         </div>
     `;
@@ -1461,10 +1435,12 @@ function setupInputFormattingListeners() {
     if (minhaCNPJ) minhaCNPJ.addEventListener('blur', e=> e.target.value = formatCPF_CNPJ(e.target.value));
     const minhaTel = document.getElementById('minhaEmpresaTelefone');
     if (minhaTel) minhaTel.addEventListener('input', e=> e.target.value = formatPhoneBr(e.target.value));
+
     const contratanteCNPJ = document.getElementById('contratanteCNPJ');
     if (contratanteCNPJ) contratanteCNPJ.addEventListener('blur', e=> e.target.value = formatCPF_CNPJ(e.target.value));
     const contratanteTel = document.getElementById('contratanteTelefone');
     if (contratanteTel) contratanteTel.addEventListener('input', e=> e.target.value = formatPhoneBr(e.target.value));
+
     const motoristaTel = document.getElementById('motoristaTelefone');
     if (motoristaTel) motoristaTel.addEventListener('input', e=> e.target.value = formatPhoneBr(e.target.value));
     const motoristaPix = document.getElementById('motoristaPix');
@@ -1472,6 +1448,7 @@ function setupInputFormattingListeners() {
         motoristaPix.addEventListener('input', ()=> document.getElementById('motoristaPixTipo').textContent = 'TIPO: ' + detectPixType(motoristaPix.value));
         document.getElementById('btnMotoristaPixCopy').addEventListener('click', ()=> copyToClipboard(motoristaPix.value));
     }
+
     const ajudanteTel = document.getElementById('ajudanteTelefone');
     if (ajudanteTel) ajudanteTel.addEventListener('input', e=> e.target.value = formatPhoneBr(e.target.value));
     const ajudantePix = document.getElementById('ajudantePix');
@@ -1479,8 +1456,15 @@ function setupInputFormattingListeners() {
         ajudantePix.addEventListener('input', ()=> document.getElementById('ajudantePixTipo').textContent = 'TIPO: ' + detectPixType(ajudantePix.value));
         document.getElementById('btnAjudantePixCopy').addEventListener('click', ()=> copyToClipboard(ajudantePix.value));
     }
+
+    const contratanteTel2 = document.getElementById('contratanteTelefone');
+    if (contratanteTel2) contratanteTel2.addEventListener('input', e=> e.target.value = formatPhoneBr(e.target.value));
+
+    // ouvindo seleção de ajudantes para pedir diária
     const selAjud = document.getElementById('selectAjudantesOperacao');
     if (selAjud) selAjud.addEventListener('change', handleAjudanteSelectionChange);
+
+    // NOVO: Toggle de cursos especiais
     const selCurso = document.getElementById('motoristaTemCurso');
     if (selCurso) selCurso.addEventListener('change', toggleCursoInput);
 }
