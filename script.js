@@ -34,7 +34,7 @@ const MOCK_DESPESAS_GERAIS = [];
 const MOCK_EMPRESA = {};
 const MOCK_ATIVIDADES = [];
 
-// Inicializa dados vazios
+// Inicializa dados vazios se não existirem
 if (!loadData(DB_KEYS.MOTORISTAS).length) saveData(DB_KEYS.MOTORISTAS, MOCK_MOTORISTAS);
 if (!loadData(DB_KEYS.VEICULOS).length) saveData(DB_KEYS.VEICULOS, MOCK_VEICULOS);
 if (!loadData(DB_KEYS.CONTRATANTES).length) saveData(DB_KEYS.CONTRATANTES, MOCK_CONTRATANTES);
@@ -52,27 +52,76 @@ function getAjudante(id) { return loadData(DB_KEYS.AJUDANTES).find(a => String(a
 function getAtividade(id) { return loadData(DB_KEYS.ATIVIDADES).find(a => String(a.id) === String(id)); }
 function getMinhaEmpresa(){ return loadData(DB_KEYS.MINHA_EMPRESA); }
 
-// --- NOVA FUNÇÃO INTELIGENTE: CALCULAR MÉDIA DE CONSUMO (KM/L) DO VEÍCULO ---
-function calcularMediaVeiculo(placa) {
-    const ops = loadData(DB_KEYS.OPERACOES).filter(op => op.veiculoPlaca === placa);
-    
-    let totalKm = 0;
-    let totalLitros = 0;
+// --- INTELIGÊNCIA DE CÁLCULO (NOVA) ---
 
-    ops.forEach(op => {
-        // Somamos KM rodado
-        if (op.kmRodado) totalKm += Number(op.kmRodado);
-        
-        // Somamos Litros (Baseado no valor abastecido / preço litro)
-        if (op.combustivel > 0 && op.precoLitro > 0) {
-            totalLitros += (Number(op.combustivel) / Number(op.precoLitro));
+/**
+ * Calcula métricas avançadas do veículo.
+ * Retorna um objeto com:
+ * - mediaMensalKmL: Eficiência de combustível no mês específico.
+ * - custoKmGeral: Custo total por KM (considerando manutenção, pneus, etc) em todo histórico.
+ */
+function calcularMetricasVeiculo(placa, dataReferencia) {
+    const ops = loadData(DB_KEYS.OPERACOES).filter(o => o.veiculoPlaca === placa);
+    const despesasGerais = loadData(DB_KEYS.DESPESAS_GERAIS).filter(d => d.veiculoPlaca === placa);
+
+    // 1. CÁLCULO DA MÉDIA DE COMBUSTÍVEL DO MÊS (KM/L)
+    const refDate = new Date(dataReferencia + 'T00:00:00');
+    const mesRef = refDate.getMonth();
+    const anoRef = refDate.getFullYear();
+
+    const opsMes = ops.filter(o => {
+        const d = new Date(o.data + 'T00:00:00');
+        return d.getMonth() === mesRef && d.getFullYear() === anoRef;
+    });
+
+    let kmMes = 0;
+    let litrosMes = 0;
+
+    opsMes.forEach(o => {
+        kmMes += (Number(o.kmRodado) || 0);
+        if (o.combustivel > 0 && o.precoLitro > 0) {
+            litrosMes += (Number(o.combustivel) / Number(o.precoLitro));
         }
     });
 
-    // Se não tiver histórico suficiente, retorna 0
-    if (totalLitros === 0) return 0;
+    // Se não tiver dados suficientes no mês, tenta pegar a média geral do veículo para não quebrar o calculo
+    let mediaKmL = (litrosMes > 0) ? (kmMes / litrosMes) : 0;
+    if (mediaKmL === 0) {
+        // Fallback: média geral histórica
+        let kG = 0, lG = 0;
+        ops.forEach(o => {
+            kG += (Number(o.kmRodado) || 0);
+            if(o.combustivel > 0 && o.precoLitro > 0) lG += (o.combustivel/o.precoLitro);
+        });
+        if(lG > 0) mediaKmL = kG / lG;
+    }
+    
+    // Proteção contra divisão por zero se for o primeiro lançamento
+    if (mediaKmL === 0) mediaKmL = 1; // Evita erro, assume 1km/l temporariamente
 
-    return totalKm / totalLitros; // Retorna KM/L
+    // 2. CÁLCULO DO CUSTO GERAL POR KM (R$/KM) - Histórico Completo
+    // Soma: Combustivel + Comissao + Pedagios + Ajudantes + Despesas Gerais do Veículo
+    let custoTotalVida = 0;
+    let kmTotalVida = 0;
+
+    ops.forEach(o => {
+        kmTotalVida += (Number(o.kmRodado) || 0);
+        const ajudantesCost = (o.ajudantes || []).reduce((s,a)=>s+(Number(a.diaria)||0),0);
+        custoTotalVida += (Number(o.combustivel)||0) + (Number(o.comissao)||0) + (Number(o.despesas)||0) + ajudantesCost;
+    });
+
+    despesasGerais.forEach(d => {
+        custoTotalVida += (Number(d.valor)||0);
+    });
+
+    const custoPorKmGeral = kmTotalVida > 0 ? (custoTotalVida / kmTotalVida) : 0;
+
+    return {
+        mediaMensalKmL: mediaKmL,
+        custoKmGeral: custoPorKmGeral,
+        kmTotalVida: kmTotalVida,
+        totalLitrosMes: litrosMes
+    };
 }
 
 // --- FORMATTERS ---
@@ -665,8 +714,9 @@ function renderOperacaoTable() {
         const atividade = getAtividade(op.atividadeId)?.nome || 'N/A';
         const totalDiarias = (op.ajudantes || []).reduce((s,a)=> s + (Number(a.diaria)||0), 0);
         
-        // LÓGICA CORRIGIDA: CÁLCULO DO CUSTO COMBUSTIVEL BASEADO NA MÉDIA
-        const mediaVeiculo = calcularMediaVeiculo(op.veiculoPlaca);
+        // CALCULO INTELIGENTE DE CUSTO
+        const metricas = calcularMetricasVeiculo(op.veiculoPlaca, op.data);
+        const mediaVeiculo = metricas.mediaMensalKmL;
         let custoCombustivelEstimado = 0;
         if (mediaVeiculo > 0 && op.kmRodado > 0 && op.precoLitro > 0) {
             const litrosEstimados = op.kmRodado / mediaVeiculo;
@@ -703,7 +753,10 @@ function viewOperacaoDetails(id) {
     const totalDiarias = (op.ajudantes || []).reduce((s,a)=> s + (Number(a.diaria)||0), 0);
     
     // CÁLCULO INTELIGENTE DE CUSTO
-    const mediaVeiculo = calcularMediaVeiculo(op.veiculoPlaca);
+    const metricas = calcularMetricasVeiculo(op.veiculoPlaca, op.data);
+    const mediaVeiculo = metricas.mediaMensalKmL;
+    const custoKmGeral = metricas.custoKmGeral;
+
     let custoCombustivelEstimado = 0;
     let litrosEstimados = 0;
     let infoConsumo = '';
@@ -711,7 +764,7 @@ function viewOperacaoDetails(id) {
     if (mediaVeiculo > 0 && op.kmRodado > 0 && op.precoLitro > 0) {
         litrosEstimados = op.kmRodado / mediaVeiculo;
         custoCombustivelEstimado = litrosEstimados * op.precoLitro;
-        infoConsumo = `<p><strong>MÉDIA VEÍCULO:</strong> ${mediaVeiculo.toFixed(2)} KM/L</p>
+        infoConsumo = `<p><strong>MÉDIA CONSUMO DO MÊS:</strong> ${mediaVeiculo.toFixed(2)} KM/L</p>
                        <p><strong>CONSUMO ESTIMADO NESTA VIAGEM:</strong> ${litrosEstimados.toFixed(2)} LITROS (${formatCurrency(custoCombustivelEstimado)})</p>`;
     } else {
         infoConsumo = `<p style="color:orange; font-size:0.8rem;">DADOS INSUFICIENTES PARA CALCULAR MÉDIA DE CONSUMO</p>`;
@@ -739,6 +792,7 @@ function viewOperacaoDetails(id) {
             <p><strong>TOTAL DE DIÁRIAS (AJUDANTES):</strong> ${formatCurrency(totalDiarias)}</p>
             <hr style="margin:10px 0; border:0; border-top:1px solid #eee;">
             ${infoConsumo}
+            <p><strong>CUSTO GERAL DO KM (VIDA ÚTIL):</strong> ${formatCurrency(custoKmGeral)} / KM</p>
             <p style="margin-top:8px; font-size:1.1rem;"><strong>LUCRO LÍQUIDO (CALCULADO):</strong> ${formatCurrency(liquidoTotal)}</p>
             <div style="margin-top:10px;">
                 <strong>AJUDANTES:</strong>
@@ -833,7 +887,9 @@ function showOperationDetails(date) {
         const totalDiarias = (op.ajudantes||[]).reduce((s,a)=>s+(Number(a.diaria)||0),0);
         
         // CALCULO INTELIGENTE PARA O MODAL DO CALENDARIO TAMBEM
-        const mediaVeiculo = calcularMediaVeiculo(op.veiculoPlaca);
+        const metricas = calcularMetricasVeiculo(op.veiculoPlaca, op.data);
+        const mediaVeiculo = metricas.mediaMensalKmL;
+        
         let custoCombustivelEstimado = 0;
         if (mediaVeiculo > 0 && op.kmRodado > 0 && op.precoLitro > 0) {
             const litrosEstimados = op.kmRodado / mediaVeiculo;
@@ -1441,6 +1497,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             if (el) el.classList.add('active');
         });
     });
+
     document.querySelectorAll('.nav-item').forEach(item=>{
         item.addEventListener('click', ()=>{
             document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
