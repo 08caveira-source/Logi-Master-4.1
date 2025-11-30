@@ -52,52 +52,95 @@ function getAjudante(id) { return loadData(DB_KEYS.AJUDANTES).find(a => String(a
 function getAtividade(id) { return loadData(DB_KEYS.ATIVIDADES).find(a => String(a.id) === String(id)); }
 function getMinhaEmpresa(){ return loadData(DB_KEYS.MINHA_EMPRESA); }
 
-// --- INTELEGÊNCIA DE CÁLCULO DE FROTA ---
+// --- INTELIGÊNCIA DE CÁLCULO DE FROTA (CORRIGIDO) ---
+
 /**
- * Calcula a média histórica de consumo (KM/L) de um veículo
- * baseada em todos os lançamentos feitos até hoje.
+ * Busca o último preço de combustível informado para um veículo específico.
+ * BLINDADO contra falhas de data ou dados vazios.
+ */
+function obterUltimoPrecoCombustivel(placa) {
+    if (!placa) return 0;
+    const todasOps = loadData(DB_KEYS.OPERACOES) || [];
+    
+    // Filtra operações deste veículo que tenham preço preenchido
+    const opsComPreco = todasOps.filter(op => 
+        op && op.veiculoPlaca === placa && op.precoLitro && Number(op.precoLitro) > 0
+    );
+    
+    // Se não achou nada, retorna 0
+    if (opsComPreco.length === 0) return 0;
+
+    // Ordena pela data mais recente primeiro (decrescente)
+    opsComPreco.sort((a, b) => {
+        const da = new Date(a.data || '1970-01-01');
+        const db = new Date(b.data || '1970-01-01');
+        return db - da; 
+    });
+
+    return Number(opsComPreco[0].precoLitro) || 0;
+}
+
+/**
+ * Calcula a média histórica de consumo (KM/L) de um veículo.
+ * BLINDADO contra divisão por zero.
  */
 function calcularMediaHistoricaVeiculo(placa) {
-    const todasOps = loadData(DB_KEYS.OPERACOES).filter(op => op.veiculoPlaca === placa);
+    if (!placa) return 0;
+    const todasOps = loadData(DB_KEYS.OPERACOES) || [];
+    const opsVeiculo = todasOps.filter(op => op && op.veiculoPlaca === placa);
     
     let totalKmAcumulado = 0;
     let totalLitrosAbastecidos = 0;
 
-    todasOps.forEach(op => {
+    opsVeiculo.forEach(op => {
         // Soma KM
         if(op.kmRodado) totalKmAcumulado += Number(op.kmRodado);
         
-        // Soma Litros (Se houve abastecimento neste dia)
-        // Se abasteceu R$ 500,00 a R$ 5,00/L = 100 Litros entraram no tanque
-        if (op.combustivel > 0 && op.precoLitro > 0) {
-            totalLitrosAbastecidos += (Number(op.combustivel) / Number(op.precoLitro));
+        // Soma Litros (Se houve abastecimento neste dia e preço válido)
+        const vlrCombustivel = Number(op.combustivel) || 0;
+        const vlrPreco = Number(op.precoLitro) || 0;
+        
+        if (vlrCombustivel > 0 && vlrPreco > 0) {
+            totalLitrosAbastecidos += (vlrCombustivel / vlrPreco);
         }
     });
 
     // Evita divisão por zero
-    if (totalLitrosAbastecidos === 0) return 0;
+    if (totalLitrosAbastecidos <= 0) return 0;
 
     // Retorna KM/L (Ex: 3.5 km/l)
     return totalKmAcumulado / totalLitrosAbastecidos; 
 }
 
 /**
- * Calcula o custo estimado de combustível para UMA operação específica
- * baseada na média histórica do veículo e no KM que ele rodou naquele dia.
+ * Calcula o custo ESTIMADO de combustível para UMA operação.
+ * BLINDADO para não quebrar se faltar dados.
  */
 function calcularCustoConsumoViagem(op) {
-    const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca);
-    
-    // Se o veículo não tem média (nunca abasteceu ou rodou), não conseguimos estimar custo
-    if (mediaKmL === 0 || !op.kmRodado || !op.precoLitro) return 0;
+    if (!op || !op.veiculoPlaca) return 0;
 
-    // Litros que o caminhão "bebeu" para rodar essa distância
-    const litrosConsumidos = Number(op.kmRodado) / mediaKmL;
+    const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca);
+    const kmRodado = Number(op.kmRodado) || 0;
     
-    // Custo financeiro desses litros
-    const custoEstimado = litrosConsumidos * Number(op.precoLitro);
+    // Sem média ou sem KM, custo zero
+    if (mediaKmL <= 0 || kmRodado <= 0) return 0;
+
+    // Determina o preço a ser usado
+    let precoParaCalculo = Number(op.precoLitro) || 0;
     
-    return custoEstimado;
+    // Se não informou preço no dia, busca o último
+    if (precoParaCalculo <= 0) {
+        precoParaCalculo = obterUltimoPrecoCombustivel(op.veiculoPlaca);
+    }
+
+    // Se ainda assim for zero (nunca abasteceu), não há custo calculado
+    if (precoParaCalculo <= 0) return 0;
+
+    // Litros estimados
+    const litrosConsumidos = kmRodado / mediaKmL;
+    
+    // Custo financeiro estimado
+    return litrosConsumidos * precoParaCalculo;
 }
 
 
@@ -691,21 +734,12 @@ function renderOperacaoTable() {
         const atividade = getAtividade(op.atividadeId)?.nome || 'N/A';
         const totalDiarias = (op.ajudantes || []).reduce((s,a)=> s + (Number(a.diaria)||0), 0);
         
-        // --- CÁLCULO DO LÍQUIDO DIÁRIO USANDO MÉDIA HISTÓRICA ---
-        // 1. Descobrir média histórica do veículo
-        const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca);
-        
-        // 2. Estimar custo do combustível para ESTA viagem
-        let custoDieselEstimado = 0;
-        if (mediaKmL > 0 && op.kmRodado > 0 && op.precoLitro > 0) {
-            const litrosEstimados = Number(op.kmRodado) / mediaKmL;
-            custoDieselEstimado = litrosEstimados * Number(op.precoLitro);
-        }
+        // --- CÁLCULO DO LÍQUIDO DIÁRIO USANDO CUSTO ESTIMADO ---
+        const custoDieselCalculado = calcularCustoConsumoViagem(op) || 0;
 
-        // 3. Subtrair do faturamento (Custo Operacional Estimado)
-        //    Note que NÃO subtraímos op.combustivel (que é o abastecimento do tanque cheio)
-        const custosOperacionais = (op.comissao||0) + totalDiarias + (op.despesas||0) + custoDieselEstimado;
-        const liquido = op.faturamento - custosOperacionais;
+        // Subtrair do faturamento (Custo Operacional Estimado)
+        const custosOperacionais = (op.comissao||0) + totalDiarias + (op.despesas||0) + custoDieselCalculado;
+        const liquido = (op.faturamento || 0) - custosOperacionais;
 
         const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
         rows += `<tr>
@@ -733,29 +767,40 @@ function viewOperacaoDetails(id) {
     const totalDiarias = (op.ajudantes || []).reduce((s,a)=> s + (Number(a.diaria)||0), 0);
     
     // --- CÁLCULOS DE CUSTO ---
-    const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca);
-    let custoDieselEstimado = 0;
+    const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca) || 0;
+    const custoDieselEstimado = calcularCustoConsumoViagem(op) || 0;
     let litrosEstimados = 0;
-    let infoConsumoHTML = '';
+    
+    // Para exibição, determinamos qual preço foi usado
+    let precoUsado = Number(op.precoLitro);
+    let origemPreco = "(INFORMADO NO DIA)";
+    
+    if (!precoUsado || precoUsado <= 0) {
+        precoUsado = obterUltimoPrecoCombustivel(op.veiculoPlaca) || 0;
+        origemPreco = "(BASEADO NO ÚLTIMO ABASTECIMENTO)";
+    }
 
-    if (mediaKmL > 0 && op.kmRodado > 0 && op.precoLitro > 0) {
+    if (mediaKmL > 0 && op.kmRodado > 0) {
         litrosEstimados = Number(op.kmRodado) / mediaKmL;
-        custoDieselEstimado = litrosEstimados * Number(op.precoLitro);
-        
+    }
+    
+    let infoConsumoHTML = '';
+    if (mediaKmL > 0 && custoDieselEstimado > 0) {
         infoConsumoHTML = `
             <div class="modal-operation-block">
                 <p><strong>MÉDIA HISTÓRICA DO VEÍCULO:</strong> ${mediaKmL.toFixed(2)} KM/L</p>
                 <p><strong>CONSUMO ESTIMADO NA VIAGEM:</strong> ${litrosEstimados.toFixed(1)} L</p>
+                <p><strong>PREÇO DO DIESEL CONSIDERADO:</strong> ${formatCurrency(precoUsado)} <small>${origemPreco}</small></p>
                 <p><strong>CUSTO DIESEL (CALCULADO):</strong> ${formatCurrency(custoDieselEstimado)}</p>
             </div>
         `;
     } else {
-        infoConsumoHTML = `<p style="font-size:0.8rem; color:orange;">DADOS INSUFICIENTES PARA CALCULAR CONSUMO (NECESSÁRIO HISTÓRICO DE ABASTECIMENTOS E KM)</p>`;
+        infoConsumoHTML = `<p style="font-size:0.8rem; color:orange;">DADOS INSUFICIENTES PARA CALCULAR CONSUMO (NECESSÁRIO HISTÓRICO DE ABASTECIMENTOS, KM E PREÇO REFERÊNCIA)</p>`;
     }
 
     // Líquido Operacional
     const custosOperacionais = (op.comissao||0) + totalDiarias + (op.despesas||0) + custoDieselEstimado;
-    const liquidoOperacional = op.faturamento - custosOperacionais;
+    const liquidoOperacional = (op.faturamento||0) - custosOperacionais;
 
     // Abastecimento Real (Caixa)
     const abastecimentoReal = op.combustivel || 0;
@@ -778,7 +823,7 @@ function viewOperacaoDetails(id) {
             <p><strong>COMISSÃO MOTORISTA:</strong> ${formatCurrency(op.comissao||0)}</p>
             <p><strong>PEDÁGIOS:</strong> ${formatCurrency(op.despesas||0)}</p>
             <p><strong>TOTAL DE DIÁRIAS (AJUDANTES):</strong> ${formatCurrency(totalDiarias)}</p>
-            <p><strong>ABASTECIMENTO NO DIA (CAIXA):</strong> ${formatCurrency(abastecimentoReal)}</p>
+            <p><strong>SAÍDA DE CAIXA (ABASTECIMENTO NO POSTO):</strong> ${formatCurrency(abastecimentoReal)}</p>
 
             ${infoConsumoHTML}
 
@@ -855,7 +900,6 @@ function renderCalendar(date) {
         const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
         const opsDay = ops.filter(op=>op.data===dateStr);
         if (opsDay.length) {
-            // CORRIGIDO: ADICIONA CLASSE 'has-operation' PARA FICAR VERDE
             cell.classList.add('has-operation');
             
             const dot = document.createElement('div'); dot.classList.add('event-dot'); cell.appendChild(dot);
@@ -880,22 +924,17 @@ function showOperationDetails(date) {
         const totalDiarias = (op.ajudantes||[]).reduce((s,a)=>s+(Number(a.diaria)||0),0);
         
         // CÁLCULO INTELIGENTE (O MESMO DA TABELA PRINCIPAL)
-        const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca);
-        let custoDieselEstimado = 0;
-        if (mediaKmL > 0 && op.kmRodado > 0 && op.precoLitro > 0) {
-            const litrosEstimados = Number(op.kmRodado) / mediaKmL;
-            custoDieselEstimado = litrosEstimados * Number(op.precoLitro);
-        }
+        const custoDieselEstimado = calcularCustoConsumoViagem(op) || 0;
 
         const custosViagem = (op.comissao||0) + totalDiarias + (op.despesas||0) + custoDieselEstimado;
-        const liquido = op.faturamento - custosViagem;
+        const liquido = (op.faturamento||0) - custosViagem;
 
         html += `<div class="card" style="margin-bottom:10px;">
             <p><strong>MOTORISTA:</strong> ${motorista}</p>
             <p><strong>VEÍCULO:</strong> ${op.veiculoPlaca}</p>
             <p><strong>CONTRATANTE:</strong> ${getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ}</p>
             <p><strong>FATURAMENTO:</strong> ${formatCurrency(op.faturamento)}</p>
-            <p style="font-size:0.9rem; color:#555;">MÉDIA VEÍCULO: ${mediaKmL.toFixed(2)} KM/L (CUSTO DIESEL EST.: ${formatCurrency(custoDieselEstimado)})</p>
+            <p style="font-size:0.9rem; color:#555;">CUSTO DIESEL (ESTIMADO): ${formatCurrency(custoDieselEstimado)}</p>
             <p style="font-weight:700;color:${liquido>=0?'var(--success-color)':'var(--danger-color)'}">LUCRO OPERACIONAL: ${formatCurrency(liquido)}</p>
             <div><strong>AJUDANTES:</strong><ul>${ajudantesHtml}</ul></div>
             <div style="text-align:right;">
@@ -916,22 +955,22 @@ function updateDashboardStats() {
     const opsMes = ops.filter(op => { const d=new Date(op.data+'T00:00:00'); return d.getMonth()===mesAtual && d.getFullYear()===anoAtual; });
     const despesasMes = despesas.filter(d=>{ const dt=new Date(d.data+'T00:00:00'); return dt.getMonth()===mesAtual && dt.getFullYear()===anoAtual; });
     
-    const totalFaturamento = opsMes.reduce((s,o)=>s+o.faturamento,0);
+    const totalFaturamento = opsMes.reduce((s,o)=>s+(o.faturamento||0),0);
     
-    // DASHBOARD: FLUXO DE CAIXA REAL (O QUE SAIU DO BOLSO NA BOMBA)
-    // No dashboard geral, mantemos o fluxo de caixa para controle financeiro de "quanto dinheiro tenho".
+    // DASHBOARD: BASEADO NO RESULTADO OPERACIONAL (LUCRO)
     const custoOp = opsMes.reduce((s,o)=> {
         const diarias = (o.ajudantes||[]).reduce((ss,a)=>ss+(Number(a.diaria)||0),0);
-        return s + (o.comissao||0) + diarias + (o.combustivel||0) + (o.despesas||0);
+        const custoDiesel = calcularCustoConsumoViagem(o) || 0; 
+        return s + (o.comissao||0) + diarias + custoDiesel + (o.despesas||0);
     }, 0);
 
-    const custoGeral = despesasMes.reduce((s,d)=>s+d.valor,0);
+    const custoGeral = despesasMes.reduce((s,d)=>s+(d.valor||0),0);
     
     const totalCustos = custoOp + custoGeral;
     const receitaLiquida = totalFaturamento - totalCustos;
     
     document.getElementById('faturamentoMes').textContent = formatCurrency(totalFaturamento);
-    document.getElementById('despesasMes').textContent = formatCurrency(totalCustos);
+    document.getElementById('despesasMes').textContent = formatCurrency(totalCustos); // Agora reflete o custo operacional total
     document.getElementById('receitaMes').textContent = formatCurrency(receitaLiquida);
 }
 
@@ -971,14 +1010,17 @@ function renderCharts() {
             return dateDp.getMonth() === m && dateDp.getFullYear() === y;
         });
 
-        let sumCombustivel = 0;
+        let sumCombustivelEstimado = 0;
         let sumOutros = 0;
         let sumFaturamento = 0;
         let sumKm = 0;
 
         opsMes.forEach(op => {
             sumFaturamento += (op.faturamento || 0);
-            sumCombustivel += (op.combustivel || 0);
+            
+            // Alteração para o Gráfico: Usar Custo Estimado
+            sumCombustivelEstimado += (calcularCustoConsumoViagem(op) || 0);
+
             sumKm += (op.kmRodado || 0);
             const diarias = (op.ajudantes || []).reduce((acc, a) => acc + (Number(a.diaria)||0), 0);
             sumOutros += (op.comissao || 0) + diarias + (op.despesas || 0);
@@ -986,9 +1028,9 @@ function renderCharts() {
         const sumDespGeral = despMes.reduce((acc, d) => acc + (d.valor || 0), 0);
         sumOutros += sumDespGeral;
 
-        const lucro = sumFaturamento - (sumCombustivel + sumOutros);
+        const lucro = sumFaturamento - (sumCombustivelEstimado + sumOutros);
 
-        dataCombustivel.push(sumCombustivel);
+        dataCombustivel.push(sumCombustivelEstimado);
         dataOutrasDespesas.push(sumOutros);
         dataLucro.push(lucro);
         dataKm.push(sumKm);
@@ -1003,7 +1045,7 @@ function renderCharts() {
             labels: labels,
             datasets: [
                 {
-                    label: 'COMBUSTÍVEL',
+                    label: 'CUSTO DIESEL (ESTIMADO)',
                     data: dataCombustivel,
                     backgroundColor: '#d32f2f', // Vermelho escuro
                     stack: 'Stack 0',
@@ -1117,11 +1159,8 @@ function gerarRelatorio(e) {
         kmTotalNoPeriodo += (op.kmRodado || 0);
         if (op.ajudantes) op.ajudantes.forEach(a => custoAjudantes += (Number(a.diaria) || 0));
 
-        // Custo Diesel desta operação específica (Estimado)
-        const media = calcularMediaHistoricaVeiculo(op.veiculoPlaca);
-        if(media > 0 && op.kmRodado > 0 && op.precoLitro > 0) {
-            custoDieselEstimadoTotal += (Number(op.kmRodado) / media) * Number(op.precoLitro);
-        }
+        // Custo Diesel Inteligente
+        custoDieselEstimadoTotal += (calcularCustoConsumoViagem(op) || 0);
     });
 
     let custoGeral = despesasGerais.reduce((acc, d) => acc + (d.valor || 0), 0);
@@ -1156,7 +1195,7 @@ function gerarRelatorio(e) {
             </div>
             <h4 style="border-left:4px solid var(--primary-color); padding-left:10px; margin-bottom:10px; background:#f0f0f0; padding:5px;">DETALHAMENTO DE GASTOS</h4>
             <table class="report-table" style="width:100%; border-collapse:collapse; font-size:0.9rem; margin-bottom:20px;">
-                <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">COMBUSTÍVEL (ESTIMADO PELO KM)</td><td style="text-align:right; color:var(--danger-color); font-weight:bold;">${formatCurrency(custoDieselEstimadoTotal)}</td></tr>
+                <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">COMBUSTÍVEL (CUSTO OPERACIONAL ESTIMADO)</td><td style="text-align:right; color:var(--danger-color); font-weight:bold;">${formatCurrency(custoDieselEstimadoTotal)}</td></tr>
                 <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">PAGAMENTO MOTORISTAS (COMISSÕES)</td><td style="text-align:right; color:var(--danger-color);">${formatCurrency(custoMotoristas)}</td></tr>
                 <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">PAGAMENTO AJUDANTES (DIÁRIAS)</td><td style="text-align:right; color:var(--danger-color);">${formatCurrency(custoAjudantes)}</td></tr>
                 <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">PEDÁGIOS</td><td style="text-align:right; color:var(--danger-color);">${formatCurrency(custoPedagios)}</td></tr>
