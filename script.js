@@ -1,7 +1,27 @@
 // =============================================================================
-// 1. CONFIGURAÇÕES E UTILITÁRIOS
+// 1. IMPORTAÇÃO E CONFIGURAÇÃO DO FIREBASE (NUVEM)
 // =============================================================================
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
+// --- COLE SUAS CHAVES DO FIREBASE AQUI ---
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyAyTMFwAyWgNEy5Rqwan7frA547iPGv1vY",
+  authDomain: "logimaster-72a29.firebaseapp.com",
+  databaseURL: "https://logimaster-72a29-default-rtdb.firebaseio.com",
+  projectId: "logimaster-72a29",
+  storageBucket: "logimaster-72a29.firebasestorage.app",
+  messagingSenderId: "380606262384",
+  appId: "1:380606262384:web:e0780179f3bf32973498b5",
+  measurementId: "G-29W9SE4P7D"
+};
+
+// Inicializa o App
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// Mantém suas chaves originais
 const DB_KEYS = {
     MOTORISTAS: 'db_motoristas',
     VEICULOS: 'db_veiculos',
@@ -13,36 +33,55 @@ const DB_KEYS = {
     ATIVIDADES: 'db_atividades'
 };
 
-// Carrega dados do LocalStorage com tratamento de erro
-function loadData(key) {
-    const raw = localStorage.getItem(key);
-    if (!raw) {
-        return key === DB_KEYS.MINHA_EMPRESA ? {} : [];
-    }
-    try {
-        return JSON.parse(raw);
-    } catch (e) {
-        console.error("Erro ao carregar dados:", e);
-        return key === DB_KEYS.MINHA_EMPRESA ? {} : [];
-    }
-}
-
-// Salva dados no LocalStorage
-function saveData(key, value) {
-    localStorage.setItem(key, JSON.stringify(value));
-}
-
-// Remove tudo que não for número
-const onlyDigits = (v) => (v || '').toString().replace(/\D/g, '');
-
-// Formata valor para Moeda Brasileira (R$)
-const formatCurrency = (value) => {
-    if (typeof value !== 'number' || isNaN(value)) value = 0;
-    return new Intl.NumberFormat('pt-BR', {
-        style: 'currency',
-        currency: 'BRL'
-    }).format(value);
+// CACHE LOCAL (Substitui o comportamento do localStorage para o resto do sistema)
+window.DB_CACHE = {
+    db_motoristas: [], db_veiculos: [], db_contratantes: [], db_operacoes: [],
+    db_minha_empresa: {}, db_despesas_gerais: [], db_ajudantes: [], db_atividades: []
 };
+
+// =============================================================================
+// FUNÇÕES DE DADOS (ADAPTADAS PARA NUVEM)
+// =============================================================================
+
+// Salva na Nuvem + Cache Local
+function saveData(key, value) {
+    // 1. Atualiza memória local imediatamente
+    window.DB_CACHE[key] = value;
+    
+    // 2. Envia para o Google Firebase
+    set(ref(db, key), value)
+        .then(() => console.log("Sincronizado: " + key))
+        .catch(e => console.error("Erro sync: " + e.message));
+}
+
+// Lê do Cache (que é mantido atualizado pelo Firebase)
+function loadData(key) {
+    return window.DB_CACHE[key] || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
+}
+
+// SINCRONIZAÇÃO EM TEMPO REAL (Ouvinte)
+function iniciarSincronizacao() {
+    const dbRef = ref(db);
+    onValue(dbRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            // Atualiza o cache com os dados novos da nuvem
+            Object.keys(DB_KEYS).forEach(k => {
+                const dbKey = DB_KEYS[k];
+                if (data[dbKey]) {
+                    window.DB_CACHE[dbKey] = data[dbKey];
+                }
+            });
+            // Tenta atualizar a tela se as funções existirem
+            if(typeof populateAllSelects === 'function') populateAllSelects();
+            if(typeof renderOperacaoTable === 'function') renderOperacaoTable();
+            if(typeof window.changeMonth === 'function') window.changeMonth(0);
+            if(typeof updateDashboardStats === 'function') updateDashboardStats();
+            if(typeof renderDespesasTable === 'function') renderDespesasTable();
+            if(typeof renderCharts === 'function') renderCharts();
+        }
+    });
+}
 
 // =============================================================================
 // 2. INICIALIZAÇÃO DE DADOS (MOCK)
@@ -1628,6 +1667,7 @@ function setupInputFormattingListeners() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    iniciarSincronizacao();
     document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.cadastro-tab-btn').forEach(b => b.classList.remove('active'));
