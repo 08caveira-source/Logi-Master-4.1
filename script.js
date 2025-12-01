@@ -13,7 +13,7 @@ const DB_KEYS = {
     ATIVIDADES: 'db_atividades'
 };
 
-// Inicializa as chaves do localStorage se não existirem para evitar erros de null
+// Inicializa o banco de dados local se vazio
 (function initDB() {
     const keys = Object.values(DB_KEYS);
     keys.forEach(k => {
@@ -25,7 +25,8 @@ const DB_KEYS = {
 
 function loadData(key) {
     try {
-        return JSON.parse(localStorage.getItem(key));
+        const data = localStorage.getItem(key);
+        return data ? JSON.parse(data) : (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
     } catch (e) {
         return key === DB_KEYS.MINHA_EMPRESA ? {} : [];
     }
@@ -116,22 +117,15 @@ function formatPhoneBr(value) {
     return d.replace(/(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3");
 }
 
-function detectPixType(key) {
-    if (!key) return '';
-    if (key.includes('@')) return 'EMAIL';
-    const d = onlyDigits(key);
-    if (d.length === 11) return 'CPF/CELULAR';
-    if (d.length === 14) return 'CNPJ';
-    return 'ALEATÓRIA';
-}
-
 function copyToClipboard(text) {
     if (!text) return alert('Nada para copiar.');
     navigator.clipboard.writeText(text).then(() => alert('Copiado!'), () => alert('Erro ao copiar.'));
 }
 
 function toggleCursoInput() {
-    const val = document.getElementById('motoristaTemCurso').value;
+    const el = document.getElementById('motoristaTemCurso');
+    if(!el) return;
+    const val = el.value;
     const div = document.getElementById('divCursoDescricao');
     if (div) div.style.display = val === 'sim' ? 'flex' : 'none';
 }
@@ -164,7 +158,7 @@ function closeAdicionarAjudanteModal() {
     _pendingAjudante = null;
     document.getElementById('modalAdicionarAjudante').style.display = 'none';
 }
-// Evento botão ajudante
+// Evento botão ajudante (Global Listener)
 document.addEventListener('click', (e) => {
     if (e.target.id === 'modalAjudanteAddBtn') {
         const val = Number(document.getElementById('modalDiariaInput').value);
@@ -176,13 +170,13 @@ document.addEventListener('click', (e) => {
 });
 
 // =============================================================================
-// 5. LOGICA DO FORMULÁRIO DE OPERAÇÃO
+// 5. LÓGICA DE OPERAÇÃO (AJUDANTES)
 // =============================================================================
 window._operacaoAjudantesTempList = [];
 
 function handleAjudanteSelectionChange() {
     const sel = document.getElementById('selectAjudantesOperacao');
-    if (!sel.value) return;
+    if (!sel || !sel.value) return;
     const id = Number(sel.value);
     
     const exists = window._operacaoAjudantesTempList.some(a => Number(a.id) === id);
@@ -223,8 +217,34 @@ function removeAjudanteFromOperation(id) {
 }
 
 // =============================================================================
-// 6. POPULATE E TABELAS
+// 6. POPULATE, TABELAS E RENDERIZAÇÃO
 // =============================================================================
+
+// Função corrigida que estava faltando e travava o script
+function renderCadastroTable(dbKey, tableId, columns, idField = 'id') {
+    const tbody = document.querySelector(`#${tableId} tbody`);
+    if (!tbody) return;
+    
+    const data = loadData(dbKey);
+    
+    if (data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${columns.length + 1}" style="text-align:center">Nenhum registro encontrado.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = data.map(item => {
+        let colsHtml = columns.map(col => `<td>${item[col] || '-'}</td>`).join('');
+        // Botões de ação
+        const itemId = item[idField];
+        const actionsHtml = `
+            <td>
+                <button type="button" class="btn-action edit-btn" onclick="editCadastroItem('${dbKey}', '${itemId}')"><i class="fas fa-edit"></i></button>
+                <button type="button" class="btn-action delete-btn" onclick="deleteItem('${dbKey}', '${itemId}')"><i class="fas fa-trash"></i></button>
+            </td>
+        `;
+        return `<tr>${colsHtml}${actionsHtml}</tr>`;
+    }).join('');
+}
 
 function populateAllSelects() {
     const dataMap = {
@@ -245,7 +265,8 @@ function populateAllSelects() {
         const el = document.getElementById(id);
         if (!el) continue;
         const dados = loadData(cfg.key);
-        const firstOpt = el.firstElementChild;
+        // Preserva a opção "Selecione..." se existir
+        const firstOpt = el.querySelector('option[value=""]'); 
         el.innerHTML = '';
         if (firstOpt) el.appendChild(firstOpt);
         
@@ -257,17 +278,19 @@ function populateAllSelects() {
         });
     }
 
+    // Select Especial do Recibo (Motorista + Ajudante)
     const selRecibo = document.getElementById('selectMotoristaRecibo');
     if (selRecibo) {
         selRecibo.innerHTML = '<option value="">SELECIONE...</option>';
         loadData(DB_KEYS.MOTORISTAS).forEach(m => {
-            selRecibo.innerHTML += `<option value="motorista:${m.id}">Motorista - ${m.nome}</option>`;
+            selRecibo.innerHTML += `<option value="motorista:${m.id}">MOTORISTA - ${m.nome}</option>`;
         });
         loadData(DB_KEYS.AJUDANTES).forEach(a => {
-            selRecibo.innerHTML += `<option value="ajudante:${a.id}">Ajudante - ${a.nome}</option>`;
+            selRecibo.innerHTML += `<option value="ajudante:${a.id}">AJUDANTE - ${a.nome}</option>`;
         });
     }
 
+    // Renderiza Tabelas de Cadastro
     renderCadastroTable(DB_KEYS.MOTORISTAS, 'tabelaMotoristas', ['id', 'nome', 'documento']);
     renderCadastroTable(DB_KEYS.VEICULOS, 'tabelaVeiculos', ['placa', 'modelo', 'ano'], 'placa');
     renderCadastroTable(DB_KEYS.CONTRATANTES, 'tabelaContratantes', ['cnpj', 'razaoSocial', 'telefone'], 'cnpj');
@@ -291,17 +314,21 @@ function renderMinhaEmpresaInfo() {
 // =============================================================================
 
 function deleteItem(key, id) {
-    if (!confirm('Excluir registro?')) return;
+    if (!confirm('Tem certeza que deseja excluir este registro?')) return;
     let data = loadData(key);
+    
     const idField = (key === DB_KEYS.VEICULOS) ? 'placa' : (key === DB_KEYS.CONTRATANTES ? 'cnpj' : 'id');
+    
+    // Filtra removendo o item
     data = data.filter(d => String(d[idField]) !== String(id));
+    
     saveData(key, data);
     populateAllSelects();
     renderOperacaoTable();
     renderDespesasTable();
     updateDashboardStats();
     renderCharts();
-    alert('Excluído!');
+    alert('Registro excluído!');
 }
 
 function editCadastroItem(key, id) {
@@ -323,18 +350,25 @@ function editCadastroItem(key, id) {
         document.getElementById('motoristaCursoDescricao').value = item.cursoDescricao;
         document.getElementById('motoristaPix').value = item.pix;
         toggleCursoInput();
+        // Ativar aba
+        document.querySelector('[data-tab="motoristas"]').click();
+
     } else if (key === DB_KEYS.VEICULOS) {
-        document.getElementById('veiculoId').value = item.placa;
+        document.getElementById('veiculoId').value = item.placa; // old ID reference
         document.getElementById('veiculoPlaca').value = item.placa;
         document.getElementById('veiculoModelo').value = item.modelo;
         document.getElementById('veiculoAno').value = item.ano;
         document.getElementById('veiculoRenavam').value = item.renavam;
         document.getElementById('veiculoChassi').value = item.chassi;
+        document.querySelector('[data-tab="veiculos"]').click();
+
     } else if (key === DB_KEYS.CONTRATANTES) {
         document.getElementById('contratanteId').value = item.cnpj;
         document.getElementById('contratanteCNPJ').value = item.cnpj;
         document.getElementById('contratanteRazaoSocial').value = item.razaoSocial;
         document.getElementById('contratanteTelefone').value = item.telefone;
+        document.querySelector('[data-tab="contratantes"]').click();
+
     } else if (key === DB_KEYS.AJUDANTES) {
         document.getElementById('ajudanteId').value = item.id;
         document.getElementById('ajudanteNome').value = item.nome;
@@ -342,11 +376,16 @@ function editCadastroItem(key, id) {
         document.getElementById('ajudanteTelefone').value = item.telefone;
         document.getElementById('ajudanteEndereco').value = item.endereco;
         document.getElementById('ajudantePix').value = item.pix;
+        document.querySelector('[data-tab="ajudantes"]').click();
+
     } else if (key === DB_KEYS.ATIVIDADES) {
         document.getElementById('atividadeId').value = item.id;
         document.getElementById('atividadeNome').value = item.nome;
+        document.querySelector('[data-tab="atividades"]').click();
     }
-    alert('Dados carregados. Edite e salve.');
+    
+    // Rola para o topo do formulário
+    document.querySelector('.cadastro-form.active').scrollIntoView({ behavior: 'smooth' });
 }
 
 // =============================================================================
@@ -359,7 +398,7 @@ function renderOperacaoTable() {
     const ops = loadData(DB_KEYS.OPERACOES).sort((a, b) => new Date(b.data) - new Date(a.data));
 
     if (ops.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center">Nenhuma operação.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center">Nenhuma operação lançada.</td></tr>';
         return;
     }
 
@@ -380,7 +419,7 @@ function renderOperacaoTable() {
             <td>${motName}</td>
             <td>${atvName}</td>
             <td>${formatCurrency(op.faturamento)}</td>
-            <td style="color:${color}">${formatCurrency(liquido)}</td>
+            <td style="color:${color}; font-weight:bold;">${formatCurrency(liquido)}</td>
             <td>
                 <button type="button" class="btn-action edit-btn" onclick="editOperacaoItem(${op.id})"><i class="fas fa-edit"></i></button>
                 <button type="button" class="btn-action view-btn" onclick="viewOperacaoDetails(${op.id})"><i class="fas fa-eye"></i></button>
@@ -390,9 +429,11 @@ function renderOperacaoTable() {
     }).join('');
 }
 
-window.editOperacaoItem = function(id) {
+function editOperacaoItem(id) {
     const op = loadData(DB_KEYS.OPERACOES).find(o => o.id === id);
     if (!op) return;
+    
+    // Preenche o form
     document.getElementById('operacaoId').value = op.id;
     document.getElementById('operacaoData').value = op.data;
     document.getElementById('selectMotoristaOperacao').value = op.motoristaId;
@@ -400,7 +441,7 @@ window.editOperacaoItem = function(id) {
     document.getElementById('selectContratanteOperacao').value = op.contratanteCNPJ;
     document.getElementById('selectAtividadeOperacao').value = op.atividadeId;
     document.getElementById('operacaoFaturamento').value = op.faturamento;
-    document.getElementById('operacaoAdiantamento').value = op.adiantamento || ''; 
+    document.getElementById('operacaoAdiantamento').value = op.adiantamento || 0; 
     document.getElementById('operacaoComissao').value = op.comissao;
     document.getElementById('operacaoCombustivel').value = op.combustivel;
     document.getElementById('operacaoPrecoLitro').value = op.precoLitro;
@@ -409,8 +450,11 @@ window.editOperacaoItem = function(id) {
     
     window._operacaoAjudantesTempList = op.ajudantes || [];
     renderAjudantesAdicionadosList();
-    alert('Operação carregada. Edite e Salve.');
-};
+    
+    // Troca para a aba de operações
+    document.querySelector('[data-page="operacoes"]').click();
+    document.getElementById('formOperacao').scrollIntoView({ behavior: 'smooth' });
+}
 
 function viewOperacaoDetails(id) {
     const op = loadData(DB_KEYS.OPERACOES).find(o => o.id === id);
@@ -458,22 +502,20 @@ function viewOperacaoDetails(id) {
 }
 
 // =============================================================================
-// 9. CALENDÁRIO E DASHBOARD (CORRIGIDO)
+// 9. CALENDÁRIO E DASHBOARD
 // =============================================================================
 let currentDate = new Date();
 
-// Tornando a função global para ser acessada pelo onclick do HTML
-window.changeMonth = function(dir) {
+function changeMonth(dir) {
     currentDate.setMonth(currentDate.getMonth() + dir);
     renderCalendar(currentDate);
     updateDashboardStats();
-};
+}
 
 function renderCalendar(date) {
     const grid = document.getElementById('calendarGrid');
     const title = document.getElementById('currentMonthYear');
     
-    // Segurança: Se não achar o grid (ex: outra página), sai sem erro
     if (!grid || !title) return;
 
     const y = date.getFullYear();
@@ -485,13 +527,13 @@ function renderCalendar(date) {
     // Headers
     const days = ['DOM','SEG','TER','QUA','QUI','SEX','SÁB'];
     days.forEach(d => {
-        grid.innerHTML += `<div class="day-header">${d}</div>`;
+        grid.innerHTML += `<div class="day-label">${d}</div>`;
     });
 
     const firstDay = new Date(y, m, 1).getDay();
     const daysInMonth = new Date(y, m + 1, 0).getDate();
 
-    // Células vazias antes do dia 1
+    // Células vazias
     for(let i=0; i<firstDay; i++) {
         grid.innerHTML += `<div class="day-cell empty"></div>`;
     }
@@ -500,6 +542,7 @@ function renderCalendar(date) {
 
     // Dias do mês
     for(let d=1; d<=daysInMonth; d++) {
+        // Formato YYYY-MM-DD
         const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
         const dayOps = ops.filter(o => o.data === dateStr);
         
@@ -517,7 +560,7 @@ function renderCalendar(date) {
                     const saldo = fat - adt;
                     
                     return `
-                    <div style="margin-bottom:15px; padding-bottom:15px; border-bottom:1px solid #eee;">
+                    <div class="modal-operation-block">
                         <strong>VEÍCULO:</strong> ${op.veiculoPlaca} <br>
                         <strong>KM:</strong> ${op.kmRodado || 0} KM<br>
                         <strong>MOTORISTA:</strong> ${mot} <br>
@@ -525,8 +568,9 @@ function renderCalendar(date) {
                         <span style="color:var(--primary-color)">FAT: ${formatCurrency(fat)}</span> | 
                         <span style="color:red">ADT: ${formatCurrency(adt)}</span> <br>
                         <strong>SALDO: ${formatCurrency(saldo)}</strong>
-                        <div style="margin-top:5px;">
-                             <button class="btn-mini" onclick="editOperacaoItem(${op.id})">EDITAR</button>
+                        <div style="margin-top:8px; text-align:right;">
+                             <button class="btn-mini" onclick="editOperacaoItem(${op.id}); closeModal();">EDITAR</button>
+                             <button class="btn-mini" onclick="viewOperacaoDetails(${op.id}); closeModal();">VER DETALHES</button>
                         </div>
                     </div>`;
                 }).join('');
@@ -577,7 +621,7 @@ function updateDashboardStats() {
 }
 
 // =============================================================================
-// 10. GRÁFICOS (COM TOOLTIP %)
+// 10. GRÁFICOS
 // =============================================================================
 let mainChart = null;
 
@@ -684,7 +728,7 @@ function renderCharts() {
 }
 
 // =============================================================================
-// 11. RELATÓRIOS (COBRANÇA COM ADIANTAMENTO E SALDO)
+// 11. RELATÓRIOS
 // =============================================================================
 
 function gerarRelatorioCobranca() {
@@ -780,23 +824,68 @@ function gerarRelatorio(e) {
     e.preventDefault();
     const ini = document.getElementById('dataInicioRelatorio').value;
     const fim = document.getElementById('dataFimRelatorio').value;
-    if (!ini || !fim) return alert('Preencha as datas.');
     
-    // ... Implementação simplificada do gerencial para brevidade, mantendo a lógica original ...
-    // (Aqui você pode restaurar a lógica completa do relatório gerencial se necessário, 
-    // mas o foco foi corrigir o calendário e o relatório de cobrança)
-    alert('Relatório Gerencial Gerado (Verifique os Cards e Gráficos para análise detalhada)');
+    if (!ini || !fim) return alert('Preencha as datas de início e fim.');
+
+    const dIni = new Date(ini + 'T00:00:00');
+    const dFim = new Date(fim + 'T23:59:59');
+
+    // Filtros
+    const motId = document.getElementById('selectMotoristaRelatorio').value;
+    const veicPlaca = document.getElementById('selectVeiculoRelatorio').value;
+    const conCnpj = document.getElementById('selectContratanteRelatorio').value;
+
+    const ops = loadData(DB_KEYS.OPERACOES).filter(o => {
+        const d = new Date(o.data + 'T00:00:00');
+        if (d < dIni || d > dFim) return false;
+        if (motId && String(o.motoristaId) !== motId) return false;
+        if (veicPlaca && o.veiculoPlaca !== veicPlaca) return false;
+        if (conCnpj && o.contratanteCNPJ !== conCnpj) return false;
+        return true;
+    });
+
+    if (ops.length === 0) return alert('Nenhum dado encontrado com esses filtros.');
+
+    // Cálculos simples para exibição
+    const totalFat = ops.reduce((a,b) => a + (Number(b.faturamento)||0), 0);
+    const totalLucro = ops.reduce((acc, o) => {
+         const custo = (Number(o.comissao)||0) + (Number(o.despesas)||0) + calcularCustoConsumoViagem(o);
+         return acc + ((Number(o.faturamento)||0) - custo);
+    }, 0);
+
+    const html = `
+        <div style="padding:20px;">
+            <h3>RESUMO GERENCIAL</h3>
+            <p><strong>PERÍODO:</strong> ${dIni.toLocaleDateString('pt-BR')} a ${dFim.toLocaleDateString('pt-BR')}</p>
+            <p><strong>OPERAÇÕES ENCONTRADAS:</strong> ${ops.length}</p>
+            <hr>
+            <p><strong>FATURAMENTO TOTAL:</strong> ${formatCurrency(totalFat)}</p>
+            <p><strong>LUCRO ESTIMADO:</strong> ${formatCurrency(totalLucro)}</p>
+            <p style="color:#777; font-size:0.8rem; margin-top:10px;">Para detalhes completos, use o Relatório de Cobrança ou exporte os dados.</p>
+        </div>
+    `;
+
+    document.getElementById('reportContent').innerHTML = html;
+    document.getElementById('btnWhatsappReport').style.display = 'none'; // Esconde zap no gerencial simples
+    document.getElementById('reportResults').style.display = 'block';
 }
 
 function exportReportToPDF() {
     const element = document.getElementById('reportContent');
-    if (!element || !element.innerHTML) return alert('Gere um relatório primeiro.');
-    html2pdf().from(element).save();
+    if (!element || !element.innerHTML || element.innerHTML.trim() === "") return alert('Gere um relatório primeiro.');
+    
+    const opt = {
+        margin: 10,
+        filename: 'relatorio_logimaster.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+    html2pdf().set(opt).from(element).save();
 }
-window.exportReportToPDF = exportReportToPDF;
 
 // =============================================================================
-// 12. RECIBO
+// 12. RECIBOS
 // =============================================================================
 
 function setupReciboListeners() {
@@ -807,18 +896,26 @@ function setupReciboListeners() {
         const comp = document.getElementById('selectMotoristaRecibo').value;
         const ini = document.getElementById('dataInicioRecibo').value;
         const fim = document.getElementById('dataFimRecibo').value;
+        const placa = document.getElementById('selectVeiculoRecibo').value;
+        const cnpj = document.getElementById('selectContratanteRecibo').value;
         
-        if (!comp || !ini || !fim) return alert('Preencha todos os campos!');
+        if (!comp || !ini || !fim) return alert('Selecione o Beneficiário e as Datas.');
         
         const [tipo, id] = comp.split(':');
         const pessoa = tipo === 'motorista' ? getMotorista(id) : getAjudante(id);
+        if(!pessoa) return alert('Beneficiário não encontrado.');
+
         const empresa = getMinhaEmpresa();
         
         const ops = loadData(DB_KEYS.OPERACOES).filter(o => {
             const d = new Date(o.data+'T00:00:00');
             const range = d >= new Date(ini+'T00:00:00') && d <= new Date(fim+'T23:59:59');
             if (!range) return false;
+            if (placa && o.veiculoPlaca !== placa) return false;
+            if (cnpj && o.contratanteCNPJ !== cnpj) return false;
+
             if (tipo === 'motorista') return String(o.motoristaId) === id;
+            // Se ajudante, verificar se está na lista de ajudantes da operação
             return (o.ajudantes||[]).some(a => String(a.id) === id);
         });
         
@@ -827,26 +924,45 @@ function setupReciboListeners() {
         let total = 0;
         const rows = ops.map(o => {
             let val = 0;
-            if (tipo === 'motorista') val = Number(o.comissao) || 0;
-            else {
+            let desc = '';
+            if (tipo === 'motorista') {
+                val = Number(o.comissao) || 0;
+                desc = `COMISSÃO - ${o.veiculoPlaca}`;
+            } else {
                 const aj = o.ajudantes.find(x => String(x.id) === id);
                 val = aj ? (Number(aj.diaria)||0) : 0;
+                desc = `DIÁRIA - ${o.veiculoPlaca}`;
             }
             total += val;
-            return `<tr><td>${new Date(o.data+'T00:00:00').toLocaleDateString('pt-BR')}</td><td>${o.veiculoPlaca}</td><td style="text-align:right">${formatCurrency(val)}</td></tr>`;
+            return `<tr>
+                <td>${new Date(o.data+'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                <td>${desc}</td>
+                <td style="text-align:right">${formatCurrency(val)}</td>
+            </tr>`;
         }).join('');
         
         const html = `
         <div class="recibo-template">
-            <h2 style="text-align:center">RECIBO DE PAGAMENTO</h2>
-            <p><strong>EMPRESA:</strong> ${empresa.razaoSocial || 'N/A'}</p>
-            <p><strong>BENEFICIÁRIO:</strong> ${pessoa.nome}</p>
-            <hr>
-            <table style="width:100%">
-                <thead><tr><th style="text-align:left">DATA</th><th style="text-align:left">VEÍCULO</th><th style="text-align:right">VALOR</th></tr></thead>
+            <div class="recibo-header">
+                <h3>RECIBO DE PAGAMENTO</h3>
+                <p>Nº CONTROLE: ${Date.now().toString().slice(-6)}</p>
+            </div>
+            <div class="recibo-info">
+                <p><strong>PAGADOR:</strong> ${empresa.razaoSocial || 'MINHA EMPRESA'}</p>
+                <p><strong>CNPJ:</strong> ${empresa.cnpj || '-'}</p>
+                <br>
+                <p><strong>BENEFICIÁRIO:</strong> ${pessoa.nome}</p>
+                <p><strong>DOCUMENTO:</strong> ${pessoa.documento}</p>
+            </div>
+            <table class="recibo-detalhes-tabela">
+                <thead><tr><th>DATA</th><th>DESCRIÇÃO</th><th style="text-align:right">VALOR</th></tr></thead>
                 <tbody>${rows}</tbody>
             </table>
-            <h3 style="text-align:right; margin-top:20px">TOTAL: ${formatCurrency(total)}</h3>
+            <p class="recibo-total">TOTAL LÍQUIDO: ${formatCurrency(total)}</p>
+            <div class="recibo-assinaturas">
+                <div>ASSINATURA DO PAGADOR</div>
+                <div>ASSINATURA DO BENEFICIÁRIO</div>
+            </div>
         </div>`;
         
         document.getElementById('reciboContent').innerHTML = html;
@@ -855,7 +971,7 @@ function setupReciboListeners() {
         
         document.getElementById('btnBaixarRecibo').onclick = () => {
             const el = document.querySelector('.recibo-template');
-            html2pdf(el);
+            html2pdf(el).save('recibo_pagamento.pdf');
         };
     });
 }
@@ -879,55 +995,206 @@ function renderDespesasTable() {
 }
 
 // =============================================================================
-// 14. FORM HANDLERS
+// 14. BACKUP E RESET
+// =============================================================================
+
+function exportDataBackup() {
+    const backup = {};
+    Object.values(DB_KEYS).forEach(key => {
+        backup[key] = loadData(key);
+    });
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "backup_logimaster_" + new Date().toISOString().slice(0,10) + ".json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+}
+
+function importDataBackup(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const json = JSON.parse(e.target.result);
+            Object.values(DB_KEYS).forEach(key => {
+                if (json[key]) {
+                    saveData(key, json[key]);
+                }
+            });
+            alert('Backup restaurado com sucesso! A página será recarregada.');
+            location.reload();
+        } catch (err) {
+            alert('Erro ao ler arquivo de backup.');
+            console.error(err);
+        }
+    };
+    reader.readAsText(file);
+}
+
+function fullSystemReset() {
+    if(confirm('ATENÇÃO: ISSO APAGARÁ TODOS OS DADOS DO SISTEMA PERMANENTEMENTE.\n\nTem certeza absoluta?')) {
+        if(confirm('Última chance: Confirma a exclusão total?')) {
+            localStorage.clear();
+            alert('Sistema resetado. Recarregando...');
+            location.reload();
+        }
+    }
+}
+
+// =============================================================================
+// 15. FORM HANDLERS
 // =============================================================================
 function setupFormHandlers() {
-    // Handler Genérico
-    const forms = ['formMotorista', 'formAjudante', 'formVeiculo', 'formContratante', 'formAtividade', 'formMinhaEmpresa'];
-    forms.forEach(fid => {
-        const el = document.getElementById(fid);
-        if(el) {
-            el.addEventListener('submit', e => {
-                e.preventDefault();
-                // Para simplificar, recarregamos a página após salvar em cadastros básicos
-                // Em uma aplicação real, faríamos o push no array e salvaríamos
-                // Aqui, vou assumir que a lógica específica de cada um já foi tratada 
-                // ou vou alertar para o usuário que foi salvo.
-                
-                // Exemplo para Motorista
-                if(fid === 'formMotorista') {
-                    const data = loadData(DB_KEYS.MOTORISTAS);
-                    const id = document.getElementById('motoristaId').value || Date.now();
-                    const obj = {
-                        id: Number(id),
-                        nome: document.getElementById('motoristaNome').value.toUpperCase(),
-                        documento: document.getElementById('motoristaDocumento').value,
-                        telefone: document.getElementById('motoristaTelefone').value,
-                        cnh: document.getElementById('motoristaCNH').value,
-                        validadeCNH: document.getElementById('motoristaValidadeCNH').value,
-                        categoriaCNH: document.getElementById('motoristaCategoriaCNH').value,
-                        temCurso: document.getElementById('motoristaTemCurso').value === 'sim',
-                        cursoDescricao: document.getElementById('motoristaCursoDescricao').value,
-                        pix: document.getElementById('motoristaPix').value
-                    };
-                    // Remove existente se for edição
-                    const idx = data.findIndex(x => x.id == id);
-                    if(idx >= 0) data.splice(idx, 1);
-                    data.push(obj);
-                    saveData(DB_KEYS.MOTORISTAS, data);
-                }
-                // ... Repetir lógica para outros ...
-                // Como o código anterior estava ficando muito grande, 
-                // simplifiquei aqui, mas a lógica de operação está completa abaixo.
-                
-                alert('Cadastro Salvo!');
-                e.target.reset();
-                populateAllSelects();
-            });
+    
+    // --- MOTORISTA ---
+    document.getElementById('formMotorista')?.addEventListener('submit', e => {
+        e.preventDefault();
+        const data = loadData(DB_KEYS.MOTORISTAS);
+        const idField = document.getElementById('motoristaId').value;
+        const isEdit = !!idField;
+        const newId = isEdit ? Number(idField) : Date.now();
+
+        const obj = {
+            id: newId,
+            nome: document.getElementById('motoristaNome').value.toUpperCase(),
+            documento: document.getElementById('motoristaDocumento').value,
+            telefone: document.getElementById('motoristaTelefone').value,
+            cnh: document.getElementById('motoristaCNH').value,
+            validadeCNH: document.getElementById('motoristaValidadeCNH').value,
+            categoriaCNH: document.getElementById('motoristaCategoriaCNH').value,
+            temCurso: document.getElementById('motoristaTemCurso').value === 'sim',
+            cursoDescricao: document.getElementById('motoristaCursoDescricao').value.toUpperCase(),
+            pix: document.getElementById('motoristaPix').value
+        };
+
+        let newData;
+        if(isEdit) {
+            newData = data.map(i => String(i.id) === String(newId) ? obj : i);
+        } else {
+            newData = [...data, obj];
         }
+        
+        saveData(DB_KEYS.MOTORISTAS, newData);
+        alert('Motorista Salvo!');
+        e.target.reset();
+        document.getElementById('motoristaId').value = '';
+        populateAllSelects();
     });
 
-    // OPERAÇÃO
+    // --- VEÍCULO ---
+    document.getElementById('formVeiculo')?.addEventListener('submit', e => {
+        e.preventDefault();
+        const data = loadData(DB_KEYS.VEICULOS);
+        const oldPlaca = document.getElementById('veiculoId').value; 
+        const newPlaca = document.getElementById('veiculoPlaca').value.toUpperCase();
+        
+        const obj = {
+            placa: newPlaca,
+            modelo: document.getElementById('veiculoModelo').value.toUpperCase(),
+            ano: document.getElementById('veiculoAno').value,
+            renavam: document.getElementById('veiculoRenavam').value,
+            chassi: document.getElementById('veiculoChassi').value.toUpperCase()
+        };
+
+        // Se mudou a placa na edição, precisamos remover a antiga
+        let newData = data.filter(v => v.placa !== oldPlaca && v.placa !== newPlaca);
+        newData.push(obj);
+        
+        saveData(DB_KEYS.VEICULOS, newData);
+        alert('Veículo Salvo!');
+        e.target.reset();
+        document.getElementById('veiculoId').value = '';
+        populateAllSelects();
+    });
+
+    // --- CONTRATANTE ---
+    document.getElementById('formContratante')?.addEventListener('submit', e => {
+        e.preventDefault();
+        const data = loadData(DB_KEYS.CONTRATANTES);
+        const oldCnpj = document.getElementById('contratanteId').value;
+        const newCnpj = document.getElementById('contratanteCNPJ').value;
+        
+        const obj = {
+            cnpj: newCnpj,
+            razaoSocial: document.getElementById('contratanteRazaoSocial').value.toUpperCase(),
+            telefone: document.getElementById('contratanteTelefone').value
+        };
+
+        let newData = data.filter(c => c.cnpj !== oldCnpj && c.cnpj !== newCnpj);
+        newData.push(obj);
+
+        saveData(DB_KEYS.CONTRATANTES, newData);
+        alert('Contratante Salva!');
+        e.target.reset();
+        document.getElementById('contratanteId').value = '';
+        populateAllSelects();
+    });
+
+    // --- AJUDANTE ---
+    document.getElementById('formAjudante')?.addEventListener('submit', e => {
+        e.preventDefault();
+        const data = loadData(DB_KEYS.AJUDANTES);
+        const idVal = document.getElementById('ajudanteId').value;
+        const id = idVal ? Number(idVal) : Date.now();
+
+        const obj = {
+            id: id,
+            nome: document.getElementById('ajudanteNome').value.toUpperCase(),
+            documento: document.getElementById('ajudanteDocumento').value,
+            telefone: document.getElementById('ajudanteTelefone').value,
+            endereco: document.getElementById('ajudanteEndereco').value.toUpperCase(),
+            pix: document.getElementById('ajudantePix').value
+        };
+
+        let newData = data.filter(a => String(a.id) !== String(id));
+        newData.push(obj);
+
+        saveData(DB_KEYS.AJUDANTES, newData);
+        alert('Ajudante Salvo!');
+        e.target.reset();
+        document.getElementById('ajudanteId').value = '';
+        populateAllSelects();
+    });
+
+    // --- ATIVIDADE ---
+    document.getElementById('formAtividade')?.addEventListener('submit', e => {
+        e.preventDefault();
+        const data = loadData(DB_KEYS.ATIVIDADES);
+        const idVal = document.getElementById('atividadeId').value;
+        const id = idVal ? Number(idVal) : Date.now();
+
+        const obj = {
+            id: id,
+            nome: document.getElementById('atividadeNome').value.toUpperCase()
+        };
+
+        let newData = data.filter(a => String(a.id) !== String(id));
+        newData.push(obj);
+
+        saveData(DB_KEYS.ATIVIDADES, newData);
+        alert('Atividade Salva!');
+        e.target.reset();
+        document.getElementById('atividadeId').value = '';
+        populateAllSelects();
+    });
+
+    // --- MINHA EMPRESA ---
+    document.getElementById('formMinhaEmpresa')?.addEventListener('submit', e => {
+        e.preventDefault();
+        const obj = {
+            razaoSocial: document.getElementById('minhaEmpresaRazaoSocial').value.toUpperCase(),
+            cnpj: document.getElementById('minhaEmpresaCNPJ').value,
+            telefone: document.getElementById('minhaEmpresaTelefone').value
+        };
+        saveData(DB_KEYS.MINHA_EMPRESA, obj);
+        alert('Dados da Empresa Salvos!');
+        renderMinhaEmpresaInfo();
+    });
+
+    // --- OPERAÇÃO ---
     document.getElementById('formOperacao')?.addEventListener('submit', e => {
         e.preventDefault();
         const id = document.getElementById('operacaoId').value;
@@ -968,17 +1235,17 @@ function setupFormHandlers() {
         renderCalendar(currentDate);
         updateDashboardStats();
         renderCharts();
-        alert('Operação Salva!');
+        alert('Operação Salva com Sucesso!');
     });
 
-    // Despesa
+    // --- DESPESA GERAL ---
     document.getElementById('formDespesaGeral')?.addEventListener('submit', e => {
         e.preventDefault();
         const data = loadData(DB_KEYS.DESPESAS_GERAIS);
         const parcels = Number(document.getElementById('despesaParcelas').value) || 1;
         const baseVal = Number(document.getElementById('despesaGeralValor').value);
         const baseDate = new Date(document.getElementById('despesaGeralData').value + 'T00:00:00');
-        const desc = document.getElementById('despesaGeralDescricao').value;
+        const desc = document.getElementById('despesaGeralDescricao').value.toUpperCase();
         const placa = document.getElementById('selectVeiculoDespesaGeral').value;
 
         for(let i=0; i<parcels; i++) {
@@ -1002,18 +1269,29 @@ function setupFormHandlers() {
 }
 
 // =============================================================================
-// 15. INIT
+// 16. INIT
 // =============================================================================
 document.addEventListener('DOMContentLoaded', () => {
-    // Navegação
+    // Navegação Sidebar
     document.querySelectorAll('.nav-item').forEach(btn => {
         btn.addEventListener('click', () => {
+            // Remove active de tudo
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            
+            // Ativa o clicado
             btn.classList.add('active');
             const pageId = btn.getAttribute('data-page');
-            document.getElementById(pageId).classList.add('active');
-            if(pageId === 'graficos') renderCharts();
+            const pageEl = document.getElementById(pageId);
+            if(pageEl) {
+                pageEl.classList.add('active');
+                if(pageId === 'graficos') renderCharts();
+            }
+            // Fecha sidebar no mobile ao clicar
+            if(window.innerWidth <= 768) {
+                document.getElementById('sidebar').classList.remove('active');
+                document.getElementById('sidebarOverlay').classList.remove('active');
+            }
         });
     });
 
@@ -1044,9 +1322,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     setupFormHandlers();
-    // Listeners de formatação (Simplificado)
-    // ... (pode adicionar listeners de input aqui)
-
     populateAllSelects();
     renderOperacaoTable();
     renderDespesasTable();
@@ -1055,23 +1330,30 @@ document.addEventListener('DOMContentLoaded', () => {
     setupReciboListeners();
     renderCharts();
     
-    // Helper Listener
+    // Listener Helper Ajudantes
     document.getElementById('selectAjudantesOperacao')?.addEventListener('change', handleAjudanteSelectionChange);
 });
 
-// Fechar Modais
+// Fechar Modais (clique fora)
 window.onclick = function(event) {
     if (event.target.classList.contains('modal')) {
         event.target.style.display = "none";
     }
 };
 
-// Exportar funções globais necessárias
+// Exportar funções para o escopo Global (HTML onclick)
+window.changeMonth = changeMonth;
 window.editOperacaoItem = editOperacaoItem;
 window.viewOperacaoDetails = viewOperacaoDetails;
 window.deleteItem = deleteItem;
+window.editCadastroItem = editCadastroItem;
 window.exportDataBackup = exportDataBackup;
 window.importDataBackup = importDataBackup;
 window.fullSystemReset = fullSystemReset;
 window.exportReportToPDF = exportReportToPDF;
 window.gerarRelatorioCobranca = gerarRelatorioCobranca;
+window.gerarRelatorio = gerarRelatorio;
+window.closeModal = closeModal;
+window.closeViewModal = closeViewModal;
+window.closeAdicionarAjudanteModal = closeAdicionarAjudanteModal;
+window.toggleCursoInput = toggleCursoInput;

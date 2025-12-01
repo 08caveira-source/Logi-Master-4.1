@@ -126,7 +126,6 @@
                             <input type="number" id="operacaoFaturamento" step="0.01" min="0" required />
                         </div>
 
-                        <!-- CAMPO ADIANTAMENTO -->
                         <div class="form-group">
                             <label for="operacaoAdiantamento" style="color:var(--primary-color);">ADIANTAMENTO (R$):</label>
                             <input type="number" id="operacaoAdiantamento" step="0.01" min="0" placeholder="0,00" />
@@ -154,7 +153,6 @@
 
                         <div class="form-group">
                             <label for="operacaoKmRodado">KM RODADO:</label>
-                            <!-- Step 0.1 permite decimais -->
                             <input type="number" id="operacaoKmRodado" min="0" step="0.1" />
                         </div>
 
@@ -320,7 +318,7 @@
                         </div>
                         <div class="form-group">
                             <label for="motoristaTemCurso">POSSUI CURSOS ESPECIAIS?</label>
-                            <select id="motoristaTemCurso">
+                            <select id="motoristaTemCurso" onchange="toggleCursoInput()">
                                 <option value="nao">NÃO</option>
                                 <option value="sim">SIM</option>
                             </select>
@@ -333,9 +331,7 @@
                             <label for="motoristaPix">CHAVE PIX:</label>
                             <div style="display:flex; gap:8px; align-items:center;">
                                 <input type="text" id="motoristaPix" />
-                                <button type="button" class="btn-secondary btn-mini" id="btnMotoristaPixCopy" title="COPIAR PIX"><i class="fas fa-copy"></i></button>
                             </div>
-                            <small id="motoristaPixTipo" style="color:var(--secondary-color)"></small>
                         </div>
                     </div>
                     <div class="form-actions">
@@ -480,9 +476,7 @@
                             <label for="ajudantePix">CHAVE PIX:</label>
                             <div style="display:flex; gap:8px; align-items:center;">
                                 <input type="text" id="ajudantePix" />
-                                <button type="button" class="btn-secondary btn-mini" id="btnAjudantePixCopy" title="COPIAR PIX"><i class="fas fa-copy"></i></button>
                             </div>
-                            <small id="ajudantePixTipo" style="color:var(--secondary-color)"></small>
                         </div>
                     </div>
                     <div class="form-actions">
@@ -607,7 +601,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button type="submit" class="btn-primary"><i class="fas fa-file-alt"></i> GERAR RELATÓRIO GERENCIAL</button>
+                        <button type="submit" class="btn-primary" onclick="gerarRelatorio(event)"><i class="fas fa-file-alt"></i> GERAR RELATÓRIO GERENCIAL</button>
                         <button type="button" class="btn-primary" style="background-color:#455a64;" onclick="gerarRelatorioCobranca()"><i class="fas fa-file-invoice-dollar"></i> GERAR RELATÓRIO DE COBRANÇA</button>
                         <button type="button" class="btn-secondary" onclick="exportReportToPDF()"><i class="fas fa-file-pdf"></i> EXPORTAR PARA PDF</button>
                     </div>
@@ -658,9 +652,6 @@
                         
                         <div style="display:inline-flex; gap:10px; align-items:center;">
                             <button type="button" id="btnBaixarRecibo" class="btn-secondary" style="display:none;"><i class="fas fa-download"></i> BAIXAR RECIBO</button>
-                             <a id="btnWhatsappRecibo" target="_blank" class="btn-whatsapp btn-mini" title="ENVIAR RESUMO PELO WHATSAPP" style="display:none; text-decoration:none; padding:8px 10px; border-radius:50%;">
-                                <i class="fab fa-whatsapp" style="font-size:1.2rem; margin:0;"></i>
-                            </a>
                         </div>
 
                     </div>
