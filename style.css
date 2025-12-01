@@ -1,102 +1,91 @@
 /* ==========================================================================
-   1. RESET & VARIÁVEIS (TEMA MODERNO 2025)
+   1. CORES DE ALTO CONTRASTE (IDENTIFICAÇÃO RÁPIDA)
    ========================================================================== */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
 
 :root {
-    /* Paleta Principal (Logística Moderna) */
-    --primary: #0f172a;       /* Midnight Blue (Sidebar/Textos Fortes) */
-    --accent: #10b981;        /* Emerald Green (Ações Principais/Lucro) */
-    --accent-hover: #059669;
+    /* Cores Semânticas Fortes */
+    --cor-lucro: #2e7d32;       /* Verde Escuro (Dinheiro/Entrada) */
+    --cor-lucro-bg: #e8f5e9;    /* Fundo Verde Claro */
     
-    /* Paleta de Apoio */
-    --bg-body: #f1f5f9;       /* Slate 100 (Fundo Geral) */
-    --bg-surface: #ffffff;    /* Branco Puro (Cards) */
-    --border: #e2e8f0;        /* Slate 200 (Bordas Sutis) */
+    --cor-despesa: #c62828;     /* Vermelho Forte (Saída/Alerta) */
+    --cor-despesa-bg: #ffebee;  /* Fundo Vermelho Claro */
     
-    /* Textos */
-    --text-main: #334155;     /* Slate 700 */
-    --text-light: #64748b;    /* Slate 500 (Labels/Detalhes) */
-    --text-white: #ffffff;
-
-    /* Status */
-    --success-bg: #d1fae5; 
-    --success-text: #065f46;
-    --danger-bg: #fee2e2;
-    --danger-text: #991b1b;
+    --cor-sistema: #1565c0;     /* Azul Forte (Identidade do Sistema) */
+    --cor-sistema-escuro: #0d47a1;
+    
+    --cor-texto: #212121;       /* Preto Suave */
+    --cor-texto-secundario: #616161;
+    
+    --fundo-pagina: #eceff1;    /* Cinza Azulado Claro (Descanso visual) */
+    --fundo-card: #ffffff;
+    
+    --borda: #cfd8dc;
     
     /* Layout */
-    --sidebar-width: 280px;
-    --radius: 12px;           /* Cantos mais arredondados */
-    --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-    --input-height: 48px;     /* Inputs mais altos e clicáveis */
+    --sidebar-width: 250px;
+    --input-height: 40px;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Roboto', sans-serif; }
 
 body {
-    background-color: var(--bg-body);
-    color: var(--text-main);
+    background-color: var(--fundo-pagina);
+    color: var(--cor-texto);
     display: flex;
     min-height: 100vh;
     font-size: 14px;
-    line-height: 1.5;
 }
 
-/* Forçar maiúsculas elegantes */
-h1, h2, h3, h4, th, button, label, .sidebar span {
+/* Letras Maiúsculas para Leitura Rápida */
+h1, h2, h3, h4, th, button, label, input, select {
     text-transform: uppercase;
-    letter-spacing: 0.05em;
 }
 
 /* ==========================================================================
-   2. SIDEBAR (MENU LATERAL)
+   2. SIDEBAR (NAVEGAÇÃO)
    ========================================================================== */
 .sidebar {
     width: var(--sidebar-width);
-    background-color: var(--primary);
-    color: var(--text-white);
+    background-color: #263238; /* Cinza Chumbo Escuro */
+    color: white;
     height: 100vh;
     position: fixed;
     top: 0; left: 0;
     z-index: 100;
     display: flex; flex-direction: column;
-    box-shadow: 4px 0 24px rgba(0,0,0,0.15);
-    transition: transform 0.3s ease;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.2);
 }
 
 .logo {
-    height: 80px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.4rem; font-weight: 800;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-    background: linear-gradient(to right, #0f172a, #1e293b);
+    padding: 20px;
+    background-color: #1b2529;
+    text-align: center;
+    font-size: 1.4rem;
+    font-weight: 700;
+    border-bottom: 1px solid #37474f;
 }
-.logo span { color: var(--accent); }
+.logo span { color: #4caf50; } /* Detalhe verde no logo */
 
-.sidebar nav { flex: 1; padding: 20px 0; overflow-y: auto; }
+.sidebar nav { flex: 1; padding-top: 10px; overflow-y: auto; }
 .sidebar ul { list-style: none; }
 
 .nav-item {
-    padding: 16px 30px;
+    padding: 15px 20px;
     cursor: pointer;
-    color: #94a3b8;
+    border-bottom: 1px solid #37474f;
+    transition: 0.2s;
     font-weight: 500;
-    display: flex; align-items: center; gap: 15px;
-    transition: all 0.2s;
-    border-right: 3px solid transparent;
+    display: flex; align-items: center; gap: 10px;
+    color: #cfd8dc;
 }
 
-.nav-item:hover { color: #fff; background: rgba(255,255,255,0.05); }
+.nav-item:hover { background-color: #37474f; color: white; }
+
 .nav-item.active {
-    color: var(--accent);
-    background: rgba(16, 185, 129, 0.1);
-    border-right-color: var(--accent);
-}
-
-.sidebar-footer {
-    padding: 20px; text-align: center; font-size: 0.7rem; color: #64748b;
-    border-top: 1px solid rgba(255,255,255,0.1);
+    background-color: var(--cor-sistema); /* Azul destaque */
+    color: white;
+    border-left: 5px solid #64b5f6;
 }
 
 /* ==========================================================================
@@ -105,281 +94,243 @@ h1, h2, h3, h4, th, button, label, .sidebar span {
 .content {
     margin-left: var(--sidebar-width);
     flex: 1;
-    padding: 40px;
+    padding: 20px 30px;
     width: calc(100% - var(--sidebar-width));
 }
 
-.page { display: none; animation: fadeUp 0.4s ease; }
-.page.active { display: block; }
-
-@keyframes fadeUp {
-    from { opacity: 0; transform: translateY(15px); }
-    to { opacity: 1; transform: translateY(0); }
-}
+.page { display: none; }
+.page.active { display: block; animation: fadeIn 0.3s; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 h2 {
-    font-size: 1.8rem; font-weight: 700; color: var(--primary);
-    margin-bottom: 30px; position: relative;
-    padding-bottom: 10px;
-}
-h2::after {
-    content: ''; position: absolute; bottom: 0; left: 0;
-    width: 60px; height: 4px; background: var(--accent); border-radius: 2px;
+    color: var(--cor-sistema-escuro);
+    border-bottom: 3px solid var(--cor-sistema);
+    padding-bottom: 8px;
+    margin-bottom: 20px;
+    font-size: 1.6rem;
 }
 
 /* ==========================================================================
-   4. CARDS & DASHBOARD
+   4. CARDS DE RESUMO (TOPO) - IDENTIFICAÇÃO VISUAL CLARA
    ========================================================================== */
-.card {
-    background: var(--bg-surface);
-    border-radius: var(--radius);
-    padding: 30px;
-    box-shadow: var(--shadow);
-    border: 1px solid var(--border);
-    margin-bottom: 30px;
-}
-
-.card h3 {
-    font-size: 1.1rem; color: var(--text-light); margin-bottom: 25px;
-    border-bottom: 1px solid var(--border); padding-bottom: 15px;
-}
-
 .card-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 25px; margin-bottom: 30px;
+    gap: 20px;
+    margin-bottom: 25px;
 }
 
 .stat-card {
-    text-align: center; position: relative; overflow: hidden;
-    border: none; border-top: 4px solid transparent;
+    background: white;
+    padding: 20px;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    text-align: center;
+    border-top: 5px solid #ccc; /* Cor padrão */
 }
-.stat-card.success { border-color: var(--accent); }
-.stat-card.danger { border-color: #ef4444; }
-.stat-card.primary { border-color: var(--primary); }
 
-.stat-card h3 {
-    font-size: 2.5rem; font-weight: 800; margin: 10px 0 0 0; border: none; padding: 0;
-    color: var(--primary);
-}
-.stat-card.success h3 { color: var(--accent); }
-.stat-card.danger h3 { color: #ef4444; }
+.stat-card p { font-size: 0.9rem; color: #666; font-weight: bold; margin-bottom: 5px; }
+.stat-card h3 { font-size: 2rem; margin: 0; }
+
+/* Cores Específicas dos Cards */
+.stat-card.success { border-top-color: var(--cor-lucro); background-color: #f1f8e9; }
+.stat-card.success h3 { color: var(--cor-lucro); }
+
+.stat-card.danger { border-top-color: var(--cor-despesa); background-color: #ffebee; }
+.stat-card.danger h3 { color: var(--cor-despesa); }
+
+.stat-card.primary { border-top-color: var(--cor-sistema); background-color: #e3f2fd; }
+.stat-card.primary h3 { color: var(--cor-sistema-escuro); }
 
 /* ==========================================================================
-   5. FORMULÁRIOS ALINHADOS (CORREÇÃO DE ALINHAMENTO)
+   5. FORMULÁRIOS E BOTÕES
    ========================================================================== */
+.card {
+    background: white;
+    padding: 25px;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border: 1px solid #ddd;
+    margin-bottom: 20px;
+}
+
+.card h3 { margin-bottom: 20px; color: #455a64; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+
+/* GRID ALINHADO */
 .form-grid {
     display: grid;
-    /* Grid responsivo robusto: mínimo 250px por coluna */
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 25px;
-    align-items: start; /* Alinha no topo para evitar degraus se labels tiverem 2 linhas */
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 15px 20px;
+    align-items: end; /* Alinha inputs na base */
 }
 
-.form-group {
-    display: flex; flex-direction: column; position: relative;
-}
+.form-group { display: flex; flex-direction: column; }
+.form-group label { font-weight: 700; font-size: 0.8rem; margin-bottom: 5px; color: #37474f; }
 
-/* Garante que elementos full-width (como a lista de ajudantes) ocupem tudo */
-.form-group[style*="grid-column:1/-1"], 
-.form-group[style*="grid-column: 1/-1"] {
-    grid-column: 1 / -1 !important;
-}
-
-.form-group label {
-    font-size: 0.75rem; font-weight: 700; color: var(--text-light);
-    margin-bottom: 8px; display: block;
-}
-
+/* Inputs com visual forte */
 input, select, textarea {
-    width: 100%; height: var(--input-height);
-    padding: 0 16px;
-    border: 2px solid var(--border);
-    border-radius: 8px;
-    font-size: 0.95rem; color: var(--primary);
-    background: #f8fafc;
-    transition: all 0.2s;
+    height: var(--input-height);
+    padding: 5px 10px;
+    border: 1px solid #90a4ae;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    color: #000;
+    background-color: #fff;
 }
+input:focus, select:focus { border-color: var(--cor-sistema); outline: 2px solid #bbdefb; }
 
-input:focus, select:focus, textarea:focus {
-    border-color: var(--accent); background: #fff; outline: none;
-    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
-}
-
-/* Botões Modernos */
+/* Botões com cores semânticas */
 .form-actions {
-    grid-column: 1 / -1; margin-top: 10px;
-    display: flex; gap: 15px; flex-wrap: wrap;
+    grid-column: 1 / -1; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;
+    display: flex; gap: 10px;
 }
 
 button {
-    height: var(--input-height); padding: 0 25px;
-    border: none; border-radius: 8px;
-    font-weight: 600; cursor: pointer;
-    display: inline-flex; align-items: center; gap: 8px;
-    transition: transform 0.1s, opacity 0.2s;
+    height: 40px; padding: 0 20px; border: none; border-radius: 4px;
+    font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+    transition: 0.2s; font-size: 0.9rem;
 }
-button:active { transform: scale(0.98); }
 
-.btn-primary { background: var(--accent); color: white; }
-.btn-primary:hover { background: var(--accent-hover); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); }
+/* Botão Salvar = Verde (Ação Positiva) */
+.btn-primary { background-color: var(--cor-lucro); color: white; }
+.btn-primary:hover { background-color: #1b5e20; }
 
-.btn-secondary { background: var(--primary); color: white; }
-.btn-secondary:hover { background: #334155; }
+/* Botão Secundário = Azul/Cinza */
+.btn-secondary { background-color: #546e7a; color: white; }
+.btn-secondary:hover { background-color: #37474f; }
 
-.btn-danger { background: #ef4444; color: white; }
-.btn-danger:hover { background: #dc2626; }
-
-/* Botões pequenos em tabelas */
-.btn-action {
-    height: 32px; padding: 0 12px; font-size: 0.8rem;
-    border-radius: 6px; margin-left: 4px;
-}
-.edit-btn { background: #f59e0b; color: white; }
-.delete-btn { background: #ef4444; color: white; }
-.view-btn { background: #3b82f6; color: white; }
+/* Botão Excluir/Perigo = Vermelho */
+.btn-danger { background-color: var(--cor-despesa); color: white; }
+.btn-danger:hover { background-color: #b71c1c; }
 
 /* ==========================================================================
-   6. TABELAS
+   6. TABELAS (LINHAS ZEBRADAS E CORES NOS VALORES)
    ========================================================================== */
-.table-responsive {
-    overflow-x: auto; border-radius: 8px; border: 1px solid var(--border);
-}
-.data-table {
-    width: 100%; border-collapse: collapse; min-width: 700px;
-}
+.table-responsive { overflow-x: auto; border: 1px solid #ccc; margin-top: 15px; }
+.data-table { width: 100%; border-collapse: collapse; min-width: 600px; }
+
 .data-table th {
-    background: #f1f5f9; padding: 15px; text-align: left;
-    font-size: 0.75rem; color: var(--text-light);
+    background-color: #37474f; color: white; padding: 10px;
+    text-align: left; font-size: 0.85rem;
 }
+
 .data-table td {
-    padding: 15px; border-top: 1px solid var(--border);
-    font-size: 0.9rem; color: var(--text-main);
+    padding: 10px; border-bottom: 1px solid #ddd; font-size: 0.9rem; color: #333;
 }
-.data-table tr:hover { background: #f8fafc; }
+
+.data-table tr:nth-child(even) { background-color: #f5f5f5; }
+.data-table tr:hover { background-color: #e1f5fe; } /* Hover azul claro */
+
+/* Botões pequenos da tabela */
+.btn-action { height: 28px; padding: 0 10px; font-size: 0.75rem; border-radius: 3px; margin-right: 2px; }
+.edit-btn { background-color: #fbc02d; color: #333; } /* Amarelo Editar */
+.view-btn { background-color: #0288d1; color: white; } /* Azul Ver */
+.delete-btn { background-color: #d32f2f; color: white; } /* Vermelho Excluir */
 
 /* ==========================================================================
-   7. CALENDÁRIO (VISUAL MODERNO)
+   7. CALENDÁRIO (CÉLULAS CLARAS)
    ========================================================================== */
 .calendar-controls {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 15px; background: #f8fafc; border-radius: 8px; margin-bottom: 20px;
+    background: #37474f; color: white; padding: 10px; border-radius: 4px; margin-bottom: 10px;
 }
-.calendar-controls h4 { margin: 0; color: var(--primary); font-size: 1.2rem; }
+.calendar-controls h4 { margin: 0; font-size: 1.2rem; }
+.calendar-controls button { background: rgba(255,255,255,0.2); color: white; height: 30px; }
 
 .calendar-grid {
-    display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px;
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px;
+    border: 1px solid #ccc; background: #999;
 }
 
 .day-header {
-    text-align: center; font-weight: 700; color: var(--text-light);
-    font-size: 0.8rem; padding-bottom: 10px;
+    background: #eee; text-align: center; font-weight: bold; padding: 8px 0; font-size: 0.8rem;
 }
 
 .day-cell {
-    background: #fff; border: 1px solid var(--border);
-    border-radius: 12px; min-height: 110px; padding: 12px;
-    position: relative; transition: all 0.2s;
-    font-weight: 700; color: var(--text-light);
+    background: #fff; min-height: 100px; padding: 5px; position: relative;
+    border: 1px solid white; cursor: default;
 }
 
-.day-cell.empty { background: transparent; border: none; }
+.day-cell span { font-weight: bold; font-size: 1.1rem; color: #555; }
 
-/* ESTADO: TEM FATURAMENTO (VERDE) */
+/* DIAS COM FATURAMENTO (VERDE) */
 .day-cell.has-operation {
-    background: #ecfdf5; /* Fundo verde muito claro */
-    border-color: #6ee7b7;
-    color: var(--accent-hover);
+    background-color: #c8e6c9 !important; /* Verde Suave */
+    border: 2px solid #43a047;
     cursor: pointer;
 }
-.day-cell.has-operation:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.2);
-}
+.day-cell.has-operation:hover { background-color: #a5d6a7 !important; }
+.day-cell.has-operation span { color: #1b5e20; }
 
-/* ESTADO: SEM FATURAMENTO (NEUTRO/CINZA) - Opcional se usar a lógica JS */
+/* DIAS COM OPERAÇÃO MAS SEM FATURAMENTO (NEUTRO) */
 .day-cell.has-operation-neutral {
-    background: #f1f5f9;
-    border-color: #cbd5e1;
+    background-color: #cfd8dc !important;
+    border: 2px solid #78909c;
     cursor: pointer;
 }
 
 .event-dot {
-    width: 8px; height: 8px; background: var(--accent);
-    border-radius: 50%; position: absolute; top: 12px; right: 12px;
+    width: 10px; height: 10px; background-color: var(--cor-lucro);
+    border-radius: 50%; position: absolute; top: 5px; right: 5px;
+    border: 1px solid white;
 }
 
 /* ==========================================================================
-   8. UI HELPERS (LISTAS, TABS, ETC)
-   ========================================================================== */
-.tab-controls {
-    display: flex; gap: 10px; overflow-x: auto; padding-bottom: 2px;
-}
-.cadastro-tab-btn {
-    padding: 12px 24px; background: transparent; border: none;
-    border-bottom: 3px solid transparent; font-weight: 600; color: var(--text-light);
-    border-radius: 0;
-}
-.cadastro-tab-btn.active {
-    color: var(--accent); border-color: var(--accent); background: transparent;
-}
-.cadastro-form { display: none; padding-top: 20px; }
-.cadastro-form.active { display: block; }
-
-.simple-list {
-    list-style: none; margin-top: 10px; background: #fff;
-    border: 1px solid var(--border); border-radius: 8px;
-}
-.simple-list li {
-    padding: 10px 15px; border-bottom: 1px solid var(--border);
-    display: flex; justify-content: space-between; align-items: center;
-}
-.simple-list li:last-child { border-bottom: none; }
-
-/* ==========================================================================
-   9. MODAIS
+   8. MODAIS
    ========================================================================== */
 .modal {
-    display: none; position: fixed; z-index: 1000; left: 0; top: 0;
-    width: 100%; height: 100%; background: rgba(15, 23, 42, 0.7);
-    backdrop-filter: blur(4px);
+    display: none; position: fixed; z-index: 999; left: 0; top: 0;
+    width: 100%; height: 100%; background: rgba(0,0,0,0.6);
 }
 .modal-content {
-    background: #fff; margin: 5% auto; padding: 40px; width: 90%; max-width: 600px;
-    border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-    animation: slideUp 0.3s ease;
+    background: #fff; margin: 5% auto; padding: 25px; width: 95%; max-width: 650px;
+    border-radius: 5px; border-top: 5px solid var(--cor-sistema);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
 }
-@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.modal-content h3 { color: var(--cor-sistema-escuro); margin-bottom: 15px; border-bottom: 1px solid #eee; }
 
-.modal-content h3 { color: var(--primary); border-bottom: 2px solid var(--bg-body); padding-bottom: 15px; margin-bottom: 20px; }
+/* LISTAS INTERNAS (Ex: Ajudantes) */
+.simple-list {
+    list-style: none; border: 1px solid #ddd; margin-top: 5px;
+}
+.simple-list li {
+    padding: 8px 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;
+    background: #fff;
+}
+.simple-list li:nth-child(even) { background: #f9f9f9; }
 
 /* ==========================================================================
-   10. MOBILE
+   9. MOBILE & PRINT
    ========================================================================== */
 .mobile-nav {
-    display: none; position: fixed; top: 0; left: 0; width: 100%;
-    height: 60px; background: var(--primary); z-index: 200;
-    align-items: center; padding: 0 20px; color: white;
+    display: none; position: fixed; top: 0; left: 0; width: 100%; height: 60px;
+    background: #263238; z-index: 200; align-items: center; padding: 0 15px; color: white;
 }
-.mobile-nav button { background: none; padding: 0; color: white; font-size: 1.5rem; }
+.mobile-nav button { color: white; font-size: 1.5rem; padding: 0; background: none; }
 
 @media (max-width: 768px) {
     .mobile-nav { display: flex; }
     .sidebar { transform: translateX(-100%); top: 60px; height: calc(100% - 60px); }
     .sidebar.active { transform: translateX(0); }
-    .content { margin-left: 0; padding: 20px; margin-top: 60px; width: 100%; }
-    .form-grid { grid-template-columns: 1fr; }
-    .calendar-grid { gap: 5px; }
-    .day-cell { min-height: 70px; padding: 5px; font-size: 0.9rem; }
-    .card { padding: 20px; }
+    .content { margin-left: 0; padding: 15px; margin-top: 60px; width: 100%; }
+    .form-grid { grid-template-columns: 1fr; } /* Uma coluna no mobile */
+    .day-cell { min-height: 70px; }
+}
+
+@media print {
+    .sidebar, .mobile-nav, .no-print, .form-actions { display: none !important; }
+    .content { margin: 0; padding: 0; }
+    .card { box-shadow: none; border: 1px solid #000; }
 }
 
 /* ==========================================================================
-   11. IMPRESSÃO (RECIBO)
+   10. RECIBO (VISUAL FOLHA A4)
    ========================================================================== */
 .recibo-template {
-    border: 2px solid #000; padding: 40px; background: #fff;
-    font-family: 'Courier New', Courier, monospace;
+    border: 1px solid #000; padding: 30px; background: #fff; margin-top: 20px;
+    font-family: 'Courier New', Courier, monospace; /* Fonte tipo máquina de escrever */
 }
-.recibo-header { text-align: center; border-bottom: 2px dashed #000; margin-bottom: 30px; padding-bottom: 20px; }
-.recibo-total { background: #eee; padding: 10px; font-weight: bold; text-align: right; margin-top: 20px; border: 1px solid #000; }
+.recibo-header { text-align: center; border-bottom: 2px dashed #000; margin-bottom: 20px; padding-bottom: 10px; }
+.recibo-total { background: #ddd; padding: 5px; text-align: right; font-weight: bold; border: 1px solid #000; margin-top: 15px; }
+.recibo-assinaturas { margin-top: 40px; display: flex; justify-content: space-between; }
+.recibo-assinaturas div { width: 45%; border-top: 1px solid #000; text-align: center; padding-top: 5px; }
