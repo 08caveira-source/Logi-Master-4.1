@@ -1,35 +1,24 @@
-/* ==========================================================================
-   1. VARIÁVEIS E RESET GLOBAL
-   ========================================================================== */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+/* Importação de fonte moderna e limpa */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
 
 :root {
-    /* Paleta de Cores Profissional (Teal & Slate) */
-    --primary-color: #00796b;       /* Cor Principal (Botões, Destaques) */
-    --primary-hover: #004d40;       /* Hover Principal */
-    --secondary-color: #455a64;     /* Cor Secundária (Textos de apoio) */
+    /* Paleta Corporativa Sofisticada (Teal Escuro) */
+    --primary-color: #00796b; /* Teal Escuro (Mais Corporativo) */
+    --secondary-color: #546e7a; /* Cinza Chumbo Suave */
+    --background-color: #f0f4f8; /* Fundo Suave */
+    --surface-color: #ffffff; /* Fundo dos Cards/Superfícies */
+    --header-bg: #263238; /* Fundo da Sidebar Escura */
+    --text-color: #37474f; /* Texto Principal Escuro */
     
-    --bg-body: #f4f6f8;             /* Fundo da Página (Cinza muito claro) */
-    --bg-surface: #ffffff;          /* Fundo dos Cards (Branco) */
-    --bg-sidebar: #263238;          /* Fundo da Sidebar (Escuro) */
+    /* Cores de Destaque */
+    --success-color: #4caf50; /* Lucro/Faturamento */
+    --danger-color: #f44336; /* Despesas/Perdas */
+    --warning-color: #ff9800; /* Avisos */
+    --whatsapp-color: #25D366; /* WhatsApp */
     
-    --text-main: #212121;           /* Texto Principal */
-    --text-muted: #757575;          /* Texto Suave */
-    --text-light: #eceff1;          /* Texto sobre fundo escuro */
-
-    --border-color: #e0e0e0;        /* Bordas sutis */
-    
-    /* Cores de Estado */
-    --success: #2e7d32;
-    --danger: #c62828;
-    --warning: #f9a825;
-    
-    /* Dimensões e Efeitos */
-    --sidebar-width: 260px;
-    --header-height: 60px;
-    --radius: 8px;
-    --shadow-sm: 0 2px 4px rgba(0,0,0,0.05);
-    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+    /* Estilos */
+    --shadow-soft: 0 4px 16px rgba(0, 0, 0, 0.08);
+    --border-radius: 8px;
     --transition: all 0.2s ease-in-out;
 }
 
@@ -38,200 +27,197 @@
     padding: 0;
     box-sizing: border-box;
     font-family: 'Inter', sans-serif;
-    -webkit-font-smoothing: antialiased;
+    color: var(--text-color);
+}
+
+/* FORÇAR LETRAS MAIÚSCULAS GLOBALMENTE */
+body, input, select, textarea, button, h1, h2, h3, h4, h5, h6, p, label, span, td, th {
+    text-transform: uppercase;
 }
 
 body {
-    background-color: var(--bg-body);
-    color: var(--text-main);
+    background-color: var(--background-color);
     display: flex;
     min-height: 100vh;
-    font-size: 14px;
-    overflow-x: hidden; /* Evita scroll horizontal indesejado */
 }
 
-/* Forçar caixa alta em títulos e botões para padronização */
-h1, h2, h3, h4, th, .btn-primary, .btn-secondary, label {
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-/* ==========================================================================
-   2. SIDEBAR (MENU LATERAL)
-   ========================================================================== */
-.sidebar {
-    width: var(--sidebar-width);
-    background-color: var(--bg-sidebar);
-    color: var(--text-light);
-    height: 100vh;
+/* --- MOBILE NAV BAR --- */
+.mobile-nav {
+    display: none; /* Default hidden on desktop */
     position: fixed;
     top: 0;
     left: 0;
-    z-index: 100;
+    width: 100%;
+    height: 60px;
+    background-color: var(--header-bg);
+    color: white;
+    z-index: 200;
+    align-items: center;
+    padding: 0 15px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+.mobile-nav button {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    margin-right: 15px;
+}
+.logo-mobile {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: white;
+}
+
+/* --- SIDEBAR E NAVEGAÇÃO --- */
+.sidebar {
+    width: 250px;
+    background-color: var(--header-bg);
+    color: var(--surface-color);
+    padding: 30px 0;
+    position: fixed;
+    height: 100%;
     display: flex;
     flex-direction: column;
-    box-shadow: 2px 0 10px rgba(0,0,0,0.1);
-    transition: var(--transition);
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+    z-index: 300; /* Acima do mobile nav */
+    transition: transform 0.3s ease;
 }
 
 .logo {
-    padding: 25px;
-    font-size: 1.5rem;
-    font-weight: 800;
-    text-align: center;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-    background: rgba(0,0,0,0.1);
+    font-size: 1.8rem;
+    font-weight: 700;
+    padding: 0 25px 30px;
+    color: var(--surface-color);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.sidebar nav {
-    flex: 1;
-    overflow-y: auto;
-    padding-top: 15px;
-}
-
-.sidebar ul {
+nav ul {
     list-style: none;
+    flex-grow: 1;
 }
 
 .nav-item {
-    padding: 14px 25px;
+    padding: 15px 25px;
+    color: #cfd8dc;
     cursor: pointer;
-    transition: var(--transition);
-    color: #b0bec5;
-    font-weight: 500;
+    font-size: 1rem;
+    transition: background-color 0.2s, color 0.2s;
     display: flex;
     align-items: center;
-    border-left: 4px solid transparent;
 }
 
 .nav-item i {
-    width: 25px;
     margin-right: 10px;
-    text-align: center;
+    font-size: 1.1rem;
+    color: #cfd8dc;
 }
 
-.nav-item:hover {
-    background-color: rgba(255,255,255,0.05);
-    color: #fff;
+.nav-item:hover, .nav-item.active {
+    background-color: var(--primary-color);
+    color: white;
 }
 
-.nav-item.active {
-    background-color: rgba(0, 121, 107, 0.15); /* Tint of primary */
-    color: #4db6ac;
-    border-left-color: var(--primary-color);
+.nav-item:hover i, .nav-item.active i {
+    color: white;
 }
 
 .sidebar-footer {
-    padding: 20px;
-    text-align: center;
-    font-size: 0.75rem;
-    color: #546e7a;
-    border-top: 1px solid rgba(255,255,255,0.05);
+    padding: 20px 25px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* ==========================================================================
-   3. ÁREA DE CONTEÚDO PRINCIPAL
-   ========================================================================== */
+.sidebar-footer p {
+    font-size: 0.75rem;
+    color: #607d8b;
+}
+
+/* OVERLAY */
+.overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 250;
+}
+.overlay.active { display: block; }
+
+
+/* --- CONTEÚDO PRINCIPAL --- */
 .content {
-    margin-left: var(--sidebar-width);
-    flex: 1;
-    padding: 30px 40px;
-    width: calc(100% - var(--sidebar-width));
-    transition: var(--transition);
+    margin-left: 250px; /* Compensa a largura da sidebar */
+    padding: 30px;
+    flex-grow: 1;
+    transition: margin-left 0.3s ease;
 }
 
 .page {
     display: none;
-    animation: fadeIn 0.3s ease-in;
+    animation: fadeIn 0.5s;
 }
 
 .page.active {
     display: block;
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-h2 {
-    color: var(--secondary-color);
-    font-size: 1.5rem;
+.content h2 {
+    color: var(--primary-color);
     margin-bottom: 25px;
-    padding-bottom: 10px;
-    border-bottom: 2px solid var(--border-color);
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    font-weight: 600;
+    border-bottom: 2px solid var(--primary-color);
+    display: inline-block;
+    padding-bottom: 5px;
 }
 
-/* ==========================================================================
-   4. CARDS E GRID (LAYOUT)
-   ========================================================================== */
+
+/* --- CARDS E GRID --- */
 .card {
-    background: var(--bg-surface);
-    border-radius: var(--radius);
-    padding: 25px;
-    box-shadow: var(--shadow-sm);
-    border: 1px solid var(--border-color);
-    margin-bottom: 25px;
-    transition: var(--transition);
-}
-
-.card:hover {
-    box-shadow: var(--shadow-md);
+    background-color: var(--surface-color);
+    padding: 20px;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-soft);
+    margin-bottom: 20px;
 }
 
 .card h3 {
-    margin-bottom: 20px;
-    font-size: 1.1rem;
-    color: var(--primary-color);
-    font-weight: 700;
+    color: var(--secondary-color);
+    margin-bottom: 15px;
+    font-weight: 600;
 }
 
 .card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 25px;
-    margin-bottom: 25px;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
 }
 
 .stat-card {
     text-align: center;
-    padding: 30px 20px;
-    border-left: 5px solid transparent;
 }
 
 .stat-card p {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-    margin-bottom: 10px;
-    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--secondary-color);
+    margin-bottom: 5px;
 }
 
 .stat-card h3 {
-    font-size: 2.2rem;
+    font-size: 2rem;
     margin: 0;
-    font-weight: 800;
 }
 
-.stat-card.success { border-left-color: var(--success); }
-.stat-card.success h3 { color: var(--success); }
-
-.stat-card.danger { border-left-color: var(--danger); }
-.stat-card.danger h3 { color: var(--danger); }
-
-.stat-card.primary { border-left-color: var(--primary-color); }
+.stat-card.success h3 { color: var(--success-color); }
+.stat-card.danger h3 { color: var(--danger-color); }
 .stat-card.primary h3 { color: var(--primary-color); }
 
-/* ==========================================================================
-   5. FORMULÁRIOS (ALINHAMENTO PERFEITO)
-   ========================================================================== */
+
+/* --- FORMULÁRIOS --- */
 .form-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); /* Colunas responsivas */
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 20px;
-    align-items: end; /* Alinha os inputs na base */
 }
 
 .form-group {
@@ -240,388 +226,457 @@ h2 {
 }
 
 .form-group label {
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     font-weight: 600;
+    margin-bottom: 5px;
     color: var(--secondary-color);
-    margin-bottom: 6px;
 }
 
-input[type="text"],
-input[type="number"],
-input[type="date"],
-input[type="email"],
-select,
-textarea {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid #cfd8dc;
-    border-radius: 6px; /* Arredondado moderno */
-    font-size: 0.95rem;
-    background-color: #fafafa;
-    transition: var(--transition);
-    color: var(--text-main);
-    height: 42px; /* Altura fixa para alinhamento */
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group input[type="date"],
+.form-group select {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+    transition: border-color 0.2s;
 }
 
-input:focus, select:focus, textarea:focus {
-    outline: none;
+.form-group input:focus,
+.form-group select:focus {
     border-color: var(--primary-color);
-    background-color: #fff;
-    box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.15);
+    outline: none;
 }
 
-/* Botões */
 .form-actions {
-    grid-column: 1 / -1; /* Ocupa linha inteira */
-    margin-top: 25px;
+    margin-top: 20px;
+    grid-column: 1 / -1; /* Ocupa todas as colunas */
     display: flex;
     gap: 15px;
-    justify-content: flex-start;
+    flex-wrap: wrap;
 }
 
-button {
-    border: none;
-    border-radius: 6px;
-    padding: 0 20px;
-    height: 42px;
-    font-weight: 600;
+/* --- BOTÕES --- */
+.btn-primary, .btn-secondary, .btn-danger, .btn-action, .btn-whatsapp {
+    padding: 10px 15px;
+    border-radius: 4px;
     cursor: pointer;
+    font-weight: 600;
+    transition: background-color 0.2s;
+    border: none;
     font-size: 0.9rem;
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    gap: 8px;
-    transition: var(--transition);
+    gap: 5px;
+    text-decoration: none; /* Para links */
 }
 
-.btn-primary { background-color: var(--primary-color); color: #fff; }
-.btn-primary:hover { background-color: var(--primary-hover); transform: translateY(-1px); }
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+}
 
-.btn-secondary { background-color: var(--secondary-color); color: #fff; }
-.btn-secondary:hover { background-color: #37474f; transform: translateY(-1px); }
+.btn-primary:hover {
+    background-color: #005f56;
+}
 
-.btn-danger { background-color: var(--danger); color: #fff; }
-.btn-danger:hover { background-color: #b71c1c; }
+.btn-secondary {
+    background-color: var(--secondary-color);
+    color: white;
+}
 
-/* Botões pequenos da tabela */
+.btn-secondary:hover {
+    background-color: #455a64;
+}
+
+.btn-danger {
+    background-color: var(--danger-color);
+    color: white;
+}
+.btn-danger:hover {
+    background-color: #d32f2f;
+}
+
+.btn-whatsapp {
+    background-color: var(--whatsapp-color);
+    color: white;
+}
+.btn-whatsapp:hover {
+    background-color: #1ebe57;
+}
+
+/* Botões de Ação na Tabela */
 .btn-action {
-    padding: 5px 10px;
-    height: 32px;
-    font-size: 0.85rem;
+    padding: 5px 8px;
     margin: 0 2px;
+    font-size: 0.8rem;
 }
+.edit-btn { background-color: var(--warning-color); color: white; }
+.edit-btn:hover { background-color: #f57c00; }
+.delete-btn { background-color: var(--danger-color); color: white; }
+.delete-btn:hover { background-color: #d32f2f; }
 
+/* NOVO: Botão Mini (usado nos popups para copiar pix) */
 .btn-mini {
-    padding: 2px 8px;
-    height: auto;
+    padding: 4px 8px;
     font-size: 0.75rem;
     border-radius: 4px;
-    background: #e0e0e0;
-    color: #333;
+    border: 1px solid #ccc;
+    background: #eee;
+    cursor: pointer;
+    margin-left: 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
-.btn-mini:hover { background: #d5d5d5; }
+.btn-mini:hover {
+    background: #ddd;
+}
 
-/* ==========================================================================
-   6. TABELAS DE DADOS
-   ========================================================================== */
+
+/* --- TABELAS E RESPONSIVIDADE --- */
 .table-responsive {
     width: 100%;
     overflow-x: auto;
-    border-radius: var(--radius);
-    border: 1px solid var(--border-color);
 }
 
 .data-table {
     width: 100%;
     border-collapse: collapse;
-    background: #fff;
+    margin-top: 15px;
+    font-size: 0.9rem;
+    min-width: 600px; /* Força scroll horizontal no mobile */
 }
 
 .data-table th, .data-table td {
     padding: 12px 15px;
     text-align: left;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid #f0f0f0;
 }
 
 .data-table th {
-    background-color: #f5f7f9;
+    background-color: var(--background-color);
     color: var(--secondary-color);
     font-weight: 700;
-    font-size: 0.75rem;
+    text-transform: uppercase;
+    font-size: 0.8rem;
 }
 
 .data-table tbody tr:hover {
-    background-color: #f0f8f7; /* Leve tom verde ao passar mouse */
-}
-
-.data-table tbody tr:last-child td {
-    border-bottom: none;
-}
-
-/* ==========================================================================
-   7. CALENDÁRIO (VISUAL REFINADO)
-   ========================================================================== */
-.calendar-section {
-    background: white;
-}
-
-.calendar-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    background: #f5f5f5;
-    padding: 10px;
-    border-radius: 6px;
-}
-
-.calendar-controls h4 {
-    margin: 0;
-    font-size: 1.2rem;
-    color: var(--primary-color);
-}
-
-.calendar-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr); /* Sempre 7 colunas */
-    gap: 8px;
-}
-
-.day-header {
-    text-align: center;
-    font-weight: 700;
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    padding: 10px 0;
-    background-color: transparent;
-}
-
-.day-cell {
-    background-color: #fff;
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    min-height: 100px;
-    padding: 8px;
-    position: relative;
-    cursor: default;
-    transition: var(--transition);
-}
-
-.day-cell span {
-    font-weight: 700;
-    font-size: 1rem;
-    color: var(--text-muted);
-}
-
-.day-cell.empty {
     background-color: #f9f9f9;
-    border-color: transparent;
 }
 
-/* Dia com operação */
-.day-cell.has-operation {
-    background-color: #e0f2f1; /* Verde muito claro */
-    border-color: #80cbc4;
-    cursor: pointer;
-}
 
-.day-cell.has-operation:hover {
-    background-color: #b2dfdb;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-
-.day-cell.has-operation span {
-    color: var(--primary-color);
-}
-
-.event-dot {
-    width: 8px;
-    height: 8px;
-    background-color: var(--warning);
-    border-radius: 50%;
-    position: absolute;
-    top: 10px;
-    right: 10px;
-}
-
-/* ==========================================================================
-   8. TABS (ABAS) DE CADASTRO
-   ========================================================================== */
+/* --- CADASTROS (TABS) --- */
 .tab-controls {
     display: flex;
-    gap: 5px;
-    margin-bottom: 0; /* Cola no card abaixo */
+    gap: 10px;
+    margin-bottom: 15px;
     overflow-x: auto;
+    padding-bottom: 5px;
 }
 
 .cadastro-tab-btn {
-    padding: 12px 20px;
-    background: #e0e0e0;
-    border: none;
-    border-radius: 8px 8px 0 0;
+    padding: 10px 15px;
+    border: 1px solid #ddd;
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+    background-color: #e0e0e0;
+    color: var(--text-color);
     cursor: pointer;
-    font-weight: 600;
-    color: #666;
-    font-size: 0.85rem;
-    opacity: 0.8;
+    transition: var(--transition);
+    white-space: nowrap;
 }
 
 .cadastro-tab-btn.active {
-    background: var(--bg-surface);
+    background-color: var(--surface-color);
+    border-bottom: 1px solid var(--surface-color);
     color: var(--primary-color);
-    opacity: 1;
-    box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
+    font-weight: 600;
 }
 
 .cadastro-form {
     display: none;
-    border-top-left-radius: 0; /* Remove curva para conectar com a aba */
+    padding-top: 10px;
+    margin-top: -20px; /* Para 'esconder' a margem do card de baixo */
+    border-top-left-radius: 0;
 }
 
 .cadastro-form.active {
     display: block;
 }
 
-/* ==========================================================================
-   9. MODAIS
-   ========================================================================== */
+/* --- RECIBO --- */
+.receipt-preview {
+    margin-top: 20px;
+    overflow-x: auto;
+}
+.receipt-preview h3 {
+     border-bottom: 1px solid #eee;
+}
+
+.recibo-template {
+    border: 1px solid #ddd;
+    padding: 20px;
+    max-width: 800px;
+    min-width: 600px; /* Scroll no mobile */
+    margin: 20px auto;
+    background-color: white;
+}
+.recibo-header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+.recibo-header h3 {
+    color: var(--primary-color);
+    margin-bottom: 5px;
+}
+.recibo-info p {
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+.recibo-assinaturas {
+    display: flex;
+    justify-content: space-around;
+    text-align: center;
+    margin-top: 50px;
+    font-size: 0.95rem;
+}
+.recibo-assinaturas > div {
+    width: 45%;
+    border-top: 1px solid #333;
+    padding-top: 5px;
+    font-size: 0.9rem;
+}
+.recibo-detalhes-tabela {
+    width: 100%;
+    margin: 10px 0;
+    border: 1px solid #eee;
+}
+.recibo-detalhes-tabela th, .recibo-detalhes-tabela td {
+    padding: 8px 10px;
+    border: 1px solid #eee;
+    font-size: 0.85rem;
+}
+.recibo-detalhes-tabela th {
+    background-color: #f7f7f7;
+    font-weight: 600;
+}
+.recibo-total {
+    text-align: right;
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
+
+/* --- RELATÓRIOS --- */
+.report-container {
+    background-color: white;
+    padding: 30px;
+    border: 1px solid #eee;
+    max-width: 900px;
+    margin: 0 auto;
+    overflow-x: auto;
+}
+.report-table th, .report-table td {
+    padding: 8px 10px;
+}
+
+
+/* --- CALENDÁRIO --- */
+.calendar-section {
+    margin-top: 20px;
+}
+
+.calendar-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+    text-align: center;
+}
+
+.day-label {
+    font-weight: 700;
+    color: var(--primary-color);
+    padding: 8px 0;
+    background-color: #e0f2f1;
+    border-radius: 4px 4px 0 0;
+}
+
+.day-cell {
+    padding: 15px 5px;
+    background-color: #f7f7f7;
+    border-radius: 4px;
+    position: relative;
+    cursor: pointer;
+    transition: background-color 0.1s;
+    font-weight: 600;
+    min-height: 50px; /* Garante que células vazias tenham altura */
+}
+
+.day-cell:not(.empty):hover {
+    background-color: #e6e6e6;
+    border: 1px solid var(--primary-color);
+}
+
+.day-cell.empty {
+    background-color: #f0f4f8;
+    cursor: default;
+}
+
+/* NOVO: COR DE FUNDO PARA DIAS COM OPERAÇÃO */
+.day-cell.has-operation {
+    background-color: #c8e6c9 !important; /* Verde Suave */
+    border: 1px solid #81c784;
+    color: #1b5e20;
+}
+.day-cell.has-operation:hover {
+    background-color: #a5d6a7 !important;
+}
+
+.event-dot {
+    width: 8px;
+    height: 8px;
+    background-color: var(--warning-color);
+    border-radius: 50%;
+    position: absolute;
+    top: 5px;
+    right: 5px;
+}
+
+/* --- GRÁFICO --- */
+.chart-container {
+    height: 400px;
+    margin-bottom: 20px;
+    position: relative;
+}
+
+/* --- ANIMAÇÃO GERAL --- */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+
+/* --- NOVO: MODAL (Detalhes do Calendário) --- */
 .modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
+    display: none; /* Escondido por padrão */
+    position: fixed; 
+    z-index: 1000; /* Acima de todo o conteúdo */
     left: 0;
     top: 0;
-    width: 100%;
-    height: 100%;
-    overflow: auto;
-    background-color: rgba(0,0,0,0.6); /* Backdrop mais escuro */
-    backdrop-filter: blur(2px); /* Efeito blur no fundo */
+    width: 100%; 
+    height: 100%; 
+    overflow: auto; /* Habilita scroll se necessário */
+    background-color: rgba(0,0,0,0.4); /* Fundo preto semi-transparente */
 }
 
 .modal-content {
-    background-color: #fff;
-    margin: 5% auto;
-    padding: 30px;
-    border: none;
-    width: 90%;
+    background-color: var(--surface-color);
+    margin: 10% auto; /* Centralização vertical e horizontal */
+    padding: 25px;
+    border: 1px solid #888;
+    width: 80%; 
     max-width: 600px;
-    border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-    position: relative;
-    animation: slideDown 0.3s ease;
-}
-
-@keyframes slideDown {
-    from { transform: translateY(-50px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-soft);
+    animation: fadeIn 0.3s;
 }
 
 .modal-content h3 {
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 15px;
-    margin-bottom: 20px;
+    color: var(--primary-color);
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+.close-btn {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close-btn:hover,
+.close-btn:focus {
+    color: var(--danger-color);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+/* Estilo para cada bloco de operação no modal */
+.modal-operation-block {
+    margin-bottom: 15px;
+    padding: 10px;
+    border: 1px solid #e0e0e0;
+    border-left: 5px solid var(--secondary-color);
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+.modal-operation-block strong {
     color: var(--primary-color);
 }
 
-/* ==========================================================================
-   10. RECIBOS E RELATÓRIOS (IMPRESSÃO)
-   ========================================================================== */
-.recibo-template {
-    border: 1px solid #ccc;
-    padding: 40px;
-    background: #fff;
-    margin-top: 20px;
-    font-family: 'Times New Roman', serif; /* Fonte mais formal para recibo */
-}
-
-.recibo-header {
-    text-align: center;
-    border-bottom: 2px solid #333;
-    margin-bottom: 30px;
-    padding-bottom: 10px;
-}
-
-.recibo-total {
-    background: #f0f0f0;
+/* Lista Simples */
+.simple-list {
+    list-style: none;
+    margin-top: 10px;
     padding: 10px;
-    font-weight: 700;
-    text-align: right;
-    font-size: 1.1rem;
-    margin-top: 20px;
+    background: #f9f9f9;
+    border: 1px solid #eee;
+    border-radius: 4px;
 }
-
-/* ==========================================================================
-   11. RESPONSIVIDADE (MOBILE)
-   ========================================================================== */
-.mobile-nav {
-    display: none;
-    background: var(--bg-sidebar);
-    padding: 15px;
-    color: white;
+.simple-list li {
+    display: flex;
+    justify-content: space-between;
     align-items: center;
-    position: fixed;
-    top: 0;
-    width: 100%;
-    z-index: 200;
+    padding: 5px 0;
+    border-bottom: 1px solid #eee;
+}
+.simple-list li:last-child { border-bottom: none; }
+
+@media print {
+    .no-print { display: none !important; }
+    .sidebar { display: none !important; }
+    .content { margin: 0 !important; padding: 0 !important; }
 }
 
-.mobile-nav button {
-    background: none;
-    color: white;
-    font-size: 1.5rem;
-    padding: 0;
-    margin-right: 15px;
-}
-
-.logo-mobile {
-    font-weight: 800;
-    font-size: 1.2rem;
-}
-
-/* Overlay para sidebar mobile */
-.overlay {
-    display: none;
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: 90;
-}
-.overlay.active { display: block; }
-
+/* --- MOBILE MEDIA QUERIES --- */
 @media (max-width: 768px) {
-    .mobile-nav { display: flex; }
-    
+    .mobile-nav {
+        display: flex; /* Show Mobile Header */
+    }
+
     .sidebar {
-        transform: translateX(-100%);
-        top: 60px; /* Abaixo do header mobile */
+        transform: translateX(-100%); /* Hide Sidebar */
+        top: 60px; /* Below mobile header */
         height: calc(100% - 60px);
+        width: 250px;
     }
-    
+
     .sidebar.active {
-        transform: translateX(0);
+        transform: translateX(0); /* Slide In */
     }
-    
+
     .content {
-        margin-left: 0;
-        width: 100%;
-        margin-top: 60px;
-        padding: 20px;
+        margin-left: 0; /* Remove margin */
+        margin-top: 60px; /* Push content down */
+        padding: 15px;
     }
-    
-    .form-grid {
-        grid-template-columns: 1fr; /* Coluna única no mobile */
+
+    /* Single column grids on mobile */
+    .form-grid, .card-grid {
+        grid-template-columns: 1fr; 
     }
-    
-    .card-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .calendar-grid {
-        font-size: 0.8rem;
-    }
-    .day-cell {
-        min-height: 60px;
-        padding: 4px;
-    }
+
+    /* Smaller fonts/pads if needed */
+    .logo { display: none; } /* Hide big logo in sidebar, use mobile header */
 }
