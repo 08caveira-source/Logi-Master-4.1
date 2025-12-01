@@ -11,7 +11,7 @@
 </head>
 <body>
     <div class="mobile-nav">
-        <button id="mobileMenuBtn"><i class="fas fa-bars"></i></button>
+        <button id="mobileMenuBtn" type="button"><i class="fas fa-bars"></i></button>
         <span class="logo-mobile">LOGI<span style="color:var(--primary-color);">MASTER</span></span>
     </div>
 
@@ -58,9 +58,9 @@
             <div class="calendar-section card">
                 <h3>CALENDÁRIO DE OPERAÇÕES</h3>
                 <div class="calendar-controls">
-                    <button class="btn-secondary" onclick="changeMonth(-1)"><i class="fas fa-chevron-left"></i></button>
+                    <button type="button" class="btn-secondary" onclick="changeMonth(-1)"><i class="fas fa-chevron-left"></i></button>
                     <h4 id="currentMonthYear"></h4>
-                    <button class="btn-secondary" onclick="changeMonth(1)"><i class="fas fa-chevron-right"></i></button>
+                    <button type="button" class="btn-secondary" onclick="changeMonth(1)"><i class="fas fa-chevron-right"></i></button>
                 </div>
                 <div id="calendarGrid" class="calendar-grid"></div>
             </div>
@@ -89,11 +89,11 @@
             <h2>LANÇAR NOVA OPERAÇÃO</h2>
             <div class="card">
                 <form id="formOperacao">
-                    <input type="hidden" id="operacaoId" value="">
+                    <input type="hidden" id="operacaoId" value="" />
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="operacaoData">DATA DA OPERAÇÃO:</label>
-                            <input type="date" id="operacaoData" required>
+                            <input type="date" id="operacaoData" required />
                         </div>
                          <div class="form-group">
                             <label for="selectMotoristaOperacao">MOTORISTA:</label>
@@ -123,39 +123,39 @@
 
                         <div class="form-group">
                             <label for="operacaoFaturamento">FATURAMENTO (R$):</label>
-                            <input type="number" id="operacaoFaturamento" step="0.01" min="0" required>
+                            <input type="number" id="operacaoFaturamento" step="0.01" min="0" required />
                         </div>
 
-                        <!-- CAMPO ADIANTAMENTO ADICIONADO -->
+                        <!-- CAMPO ADIANTAMENTO -->
                         <div class="form-group">
                             <label for="operacaoAdiantamento" style="color:var(--primary-color);">ADIANTAMENTO (R$):</label>
-                            <input type="number" id="operacaoAdiantamento" step="0.01" min="0" placeholder="0,00">
+                            <input type="number" id="operacaoAdiantamento" step="0.01" min="0" placeholder="0,00" />
                         </div>
 
                         <div class="form-group">
                             <label for="operacaoComissao">COMISSÃO MOTORISTA (R$):</label>
-                            <input type="number" id="operacaoComissao" step="0.01" min="0">
+                            <input type="number" id="operacaoComissao" step="0.01" min="0" />
                         </div>
                         
                         <div class="form-group">
                             <label for="operacaoCombustivel" style="color: var(--danger-color);"><i class="fas fa-gas-pump"></i> VALOR DO ABASTECIMENTO (R$):</label>
-                            <input type="number" id="operacaoCombustivel" step="0.01" min="0">
+                            <input type="number" id="operacaoCombustivel" step="0.01" min="0" />
                         </div>
                         
                         <div class="form-group">
                             <label for="operacaoPrecoLitro">PREÇO DO LITRO (R$):</label>
-                            <input type="number" id="operacaoPrecoLitro" step="0.001" min="0">
+                            <input type="number" id="operacaoPrecoLitro" step="0.001" min="0" />
                         </div>
 
                         <div class="form-group">
                             <label for="operacaoDespesas">PEDÁGIOS (R$):</label>
-                            <input type="number" id="operacaoDespesas" step="0.01" min="0">
+                            <input type="number" id="operacaoDespesas" step="0.01" min="0" />
                         </div>
 
                         <div class="form-group">
                             <label for="operacaoKmRodado">KM RODADO:</label>
-                            <!-- Step 0.1 para aceitar frações -->
-                            <input type="number" id="operacaoKmRodado" min="0" step="0.1">
+                            <!-- Step 0.1 permite decimais -->
+                            <input type="number" id="operacaoKmRodado" min="0" step="0.1" />
                         </div>
 
                         <div class="form-group">
@@ -202,11 +202,11 @@
             <h2>LANÇAR DESPESA GERAL</h2>
             <div class="card">
                 <form id="formDespesaGeral">
-                    <input type="hidden" id="despesaGeralId" value="">
+                    <input type="hidden" id="despesaGeralId" value="" />
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="despesaGeralData">DATA DA DESPESA:</label>
-                            <input type="date" id="despesaGeralData" required>
+                            <input type="date" id="despesaGeralData" required />
                         </div>
                         <div class="form-group">
                             <label for="selectVeiculoDespesaGeral">PLACA (OPCIONAL):</label>
@@ -216,11 +216,11 @@
                         </div>
                         <div class="form-group" style="grid-column: span 1;">
                             <label for="despesaGeralDescricao">DESCRIÇÃO DA DESPESA:</label>
-                            <input type="text" id="despesaGeralDescricao" required>
+                            <input type="text" id="despesaGeralDescricao" required />
                         </div>
                         <div class="form-group">
                             <label for="despesaGeralValor">VALOR TOTAL (R$):</label>
-                            <input type="number" id="despesaGeralValor" step="0.01" min="0" required>
+                            <input type="number" id="despesaGeralValor" step="0.01" min="0" required />
                         </div>
                         <div class="form-group">
                             <label for="despesaParcelas">PARCELAS:</label>
@@ -270,38 +270,38 @@
         <section id="cadastros" class="page">
             <h2>GESTÃO DE CADASTROS E EMPRESA</h2>
             <div class="tab-controls">
-                <button class="cadastro-tab-btn active" data-tab="motoristas">MOTORISTAS</button>
-                <button class="cadastro-tab-btn" data-tab="veiculos">VEÍCULOS</button>
-                <button class="cadastro-tab-btn" data-tab="contratantes">CONTRATANTES</button>
-                <button class="cadastro-tab-btn" data-tab="ajudantes">AJUDANTES</button>
-                <button class="cadastro-tab-btn" data-tab="atividades">ATIVIDADES</button>
-                <button class="cadastro-tab-btn" data-tab="minhaEmpresa">MINHA EMPRESA</button>
+                <button type="button" class="cadastro-tab-btn active" data-tab="motoristas">MOTORISTAS</button>
+                <button type="button" class="cadastro-tab-btn" data-tab="veiculos">VEÍCULOS</button>
+                <button type="button" class="cadastro-tab-btn" data-tab="contratantes">CONTRATANTES</button>
+                <button type="button" class="cadastro-tab-btn" data-tab="ajudantes">AJUDANTES</button>
+                <button type="button" class="cadastro-tab-btn" data-tab="atividades">ATIVIDADES</button>
+                <button type="button" class="cadastro-tab-btn" data-tab="minhaEmpresa">MINHA EMPRESA</button>
             </div>
 
             <div id="motoristas" class="cadastro-form card active">
                 <h3>CADASTRO DE MOTORISTAS</h3>
                 <form id="formMotorista">
-                    <input type="hidden" id="motoristaId" value="">
+                    <input type="hidden" id="motoristaId" value="" />
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="motoristaNome">NOME COMPLETO:</label>
-                            <input type="text" id="motoristaNome" required>
+                            <input type="text" id="motoristaNome" required />
                         </div>
                         <div class="form-group">
                             <label for="motoristaDocumento">DOCUMENTO (CPF/RG):</label>
-                            <input type="text" id="motoristaDocumento" required>
+                            <input type="text" id="motoristaDocumento" required />
                         </div>
                         <div class="form-group">
                             <label for="motoristaTelefone">TELEFONE:</label>
-                            <input type="text" id="motoristaTelefone">
+                            <input type="text" id="motoristaTelefone" />
                         </div>
                         <div class="form-group">
                             <label for="motoristaCNH">NÚMERO CNH:</label>
-                            <input type="text" id="motoristaCNH">
+                            <input type="text" id="motoristaCNH" />
                         </div>
                         <div class="form-group">
                             <label for="motoristaValidadeCNH">VALIDADE CNH:</label>
-                            <input type="date" id="motoristaValidadeCNH">
+                            <input type="date" id="motoristaValidadeCNH" />
                         </div>
                         <div class="form-group">
                             <label for="motoristaCategoriaCNH">CATEGORIA CNH:</label>
@@ -327,12 +327,12 @@
                         </div>
                         <div class="form-group" id="divCursoDescricao" style="display:none;">
                             <label for="motoristaCursoDescricao">QUAIS CURSOS?</label>
-                            <input type="text" id="motoristaCursoDescricao">
+                            <input type="text" id="motoristaCursoDescricao" />
                         </div>
                         <div class="form-group">
                             <label for="motoristaPix">CHAVE PIX:</label>
                             <div style="display:flex; gap:8px; align-items:center;">
-                                <input type="text" id="motoristaPix">
+                                <input type="text" id="motoristaPix" />
                                 <button type="button" class="btn-secondary btn-mini" id="btnMotoristaPixCopy" title="COPIAR PIX"><i class="fas fa-copy"></i></button>
                             </div>
                             <small id="motoristaPixTipo" style="color:var(--secondary-color)"></small>
@@ -366,27 +366,27 @@
             <div id="veiculos" class="cadastro-form card">
                 <h3>CADASTRO DE VEÍCULOS</h3>
                 <form id="formVeiculo">
-                    <input type="hidden" id="veiculoId" value="">
+                    <input type="hidden" id="veiculoId" value="" />
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="veiculoPlaca">PLACA (CHAVE ÚNICA):</label>
-                            <input type="text" id="veiculoPlaca" required style="text-transform: uppercase;">
+                            <input type="text" id="veiculoPlaca" required style="text-transform: uppercase;" />
                         </div>
                         <div class="form-group">
                             <label for="veiculoModelo">MODELO:</label>
-                            <input type="text" id="veiculoModelo" required>
+                            <input type="text" id="veiculoModelo" required />
                         </div>
                         <div class="form-group">
                             <label for="veiculoAno">ANO:</label>
-                            <input type="number" id="veiculoAno" min="1900" max="2100">
+                            <input type="number" id="veiculoAno" min="1900" max="2100" />
                         </div>
                         <div class="form-group">
                             <label for="veiculoRenavam">RENAVAM (OPCIONAL):</label>
-                            <input type="text" id="veiculoRenavam">
+                            <input type="text" id="veiculoRenavam" />
                         </div>
                         <div class="form-group">
                             <label for="veiculoChassi">CHASSI (OPCIONAL):</label>
-                            <input type="text" id="veiculoChassi">
+                            <input type="text" id="veiculoChassi" />
                         </div>
                     </div>
                     <div class="form-actions">
@@ -416,19 +416,19 @@
             <div id="contratantes" class="cadastro-form card">
                 <h3>CADASTRO DE CONTRATANTES</h3>
                 <form id="formContratante">
-                    <input type="hidden" id="contratanteId" value="">
+                    <input type="hidden" id="contratanteId" value="" />
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="contratanteRazaoSocial">RAZÃO SOCIAL:</label>
-                            <input type="text" id="contratanteRazaoSocial" required>
+                            <input type="text" id="contratanteRazaoSocial" required />
                         </div>
                         <div class="form-group">
                             <label for="contratanteCNPJ">CNPJ/CPF (CHAVE ÚNICA):</label>
-                            <input type="text" id="contratanteCNPJ" required>
+                            <input type="text" id="contratanteCNPJ" required />
                         </div>
                         <div class="form-group">
                             <label for="contratanteTelefone">TELEFONE:</label>
-                            <input type="text" id="contratanteTelefone">
+                            <input type="text" id="contratanteTelefone" />
                         </div>
                     </div>
                     <div class="form-actions">
@@ -458,28 +458,28 @@
             <div id="ajudantes" class="cadastro-form card">
                 <h3>CADASTRO DE AJUDANTES</h3>
                 <form id="formAjudante">
-                    <input type="hidden" id="ajudanteId" value="">
+                    <input type="hidden" id="ajudanteId" value="" />
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="ajudanteNome">NOME COMPLETO:</label>
-                            <input type="text" id="ajudanteNome" required>
+                            <input type="text" id="ajudanteNome" required />
                         </div>
                         <div class="form-group">
                             <label for="ajudanteDocumento">CPF/CNPJ:</label>
-                            <input type="text" id="ajudanteDocumento" required>
+                            <input type="text" id="ajudanteDocumento" required />
                         </div>
                         <div class="form-group">
                             <label for="ajudanteTelefone">TELEFONE:</label>
-                            <input type="text" id="ajudanteTelefone">
+                            <input type="text" id="ajudanteTelefone" />
                         </div>
                         <div class="form-group">
                             <label for="ajudanteEndereco">ENDEREÇO:</label>
-                            <input type="text" id="ajudanteEndereco">
+                            <input type="text" id="ajudanteEndereco" />
                         </div>
                         <div class="form-group">
                             <label for="ajudantePix">CHAVE PIX:</label>
                             <div style="display:flex; gap:8px; align-items:center;">
-                                <input type="text" id="ajudantePix">
+                                <input type="text" id="ajudantePix" />
                                 <button type="button" class="btn-secondary btn-mini" id="btnAjudantePixCopy" title="COPIAR PIX"><i class="fas fa-copy"></i></button>
                             </div>
                             <small id="ajudantePixTipo" style="color:var(--secondary-color)"></small>
@@ -512,11 +512,11 @@
             <div id="atividades" class="cadastro-form card">
                 <h3>CADASTRO DE ATIVIDADES</h3>
                 <form id="formAtividade">
-                    <input type="hidden" id="atividadeId" value="">
+                    <input type="hidden" id="atividadeId" value="" />
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="atividadeNome">NOME DA ATIVIDADE:</label>
-                            <input type="text" id="atividadeNome" required>
+                            <input type="text" id="atividadeNome" required />
                         </div>
                     </div>
                     <div class="form-actions">
@@ -548,15 +548,15 @@
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="minhaEmpresaRazaoSocial">RAZÃO SOCIAL:</label>
-                            <input type="text" id="minhaEmpresaRazaoSocial" required>
+                            <input type="text" id="minhaEmpresaRazaoSocial" required />
                         </div>
                         <div class="form-group">
                             <label for="minhaEmpresaCNPJ">CNPJ/CPF:</label>
-                            <input type="text" id="minhaEmpresaCNPJ" required>
+                            <input type="text" id="minhaEmpresaCNPJ" required />
                         </div>
                         <div class="form-group">
                             <label for="minhaEmpresaTelefone">TELEFONE:</label>
-                            <input type="text" id="minhaEmpresaTelefone">
+                            <input type="text" id="minhaEmpresaTelefone" />
                         </div>
                     </div>
                     <div class="form-actions">
@@ -581,11 +581,11 @@
                     <div class="form-grid form-filters">
                         <div class="form-group">
                             <label for="dataInicioRelatorio">DATA INÍCIO:</label>
-                            <input type="date" id="dataInicioRelatorio" required>
+                            <input type="date" id="dataInicioRelatorio" required />
                         </div>
                         <div class="form-group">
                             <label for="dataFimRelatorio">DATA FIM:</label>
-                            <input type="date" id="dataFimRelatorio" required>
+                            <input type="date" id="dataFimRelatorio" required />
                         </div>
                         <div class="form-group">
                             <label for="selectMotoristaRelatorio">MOTORISTA:</label>
@@ -646,11 +646,11 @@
                         </div>
                         <div class="form-group">
                             <label for="dataInicioRecibo">DATA INÍCIO:</label>
-                            <input type="date" id="dataInicioRecibo">
+                            <input type="date" id="dataInicioRecibo" />
                         </div>
                         <div class="form-group">
                             <label for="dataFimRecibo">DATA FIM:</label>
-                            <input type="date" id="dataFimRecibo">
+                            <input type="date" id="dataFimRecibo" />
                         </div>
                     </div>
                     <div style="margin-top:15px;">
@@ -676,10 +676,10 @@
             <div class="card">
                 <h3>BACKUP</h3>
                 <div style="display:flex; gap:12px; align-items:center;">
-                    <button class="btn-primary" onclick="exportDataBackup()"><i class="fas fa-save"></i> SALVAR BACKUP</button>
+                    <button type="button" class="btn-primary" onclick="exportDataBackup()"><i class="fas fa-save"></i> SALVAR BACKUP</button>
                     <label class="btn-secondary" style="display:inline-flex; align-items:center; gap:8px; padding:8px 12px; cursor:pointer;">
                         <i class="fas fa-folder-open"></i> ABRIR BACKUP
-                        <input id="inputImportBackup" type="file" accept="application/json" style="display:none" onchange="importDataBackup(event)">
+                        <input id="inputImportBackup" type="file" accept="application/json" style="display:none" onchange="importDataBackup(event)" />
                     </label>
                 </div>
             </div>
@@ -687,7 +687,7 @@
             <div class="card" style="margin-top: 20px; border: 1px solid var(--danger-color);">
                 <h3 style="color: var(--danger-color);">ZONA DE PERIGO</h3>
                 <p style="margin-bottom:15px; color: var(--secondary-color);">CUIDADO: ESTA AÇÃO APAGA TODOS OS DADOS CADASTRADOS E RETORNA O SISTEMA AO ESTADO VAZIO. ESTA AÇÃO É IRREVERSÍVEL.</p>
-                <button class="btn-danger" onclick="fullSystemReset()"><i class="fas fa-bomb"></i> RESETAR TODO O SISTEMA (APAGAR TUDO)</button>
+                <button type="button" class="btn-danger" onclick="fullSystemReset()"><i class="fas fa-bomb"></i> RESETAR TODO O SISTEMA (APAGAR TUDO)</button>
             </div>
         </section>
 
@@ -698,7 +698,7 @@
             <h3 id="modalTitle"></h3>
             <div id="modalBodyContent"></div>
             <div style="text-align:right; margin-top:10px;">
-                <button class="btn-secondary" onclick="closeModal()">FECHAR</button>
+                <button type="button" class="btn-secondary" onclick="closeModal()">FECHAR</button>
             </div>
         </div>
     </div>
@@ -708,7 +708,7 @@
             <h3 id="viewItemTitle">VISUALIZAR</h3>
             <div id="viewItemBody" style="margin-top:8px;"></div>
             <div style="text-align:right; margin-top:10px;">
-                <button class="btn-secondary" onclick="closeViewModal()">FECHAR</button>
+                <button type="button" class="btn-secondary" onclick="closeViewModal()">FECHAR</button>
             </div>
         </div>
     </div>
@@ -719,11 +719,11 @@
             <div id="modalAdicionarBody">
                 <p id="modalAjudanteNome" style="font-weight:600;"></p>
                 <label for="modalDiariaInput">VALOR DA DIÁRIA (R$):</label>
-                <input id="modalDiariaInput" type="number" step="0.01" min="0" style="width:100%;padding:6px;margin-top:6px;">
+                <input id="modalDiariaInput" type="number" step="0.01" min="0" style="width:100%;padding:6px;margin-top:6px;" />
             </div>
             <div style="text-align:right; margin-top:10px;">
-                <button class="btn-primary" id="modalAjudanteAddBtn"><i class="fas fa-plus"></i> ADICIONAR</button>
-                <button class="btn-secondary" onclick="closeAdicionarAjudanteModal()">CANCELAR</button>
+                <button type="button" class="btn-primary" id="modalAjudanteAddBtn"><i class="fas fa-plus"></i> ADICIONAR</button>
+                <button type="button" class="btn-secondary" onclick="closeAdicionarAjudanteModal()">CANCELAR</button>
             </div>
         </div>
     </div>
