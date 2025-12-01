@@ -674,7 +674,7 @@ function setupFormHandlers() {
             const obj = {
                 razaoSocial: document.getElementById('minhaEmpresaRazaoSocial').value.toUpperCase(),
                 cnpj: document.getElementById('minhaEmpresaCNPJ').value,
-                telefone: document.getElementById('minhaEmpresaTelefone').value || ''
+                telefone: document.getElementById('minhaEmpresaTelefone').value
             };
             saveData(DB_KEYS.MINHA_EMPRESA, obj);
             renderMinhaEmpresaInfo();
@@ -854,8 +854,7 @@ function viewOperacaoDetails(id) {
             <p><strong>VEÍCULO:</strong> ${op.veiculoPlaca}</p>
             <p><strong>CONTRATANTE:</strong> ${contratante}</p>
             <p><strong>ATIVIDADE:</strong> ${atividade}</p>
-            <p style="font-size:1.1rem; color:var(--primary-color);"><strong>KM RODADO:</strong> ${op.kmRodado || 0} KM</p> <!-- EXIBINDO KM RODADO -->
-            <p><strong>FATURAMENTO:</strong> ${formatCurrency(op.faturamento)}</p>
+            <p style="font-size:1.1rem; color:var(--primary-color);"><strong>KM RODADO:</strong> ${op.kmRodado || 0} KM</p> <p><strong>FATURAMENTO:</strong> ${formatCurrency(op.faturamento)}</p>
             <p><strong>ADIANTAMENTO:</strong> ${formatCurrency(adiantamento)}</p>
             <p style="font-weight:bold; color:var(--primary-color); font-size:1.1rem;">SALDO A RECEBER: ${formatCurrency(saldoReceber)}</p>
             
@@ -979,8 +978,7 @@ function showOperationDetails(date) {
             <p><strong>MOTORISTA:</strong> ${motorista}</p>
             <p><strong>VEÍCULO:</strong> ${op.veiculoPlaca}</p>
             <p><strong>CONTRATANTE:</strong> ${getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ}</p>
-            <p><strong>KM RODADO:</strong> ${op.kmRodado || 0} KM</p> <!-- EXIBINDO KM RODADO -->
-            <p><strong>FATURAMENTO:</strong> ${formatCurrency(op.faturamento)}</p>
+            <p><strong>KM RODADO:</strong> ${op.kmRodado || 0} KM</p> <p><strong>FATURAMENTO:</strong> ${formatCurrency(op.faturamento)}</p>
             <p><strong>ADIANTAMENTO:</strong> ${formatCurrency(adiantamento)}</p>
             <p style="font-weight:700;">SALDO A RECEBER: ${formatCurrency(saldo)}</p>
             <p style="font-size:0.9rem; color:#555;">MÉDIA CONSUMO: ${mediaKmL.toFixed(2)} KM/L</p>
