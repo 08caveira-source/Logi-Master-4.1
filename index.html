@@ -125,6 +125,13 @@
                             <label for="operacaoFaturamento">FATURAMENTO (R$):</label>
                             <input type="number" id="operacaoFaturamento" step="0.01" min="0" required>
                         </div>
+                        
+                        <!-- NOVO CAMPO ADIANTAMENTO (Opcional, mas útil) -->
+                        <div class="form-group">
+                            <label for="operacaoAdiantamento">ADIANTAMENTO RECEBIDO (R$):</label>
+                            <input type="number" id="operacaoAdiantamento" step="0.01" min="0">
+                        </div>
+
                         <div class="form-group">
                             <label for="operacaoComissao">COMISSÃO MOTORISTA (R$):</label>
                             <input type="number" id="operacaoComissao" step="0.01" min="0">
@@ -146,8 +153,9 @@
                         </div>
 
                         <div class="form-group">
+                            <!-- ATUALIZADO: step="any" para aceitar decimais -->
                             <label for="operacaoKmRodado">KM RODADO:</label>
-                            <input type="number" id="operacaoKmRodado" min="0">
+                            <input type="number" id="operacaoKmRodado" min="0" step="any">
                         </div>
 
                         <div class="form-group">
@@ -163,6 +171,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
+                         <!-- Botão de submit garantido -->
                          <button type="submit" class="btn-primary"><i class="fas fa-save"></i> SALVAR OPERAÇÃO</button>
                          <button type="reset" class="btn-secondary"><i class="fas fa-undo"></i> LIMPAR FORMULÁRIO</button>
                     </div>
@@ -178,7 +187,7 @@
                                     <th>MOTORISTA</th>
                                     <th>ATIVIDADE</th>
                                     <th>FATURAMENTO</th>
-                                    <th>DIÁRIA LÍQUIDA</th>
+                                    <th>LUCRO OP.</th>
                                     <th>AÇÕES</th>
                                 </tr>
                             </thead>
@@ -197,7 +206,7 @@
                     <input type="hidden" id="despesaGeralId" value="">
                     <div class="form-grid">
                         <div class="form-group">
-                            <label for="despesaGeralData">DATA DA DESPESA:</label>
+                            <label for="despesaGeralData">DATA DA DESPESA / 1ª PARCELA:</label>
                             <input type="date" id="despesaGeralData" required>
                         </div>
                         <div class="form-group">
@@ -214,24 +223,54 @@
                             <label for="despesaGeralValor">VALOR TOTAL (R$):</label>
                             <input type="number" id="despesaGeralValor" step="0.01" min="0" required>
                         </div>
+                        
+                        <!-- NOVOS CAMPOS DE PAGAMENTO -->
                         <div class="form-group">
-                            <label for="despesaParcelas">PARCELAS:</label>
-                            <select id="despesaParcelas">
-                                <option value="1">À VISTA (1X)</option>
-                                <option value="2">2 VEZES</option>
-                                <option value="3">3 VEZES</option>
-                                <option value="4">4 VEZES</option>
-                                <option value="5">5 VEZES</option>
-                                <option value="6">6 VEZES</option>
-                                <option value="7">7 VEZES</option>
-                                <option value="8">8 VEZES</option>
-                                <option value="9">9 VEZES</option>
-                                <option value="10">10 VEZES</option>
-                                <option value="11">11 VEZES</option>
-                                <option value="12">12 VEZES</option>
+                            <label for="despesaFormaPagamento">FORMA DE PAGAMENTO:</label>
+                            <select id="despesaFormaPagamento">
+                                <option value="dinheiro">DINHEIRO</option>
+                                <option value="pix">PIX</option>
+                                <option value="cartao_credito">CARTÃO DE CRÉDITO</option>
+                                <option value="cartao_debito">CARTÃO DE DÉBITO</option>
+                                <option value="boleto">BOLETO BANCÁRIO</option>
+                                <option value="transferencia">TRANSFERÊNCIA</option>
                             </select>
                         </div>
+
+                        <div class="form-group">
+                            <label for="despesaModoPagamento">MODO DE PAGAMENTO:</label>
+                            <select id="despesaModoPagamento" onchange="toggleDespesaParcelas()">
+                                <option value="avista">À VISTA (1X)</option>
+                                <option value="parcelado">PARCELADO</option>
+                            </select>
+                        </div>
+
+                        <!-- DIV CONTAINER PARA CAMPOS DE PARCELAMENTO (ESCONDIDO POR PADRÃO) -->
+                        <div id="divDespesaParcelas" style="display:none; grid-column:1/-1; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:20px;">
+                            <div class="form-group">
+                                <label for="despesaParcelas">QUANTIDADE DE PARCELAS:</label>
+                                <select id="despesaParcelas">
+                                    <option value="2">2 VEZES</option>
+                                    <option value="3">3 VEZES</option>
+                                    <option value="4">4 VEZES</option>
+                                    <option value="5">5 VEZES</option>
+                                    <option value="6">6 VEZES</option>
+                                    <option value="7">7 VEZES</option>
+                                    <option value="8">8 VEZES</option>
+                                    <option value="9">9 VEZES</option>
+                                    <option value="10">10 VEZES</option>
+                                    <option value="12">12 VEZES</option>
+                                    <option value="24">24 VEZES</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="despesaIntervaloDias">INTERVALO DE PAGAMENTO (DIAS):</label>
+                                <input type="number" id="despesaIntervaloDias" value="30" min="1">
+                                <small style="color:var(--secondary-color)">EX: 30 PARA MENSAL, 7 PARA SEMANAL</small>
+                            </div>
+                        </div>
                     </div>
+
                     <div class="form-actions">
                         <button type="submit" class="btn-primary"><i class="fas fa-save"></i> SALVAR DESPESA</button>
                         <button type="reset" class="btn-secondary"><i class="fas fa-undo"></i> LIMPAR FORMULÁRIO</button>
@@ -246,9 +285,10 @@
                         <thead>
                             <tr>
                                 <th>DATA</th>
-                                <th>PLACA</th>
+                                <th>PLACA/REF</th>
                                 <th>DESCRIÇÃO</th>
                                 <th>VALOR</th>
+                                <th>STATUS</th>
                                 <th>AÇÕES</th>
                             </tr>
                         </thead>
@@ -685,6 +725,8 @@
 
     </main>
 
+    <!-- MODAIS DO SISTEMA -->
+
     <div id="operationDetailsModal" class="modal">
         <div class="modal-content">
             <h3 id="modalTitle"></h3>
@@ -716,6 +758,19 @@
             <div style="text-align:right; margin-top:10px;">
                 <button class="btn-primary" id="modalAjudanteAddBtn"><i class="fas fa-plus"></i> ADICIONAR</button>
                 <button class="btn-secondary" onclick="closeAdicionarAjudanteModal()">CANCELAR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOVO: MODAL DE LEMBRETES DE PAGAMENTO -->
+    <div id="reminderModal" class="modal">
+        <div class="modal-content">
+            <h3 style="color:var(--danger-color);"><i class="fas fa-bell"></i> LEMBRETES DE PAGAMENTO</h3>
+            <div id="reminderList" style="max-height:400px; overflow-y:auto;">
+                <!-- Lista de lembretes será injetada via JS -->
+            </div>
+            <div style="text-align:right; margin-top:15px;">
+                <button class="btn-secondary" onclick="closeReminderModal()">FECHAR</button>
             </div>
         </div>
     </div>

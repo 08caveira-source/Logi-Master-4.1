@@ -333,7 +333,7 @@ function renderAjudantesAdicionadosList() {
     }
     const html = arr.map(a => {
         const ajud = getAjudante(a.id) || {};
-        return `<li>${ajud.nome || 'ID:'+a.id} — DIÁRIA: ${formatCurrency(Number(a.diaria)||0)} <button class="btn-mini" style="margin-left:8px;" onclick="removeAjudanteFromOperation(${a.id})"><i class="fas fa-trash"></i></button></li>`;
+        return `<li>${ajud.nome || 'ID:'+a.id} — DIÁRIA: ${formatCurrency(Number(a.diaria)||0)} <button class="btn-mini" style="margin-left:8px;" type="button" onclick="removeAjudanteFromOperation(${a.id})"><i class="fas fa-trash"></i></button></li>`;
     }).join('');
     list.innerHTML = html;
 }
@@ -682,53 +682,95 @@ function setupFormHandlers() {
         });
     }
 
-    // DESPESA
+    // DESPESA GERAL (Modificado)
     const formDespesa = document.getElementById('formDespesaGeral');
     if (formDespesa) {
         formDespesa.addEventListener('submit', (e) => {
             e.preventDefault();
             let arr = loadData(DB_KEYS.DESPESAS_GERAIS);
-            const dataBase = document.getElementById('despesaGeralData').value;
-            const veiculoPlaca = document.getElementById('selectVeiculoDespesaGeral').value || null;
-            const descricaoBase = document.getElementById('despesaGeralDescricao').value.toUpperCase();
-            const valorTotal = Number(document.getElementById('despesaGeralValor').value) || 0;
-            const numParcelas = Number(document.getElementById('despesaParcelas').value) || 1;
-            const valorParcela = valorTotal / numParcelas;
+            const idHidden = document.getElementById('despesaGeralId').value;
+            
+            // Se for edição de item único
+            if (idHidden) {
+                const idx = arr.findIndex(d => d.id == idHidden);
+                if (idx >= 0) {
+                     arr[idx].data = document.getElementById('despesaGeralData').value;
+                     arr[idx].veiculoPlaca = document.getElementById('selectVeiculoDespesaGeral').value || null;
+                     arr[idx].descricao = document.getElementById('despesaGeralDescricao').value.toUpperCase();
+                     arr[idx].valor = Number(document.getElementById('despesaGeralValor').value) || 0;
+                     // Edição não muda modo de pagamento em massa, apenas dados básicos
+                }
+            } else {
+                // Nova Despesa
+                const dataBaseStr = document.getElementById('despesaGeralData').value;
+                const veiculoPlaca = document.getElementById('selectVeiculoDespesaGeral').value || null;
+                const descricaoBase = document.getElementById('despesaGeralDescricao').value.toUpperCase();
+                const valorTotal = Number(document.getElementById('despesaGeralValor').value) || 0;
+                
+                const modoPagamento = document.getElementById('despesaModoPagamento').value; // 'avista' ou 'parcelado'
+                const formaPagamento = document.getElementById('despesaFormaPagamento').value; // 'dinheiro', 'pix', etc
+                
+                let numParcelas = 1;
+                let intervaloDias = 30; // Padrão
+                
+                if (modoPagamento === 'parcelado') {
+                    numParcelas = Number(document.getElementById('despesaParcelas').value) || 1;
+                    intervaloDias = Number(document.getElementById('despesaIntervaloDias').value) || 30;
+                }
 
-            for (let i = 0; i < numParcelas; i++) {
-                const id = arr.length ? Math.max(...arr.map(d => d.id)) + 1 : 1;
-                const dateObj = new Date(dataBase + 'T00:00:00');
-                dateObj.setMonth(dateObj.getMonth() + i);
+                const valorParcela = valorTotal / numParcelas;
+                const dataBase = new Date(dataBaseStr + 'T00:00:00');
 
-                const y = dateObj.getFullYear();
-                const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-                const d = String(dateObj.getDate()).padStart(2, '0');
-                const dataParcela = `${y}-${m}-${d}`;
+                for (let i = 0; i < numParcelas; i++) {
+                    const id = arr.length ? Math.max(...arr.map(d => d.id)) + 1 : 1;
+                    
+                    // Cálculo da data baseado no intervalo de dias
+                    const dataObj = new Date(dataBase);
+                    dataObj.setDate(dataBase.getDate() + (i * intervaloDias));
+                    
+                    const y = dataObj.getFullYear();
+                    const m = String(dataObj.getMonth() + 1).padStart(2, '0');
+                    const d = String(dataObj.getDate()).padStart(2, '0');
+                    const dataParcela = `${y}-${m}-${d}`;
 
-                const descFinal = numParcelas > 1 ? `${descricaoBase} (${i+1}/${numParcelas})` : descricaoBase;
-                arr.push({
-                    id,
-                    data: dataParcela,
-                    veiculoPlaca,
-                    descricao: descFinal,
-                    valor: Number(valorParcela.toFixed(2))
-                });
+                    const descFinal = numParcelas > 1 ? `${descricaoBase} (${i+1}/${numParcelas})` : descricaoBase;
+                    
+                    arr.push({
+                        id,
+                        data: dataParcela,
+                        veiculoPlaca,
+                        descricao: descFinal,
+                        valor: Number(valorParcela.toFixed(2)),
+                        modoPagamento,
+                        formaPagamento,
+                        pago: false // Novo campo para controle de pagamento
+                    });
+                }
             }
+
             saveData(DB_KEYS.DESPESAS_GERAIS, arr);
             formDespesa.reset();
+            // Reset campos defaults
+            document.getElementById('despesaGeralId').value = '';
+            toggleDespesaParcelas(); 
             renderDespesasTable();
             updateDashboardStats();
             renderCharts();
             alert('DESPESA(S) SALVA(S).');
         });
-        formDespesa.addEventListener('reset', () => document.getElementById('despesaGeralId').value = '');
+        
+        formDespesa.addEventListener('reset', () => {
+            document.getElementById('despesaGeralId').value = '';
+            setTimeout(toggleDespesaParcelas, 50);
+        });
     }
 
     // OPERAÇÕES
     const formOperacao = document.getElementById('formOperacao');
     if (formOperacao) {
         formOperacao.addEventListener('submit', (e) => {
-            e.preventDefault();
+            e.preventDefault(); // Impede o envio padrão para garantir que o JS rode
+            
             const motId = document.getElementById('selectMotoristaOperacao').value;
             if (motId) verificarValidadeCNH(motId);
 
@@ -749,23 +791,30 @@ function setupFormHandlers() {
                 combustivel: Number(document.getElementById('operacaoCombustivel').value) || 0,
                 precoLitro: Number(document.getElementById('operacaoPrecoLitro').value) || 0,
                 despesas: Number(document.getElementById('operacaoDespesas').value) || 0,
-                kmRodado: Number(document.getElementById('operacaoKmRodado').value) || 0, // Aceita decimais
+                // Aceita decimais no KM (Number já lida com floats se vierem do input step="any")
+                kmRodado: Number(document.getElementById('operacaoKmRodado').value) || 0, 
                 ajudantes: ajudantesVisual.slice()
             };
             const idx = arr.findIndex(o => o.id === obj.id);
             if (idx >= 0) arr[idx] = obj;
             else arr.push(obj);
             saveData(DB_KEYS.OPERACOES, arr);
+            
+            // Limpeza
             window._operacaoAjudantesTempList = [];
             document.getElementById('listaAjudantesAdicionados').innerHTML = '';
             formOperacao.reset();
             document.getElementById('operacaoId').value = '';
+            
+            // Renderização
             renderOperacaoTable();
             updateDashboardStats();
             renderCalendar(currentDate);
             renderCharts();
-            alert('OPERAÇÃO SALVA.');
+            
+            alert('OPERAÇÃO SALVA COM SUCESSO!');
         });
+        
         formOperacao.addEventListener('reset', () => {
             document.getElementById('operacaoId').value = '';
             window._operacaoAjudantesTempList = [];
@@ -778,6 +827,21 @@ function setupFormHandlers() {
     const formRel = document.getElementById('formRelatorio');
     if (formRel) formRel.addEventListener('submit', gerarRelatorio);
 }
+
+// Handler para mostrar/esconder campos de parcelamento
+function toggleDespesaParcelas() {
+    const modo = document.getElementById('despesaModoPagamento').value;
+    const divParcelas = document.getElementById('divDespesaParcelas');
+    if (divParcelas) {
+        divParcelas.style.display = (modo === 'parcelado') ? 'grid' : 'none';
+        // Se for à vista, reseta para defaults para evitar erro de cálculo
+        if (modo === 'avista') {
+            document.getElementById('despesaParcelas').value = 1;
+            document.getElementById('despesaIntervaloDias').value = 30;
+        }
+    }
+}
+window.toggleDespesaParcelas = toggleDespesaParcelas; // Expor para HTML
 
 // =============================================================================
 // 12. TABELA DE OPERAÇÕES E VISUALIZAÇÃO
@@ -879,13 +943,25 @@ function renderDespesasTable() {
     const tabela = document.getElementById('tabelaDespesasGerais');
     if (!tabela || !tabela.querySelector('tbody')) return;
     if (!ds.length) {
-        tabela.querySelector('tbody').innerHTML = '<tr><td colspan="5" style="text-align:center;">NENHUMA DESPESA GERAL LANÇADA AINDA.</td></tr>';
+        tabela.querySelector('tbody').innerHTML = '<tr><td colspan="6" style="text-align:center;">NENHUMA DESPESA GERAL LANÇADA AINDA.</td></tr>';
         return;
     }
     let rows = '';
     ds.forEach(d => {
         const dataFmt = new Date(d.data + 'T00:00:00').toLocaleDateString('pt-BR');
-        rows += `<tr><td>${dataFmt}</td><td>${d.veiculoPlaca || 'GERAL'}</td><td>${d.descricao}</td><td>${formatCurrency(d.valor)}</td><td><button class="btn-action edit-btn" onclick="editDespesaItem(${d.id})"><i class="fas fa-edit"></i></button><button class="btn-action delete-btn" onclick="deleteItem('${DB_KEYS.DESPESAS_GERAIS}', ${d.id})"><i class="fas fa-trash"></i></button></td></tr>`;
+        const statusPag = d.pago ? '<span style="color:green; font-weight:bold;">PAGO</span>' : '<span style="color:red; font-weight:bold;">PENDENTE</span>';
+        
+        rows += `<tr>
+            <td>${dataFmt}</td>
+            <td>${d.veiculoPlaca || 'GERAL'}</td>
+            <td>${d.descricao}</td>
+            <td>${formatCurrency(d.valor)}</td>
+            <td>${statusPag}</td>
+            <td>
+                <button class="btn-action edit-btn" onclick="editDespesaItem(${d.id})"><i class="fas fa-edit"></i></button>
+                <button class="btn-action delete-btn" onclick="deleteItem('${DB_KEYS.DESPESAS_GERAIS}', ${d.id})"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>`;
     });
     tabela.querySelector('tbody').innerHTML = rows;
 }
@@ -898,7 +974,12 @@ function editDespesaItem(id) {
     document.getElementById('selectVeiculoDespesaGeral').value = d.veiculoPlaca || '';
     document.getElementById('despesaGeralDescricao').value = d.descricao;
     document.getElementById('despesaGeralValor').value = d.valor;
+    
+    // Na edição simples, não permitimos mudar a estrutura de parcelamento/modo
+    // para evitar complexidade em despesas já parceladas. O usuário edita valor/data.
+    
     window.location.hash = '#despesas';
+    alert('MODO DE EDIÇÃO: ALTERE DATA, VEÍCULO, DESCRIÇÃO OU VALOR. PARA REPARCELAR, EXCLUA E CRIE NOVAMENTE.');
 }
 
 // =============================================================================
@@ -1595,7 +1676,116 @@ class ConverterMoeda {
 }
 
 // =============================================================================
-// 18. INICIALIZAÇÃO E EVENTOS
+// 18. SISTEMA DE LEMBRETES DE PAGAMENTO (NOVO)
+// =============================================================================
+
+function checkAndShowReminders() {
+    const despesas = loadData(DB_KEYS.DESPESAS_GERAIS);
+    const hoje = new Date().toISOString().split('T')[0];
+    
+    // Filtra despesas vencidas ou vencendo hoje que NÃO estão pagas
+    // Se a propriedade 'pago' não existir (dados antigos), considera falso (pendente)
+    const pendentes = despesas.filter(d => {
+        const isPago = !!d.pago; 
+        return d.data <= hoje && !isPago;
+    }).sort((a,b) => new Date(a.data) - new Date(b.data));
+
+    if (pendentes.length > 0) {
+        openReminderModal(pendentes);
+    }
+}
+
+function openReminderModal(pendentes) {
+    const modal = document.getElementById('reminderModal');
+    const lista = document.getElementById('reminderList');
+    
+    let html = '';
+    pendentes.forEach(d => {
+        const dataFmt = new Date(d.data + 'T00:00:00').toLocaleDateString('pt-BR');
+        html += `
+            <div class="reminder-item">
+                <div class="reminder-info">
+                    <strong>VENCIMENTO: ${dataFmt}</strong>
+                    <p>${d.descricao} - ${formatCurrency(d.valor)}</p>
+                    ${d.veiculoPlaca ? `<small>VEÍCULO: ${d.veiculoPlaca}</small>` : ''}
+                </div>
+                <div class="reminder-actions">
+                    <button class="btn-success btn-mini" title="MARCAR COMO PAGO" onclick="payExpense(${d.id})"><i class="fas fa-check"></i> PAGO</button>
+                    <button class="btn-warning btn-mini" title="REAGENDAR (+1 DIA)" onclick="postponeExpense(${d.id})"><i class="fas fa-clock"></i> ADIAR</button>
+                    <button class="btn-danger btn-mini" title="EXCLUIR DÍVIDA" onclick="cancelExpense(${d.id})"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>
+        `;
+    });
+    
+    lista.innerHTML = html;
+    modal.style.display = 'block';
+}
+
+function closeReminderModal() {
+    document.getElementById('reminderModal').style.display = 'none';
+}
+window.closeReminderModal = closeReminderModal;
+
+// Ações do Modal de Lembrete
+window.payExpense = function(id) {
+    let arr = loadData(DB_KEYS.DESPESAS_GERAIS);
+    const idx = arr.findIndex(d => d.id === id);
+    if (idx >= 0) {
+        arr[idx].pago = true;
+        saveData(DB_KEYS.DESPESAS_GERAIS, arr);
+        // Atualiza a lista visualmente removendo o item
+        const el = event.target.closest('.reminder-item');
+        if (el) el.remove();
+        
+        // Se não houver mais itens, fecha modal
+        if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
+        
+        renderDespesasTable();
+        updateDashboardStats();
+    }
+};
+
+window.postponeExpense = function(id) {
+    let arr = loadData(DB_KEYS.DESPESAS_GERAIS);
+    const idx = arr.findIndex(d => d.id === id);
+    if (idx >= 0) {
+        const atual = new Date(arr[idx].data + 'T00:00:00');
+        atual.setDate(atual.getDate() + 1); // Adia 1 dia
+        const y = atual.getFullYear();
+        const m = String(atual.getMonth() + 1).padStart(2, '0');
+        const dStr = String(atual.getDate()).padStart(2, '0');
+        
+        arr[idx].data = `${y}-${m}-${dStr}`;
+        saveData(DB_KEYS.DESPESAS_GERAIS, arr);
+        
+        alert(`REAGENDADO PARA ${atual.toLocaleDateString('pt-BR')}`);
+        
+        const el = event.target.closest('.reminder-item');
+        if (el) el.remove();
+        if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
+        
+        renderDespesasTable();
+    }
+};
+
+window.cancelExpense = function(id) {
+    if(!confirm("TEM CERTEZA QUE DESEJA EXCLUIR ESTA DÍVIDA?")) return;
+    let arr = loadData(DB_KEYS.DESPESAS_GERAIS);
+    arr = arr.filter(d => d.id !== id);
+    saveData(DB_KEYS.DESPESAS_GERAIS, arr);
+    
+    const el = event.target.closest('.reminder-item');
+    if (el) el.remove();
+    if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
+    
+    renderDespesasTable();
+    updateDashboardStats();
+};
+
+
+// =============================================================================
+// 19. INICIALIZAÇÃO E EVENTOS
 // =============================================================================
 
 function setupInputFormattingListeners() {
@@ -1675,12 +1865,16 @@ document.addEventListener('DOMContentLoaded', () => {
     updateDashboardStats();
     setupReciboListeners();
     renderCharts();
+    
+    // Check reminders after load
+    setTimeout(checkAndShowReminders, 1000);
 });
 
 window.addEventListener('click', function(event) {
     const viewModal = document.getElementById('viewItemModal');
     const opModal = document.getElementById('operationDetailsModal');
     const addAjModal = document.getElementById('modalAdicionarAjudante');
+    // Não fecha o reminderModal clicando fora para forçar ação, mas pode adicionar se quiser
     if (event.target === viewModal) viewModal.style.display = 'none';
     if (event.target === opModal) opModal.style.display = 'none';
     if (event.target === addAjModal) addAjModal.style.display = 'none';

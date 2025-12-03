@@ -258,7 +258,7 @@ nav ul {
 }
 
 /* --- BOTÕES --- */
-.btn-primary, .btn-secondary, .btn-danger, .btn-action, .btn-whatsapp {
+.btn-primary, .btn-secondary, .btn-danger, .btn-action, .btn-whatsapp, .btn-success, .btn-warning {
     padding: 10px 15px;
     border-radius: 4px;
     cursor: pointer;
@@ -298,6 +298,22 @@ nav ul {
     background-color: #d32f2f;
 }
 
+.btn-success {
+    background-color: var(--success-color);
+    color: white;
+}
+.btn-success:hover {
+    background-color: #388e3c;
+}
+
+.btn-warning {
+    background-color: var(--warning-color);
+    color: white;
+}
+.btn-warning:hover {
+    background-color: #f57c00;
+}
+
 .btn-whatsapp {
     background-color: var(--whatsapp-color);
     color: white;
@@ -317,20 +333,29 @@ nav ul {
 .delete-btn { background-color: var(--danger-color); color: white; }
 .delete-btn:hover { background-color: #d32f2f; }
 
-/* NOVO: Botão Mini (usado nos popups para copiar pix) */
+/* NOVO: Botão Mini (usado nos popups para copiar pix e lembretes) */
 .btn-mini {
     padding: 4px 8px;
     font-size: 0.75rem;
     border-radius: 4px;
-    border: 1px solid #ccc;
-    background: #eee;
+    border: none;
     cursor: pointer;
     margin-left: 5px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    color: white;
 }
-.btn-mini:hover {
+.btn-mini i {
+    margin-right: 0;
+}
+/* Cores específicas para botões mini se não usarem as classes principais */
+button.btn-mini:not(.btn-primary):not(.btn-secondary):not(.btn-danger):not(.btn-success):not(.btn-warning):not(.btn-whatsapp) {
+     border: 1px solid #ccc;
+     background: #eee;
+     color: var(--text-color);
+}
+button.btn-mini:not(.btn-primary):not(.btn-secondary):not(.btn-danger):not(.btn-success):not(.btn-warning):not(.btn-whatsapp):hover {
     background: #ddd;
 }
 
@@ -531,7 +556,7 @@ nav ul {
     cursor: default;
 }
 
-/* NOVO: COR DE FUNDO PARA DIAS COM OPERAÇÃO */
+/* COR DE FUNDO PARA DIAS COM OPERAÇÃO */
 .day-cell.has-operation {
     background-color: #c8e6c9 !important; /* Verde Suave */
     border: 1px solid #81c784;
@@ -565,7 +590,7 @@ nav ul {
 }
 
 
-/* --- NOVO: MODAL (Detalhes do Calendário) --- */
+/* --- MODAIS --- */
 .modal {
     display: none; /* Escondido por padrão */
     position: fixed; 
@@ -575,15 +600,16 @@ nav ul {
     width: 100%; 
     height: 100%; 
     overflow: auto; /* Habilita scroll se necessário */
-    background-color: rgba(0,0,0,0.4); /* Fundo preto semi-transparente */
+    background-color: rgba(0,0,0,0.5); /* Fundo preto semi-transparente */
+    backdrop-filter: blur(2px); /* Efeito de desfoque no fundo */
 }
 
 .modal-content {
     background-color: var(--surface-color);
-    margin: 10% auto; /* Centralização vertical e horizontal */
+    margin: 5% auto; /* Mais próximo do topo para mobile */
     padding: 25px;
     border: 1px solid #888;
-    width: 80%; 
+    width: 90%; 
     max-width: 600px;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-soft);
@@ -623,6 +649,37 @@ nav ul {
 }
 .modal-operation-block strong {
     color: var(--primary-color);
+}
+
+/* Estilos Específicos do Modal de Lembretes */
+.reminder-item {
+    background: #fff3e0; /* Laranja bem claro para alerta */
+    border: 1px solid #ffe0b2;
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.reminder-info strong {
+    color: #e65100;
+    display: block;
+    margin-bottom: 4px;
+}
+.reminder-info p {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+.reminder-info small {
+    color: #666;
+}
+.reminder-actions {
+    display: flex;
+    gap: 8px;
 }
 
 /* Lista Simples */
@@ -676,7 +733,19 @@ nav ul {
     .form-grid, .card-grid {
         grid-template-columns: 1fr; 
     }
+    
+    .modal-content {
+        width: 95%;
+        margin: 15% auto;
+    }
 
-    /* Smaller fonts/pads if needed */
-    .logo { display: none; } /* Hide big logo in sidebar, use mobile header */
+    .reminder-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .reminder-actions {
+        width: 100%;
+        justify-content: flex-end;
+        margin-top: 10px;
+    }
 }
