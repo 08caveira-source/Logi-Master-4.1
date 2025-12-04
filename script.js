@@ -682,7 +682,7 @@ function setupFormHandlers() {
         });
     }
 
-    // DESPESA GERAL (Modificado para maior flexibilidade)
+    // DESPESA GERAL (Modificado para maior flexibilidade e parcelamento correto)
     const formDespesa = document.getElementById('formDespesaGeral');
     if (formDespesa) {
         formDespesa.addEventListener('submit', (e) => {
@@ -698,7 +698,7 @@ function setupFormHandlers() {
                      arr[idx].veiculoPlaca = document.getElementById('selectVeiculoDespesaGeral').value || null;
                      arr[idx].descricao = document.getElementById('despesaGeralDescricao').value.toUpperCase();
                      arr[idx].valor = Number(document.getElementById('despesaGeralValor').value) || 0;
-                     // Não alteramos a lógica de pagamento/parcelamento na edição simples
+                     // Não alteramos a lógica de pagamento/parcelamento na edição simples para evitar quebra
                 }
             } else {
                 // Nova Despesa
@@ -715,15 +715,20 @@ function setupFormHandlers() {
                 let parcelasJaPagas = 0; // Quantas das parcelas criadas já nascem pagas
                 
                 if (modoPagamento === 'parcelado') {
-                    // Pega o valor do input numérico, permitindo qualquer quantidade
+                    // Pega o valor do input numérico, permitindo qualquer quantidade (Ex: 10, 15, 24...)
                     numParcelas = parseInt(document.getElementById('despesaParcelas').value) || 2; 
                     intervaloDias = parseInt(document.getElementById('despesaIntervaloDias').value) || 30;
-                    parcelasJaPagas = parseInt(document.getElementById('despesaParcelasPagas').value) || 0;
+                    
+                    // Novo: Pega a quantidade de parcelas que já foram pagas (para dívidas antigas)
+                    // Este elemento será adicionado no HTML
+                    const inputPagas = document.getElementById('despesaParcelasPagas');
+                    if (inputPagas) {
+                        parcelasJaPagas = parseInt(inputPagas.value) || 0;
+                    }
                 }
 
                 const valorParcela = valorTotal / numParcelas;
-                // Ajuste de fuso horário simples (considerando input date como UTC-like para evitar bugs de dia anterior)
-                // Usando new Date(YYYY, MM-1, DD) é mais seguro que parsear string direta
+                // Ajuste de fuso horário simples
                 const [y_ini, m_ini, d_ini] = dataBaseStr.split('-').map(Number);
                 const dataBase = new Date(y_ini, m_ini - 1, d_ini);
 
@@ -742,6 +747,7 @@ function setupFormHandlers() {
                     const descFinal = numParcelas > 1 ? `${descricaoBase} (${i+1}/${numParcelas})` : descricaoBase;
                     
                     // Se i (índice 0-based) for menor que a quantidade já paga, marca como pago
+                    // Ex: 10 parcelas, 3 pagas. i=0 (Paga), i=1 (Paga), i=2 (Paga), i=3 (Pendente)...
                     const estaPaga = i < parcelasJaPagas;
 
                     arr.push({
@@ -759,6 +765,7 @@ function setupFormHandlers() {
 
             saveData(DB_KEYS.DESPESAS_GERAIS, arr);
             formDespesa.reset();
+            
             // Reset campos defaults
             document.getElementById('despesaGeralId').value = '';
             toggleDespesaParcelas(); 

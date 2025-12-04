@@ -249,24 +249,19 @@
                         <div id="divDespesaParcelas" style="display:none; grid-column:1/-1; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:20px;">
                             <div class="form-group">
                                 <label for="despesaParcelas">QUANTIDADE DE PARCELAS:</label>
-                                <select id="despesaParcelas">
-                                    <option value="2">2 VEZES</option>
-                                    <option value="3">3 VEZES</option>
-                                    <option value="4">4 VEZES</option>
-                                    <option value="5">5 VEZES</option>
-                                    <option value="6">6 VEZES</option>
-                                    <option value="7">7 VEZES</option>
-                                    <option value="8">8 VEZES</option>
-                                    <option value="9">9 VEZES</option>
-                                    <option value="10">10 VEZES</option>
-                                    <option value="12">12 VEZES</option>
-                                    <option value="24">24 VEZES</option>
-                                </select>
+                                <!-- MUDANÇA: INPUT LIVRE PARA QUALQUER NÚMERO DE PARCELAS -->
+                                <input type="number" id="despesaParcelas" min="2" value="2" placeholder="EX: 12">
                             </div>
                             <div class="form-group">
                                 <label for="despesaIntervaloDias">INTERVALO DE PAGAMENTO (DIAS):</label>
                                 <input type="number" id="despesaIntervaloDias" value="30" min="1">
-                                <small style="color:var(--secondary-color)">EX: 30 PARA MENSAL, 7 PARA SEMANAL</small>
+                                <small style="color:var(--secondary-color)">EX: 30 PARA MENSAL, 15 PARA QUINZENAL</small>
+                            </div>
+                            <!-- MUDANÇA: CAMPO PARA PARCELAS JÁ PAGAS -->
+                            <div class="form-group">
+                                <label for="despesaParcelasPagas">JÁ PAGAS (QUANTIDADE):</label>
+                                <input type="number" id="despesaParcelasPagas" min="0" value="0">
+                                <small style="color:var(--secondary-color)">EX: SE JÁ PAGOU 2, COLOQUE 2.</small>
                             </div>
                         </div>
                     </div>
