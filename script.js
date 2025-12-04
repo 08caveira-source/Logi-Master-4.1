@@ -333,7 +333,7 @@ function renderAjudantesAdicionadosList() {
     }
     const html = arr.map(a => {
         const ajud = getAjudante(a.id) || {};
-        return `<li>${ajud.nome || 'ID:'+a.id} — DIÁRIA: ${formatCurrency(Number(a.diaria)||0)} <button class="btn-mini" style="margin-left:8px;" type="button" onclick="removeAjudanteFromOperation(${a.id})"><i class="fas fa-trash"></i></button></li>`;
+        return `<li>${ajud.nome || 'ID:'+a.id} — DIÁRIA: ${formatCurrency(Number(a.diaria)||0)} <button class="btn-mini" type="button" style="margin-left:8px;" onclick="removeAjudanteFromOperation(${a.id})"><i class="fas fa-trash"></i></button></li>`;
     }).join('');
     list.innerHTML = html;
 }
@@ -682,7 +682,7 @@ function setupFormHandlers() {
         });
     }
 
-    // DESPESA GERAL (Modificado)
+    // DESPESA GERAL (Modificado para maior flexibilidade)
     const formDespesa = document.getElementById('formDespesaGeral');
     if (formDespesa) {
         formDespesa.addEventListener('submit', (e) => {
@@ -698,7 +698,7 @@ function setupFormHandlers() {
                      arr[idx].veiculoPlaca = document.getElementById('selectVeiculoDespesaGeral').value || null;
                      arr[idx].descricao = document.getElementById('despesaGeralDescricao').value.toUpperCase();
                      arr[idx].valor = Number(document.getElementById('despesaGeralValor').value) || 0;
-                     // Edição não muda modo de pagamento em massa, apenas dados básicos
+                     // Não alteramos a lógica de pagamento/parcelamento na edição simples
                 }
             } else {
                 // Nova Despesa
@@ -708,18 +708,24 @@ function setupFormHandlers() {
                 const valorTotal = Number(document.getElementById('despesaGeralValor').value) || 0;
                 
                 const modoPagamento = document.getElementById('despesaModoPagamento').value; // 'avista' ou 'parcelado'
-                const formaPagamento = document.getElementById('despesaFormaPagamento').value; // 'dinheiro', 'pix', etc
+                const formaPagamento = document.getElementById('despesaFormaPagamento').value; 
                 
                 let numParcelas = 1;
                 let intervaloDias = 30; // Padrão
+                let parcelasJaPagas = 0; // Quantas das parcelas criadas já nascem pagas
                 
                 if (modoPagamento === 'parcelado') {
-                    numParcelas = Number(document.getElementById('despesaParcelas').value) || 1;
-                    intervaloDias = Number(document.getElementById('despesaIntervaloDias').value) || 30;
+                    // Pega o valor do input numérico, permitindo qualquer quantidade
+                    numParcelas = parseInt(document.getElementById('despesaParcelas').value) || 2; 
+                    intervaloDias = parseInt(document.getElementById('despesaIntervaloDias').value) || 30;
+                    parcelasJaPagas = parseInt(document.getElementById('despesaParcelasPagas').value) || 0;
                 }
 
                 const valorParcela = valorTotal / numParcelas;
-                const dataBase = new Date(dataBaseStr + 'T00:00:00');
+                // Ajuste de fuso horário simples (considerando input date como UTC-like para evitar bugs de dia anterior)
+                // Usando new Date(YYYY, MM-1, DD) é mais seguro que parsear string direta
+                const [y_ini, m_ini, d_ini] = dataBaseStr.split('-').map(Number);
+                const dataBase = new Date(y_ini, m_ini - 1, d_ini);
 
                 for (let i = 0; i < numParcelas; i++) {
                     const id = arr.length ? Math.max(...arr.map(d => d.id)) + 1 : 1;
@@ -735,6 +741,9 @@ function setupFormHandlers() {
 
                     const descFinal = numParcelas > 1 ? `${descricaoBase} (${i+1}/${numParcelas})` : descricaoBase;
                     
+                    // Se i (índice 0-based) for menor que a quantidade já paga, marca como pago
+                    const estaPaga = i < parcelasJaPagas;
+
                     arr.push({
                         id,
                         data: dataParcela,
@@ -743,7 +752,7 @@ function setupFormHandlers() {
                         valor: Number(valorParcela.toFixed(2)),
                         modoPagamento,
                         formaPagamento,
-                        pago: false // Novo campo para controle de pagamento
+                        pago: estaPaga
                     });
                 }
             }
@@ -769,7 +778,7 @@ function setupFormHandlers() {
     const formOperacao = document.getElementById('formOperacao');
     if (formOperacao) {
         formOperacao.addEventListener('submit', (e) => {
-            e.preventDefault(); // Impede o envio padrão para garantir que o JS rode
+            e.preventDefault(); // Impede o envio padrão
             
             const motId = document.getElementById('selectMotoristaOperacao').value;
             if (motId) verificarValidadeCNH(motId);
@@ -791,7 +800,6 @@ function setupFormHandlers() {
                 combustivel: Number(document.getElementById('operacaoCombustivel').value) || 0,
                 precoLitro: Number(document.getElementById('operacaoPrecoLitro').value) || 0,
                 despesas: Number(document.getElementById('operacaoDespesas').value) || 0,
-                // Aceita decimais no KM (Number já lida com floats se vierem do input step="any")
                 kmRodado: Number(document.getElementById('operacaoKmRodado').value) || 0, 
                 ajudantes: ajudantesVisual.slice()
             };
@@ -834,14 +842,13 @@ function toggleDespesaParcelas() {
     const divParcelas = document.getElementById('divDespesaParcelas');
     if (divParcelas) {
         divParcelas.style.display = (modo === 'parcelado') ? 'grid' : 'none';
-        // Se for à vista, reseta para defaults para evitar erro de cálculo
+        // Reset defaults visualmente se voltar pra à vista, mas o submit trata a lógica
         if (modo === 'avista') {
             document.getElementById('despesaParcelas').value = 1;
-            document.getElementById('despesaIntervaloDias').value = 30;
         }
     }
 }
-window.toggleDespesaParcelas = toggleDespesaParcelas; // Expor para HTML
+window.toggleDespesaParcelas = toggleDespesaParcelas; 
 
 // =============================================================================
 // 12. TABELA DE OPERAÇÕES E VISUALIZAÇÃO
@@ -1676,7 +1683,7 @@ class ConverterMoeda {
 }
 
 // =============================================================================
-// 18. SISTEMA DE LEMBRETES DE PAGAMENTO (NOVO)
+// 18. SISTEMA DE LEMBRETES DE PAGAMENTO
 // =============================================================================
 
 function checkAndShowReminders() {
@@ -1684,7 +1691,6 @@ function checkAndShowReminders() {
     const hoje = new Date().toISOString().split('T')[0];
     
     // Filtra despesas vencidas ou vencendo hoje que NÃO estão pagas
-    // Se a propriedade 'pago' não existir (dados antigos), considera falso (pendente)
     const pendentes = despesas.filter(d => {
         const isPago = !!d.pago; 
         return d.data <= hoje && !isPago;
@@ -1734,13 +1740,9 @@ window.payExpense = function(id) {
     if (idx >= 0) {
         arr[idx].pago = true;
         saveData(DB_KEYS.DESPESAS_GERAIS, arr);
-        // Atualiza a lista visualmente removendo o item
         const el = event.target.closest('.reminder-item');
         if (el) el.remove();
-        
-        // Se não houver mais itens, fecha modal
         if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
-        
         renderDespesasTable();
         updateDashboardStats();
     }
@@ -1758,7 +1760,6 @@ window.postponeExpense = function(id) {
         
         arr[idx].data = `${y}-${m}-${dStr}`;
         saveData(DB_KEYS.DESPESAS_GERAIS, arr);
-        
         alert(`REAGENDADO PARA ${atual.toLocaleDateString('pt-BR')}`);
         
         const el = event.target.closest('.reminder-item');
@@ -1874,7 +1875,6 @@ window.addEventListener('click', function(event) {
     const viewModal = document.getElementById('viewItemModal');
     const opModal = document.getElementById('operationDetailsModal');
     const addAjModal = document.getElementById('modalAdicionarAjudante');
-    // Não fecha o reminderModal clicando fora para forçar ação, mas pode adicionar se quiser
     if (event.target === viewModal) viewModal.style.display = 'none';
     if (event.target === opModal) opModal.style.display = 'none';
     if (event.target === addAjModal) addAjModal.style.display = 'none';
