@@ -5,7 +5,7 @@
 // --- PROTEÇÃO DE ROTA E INICIALIZAÇÃO SEGURA ---
 (function initSystemSecurity() {
     let attempts = 0;
-    const maxAttempts = 50; // Tenta por 5 segundos
+    const maxAttempts = 100; // Tenta por 10 segundos (aumentado para conexões lentas)
 
     const checkInterval = setInterval(() => {
         attempts++;
@@ -43,10 +43,9 @@
             });
         } else if (attempts >= maxAttempts) {
             clearInterval(checkInterval);
-            console.error("Falha ao carregar Firebase. Verifique sua conexão.");
+            console.error("Falha crítica: Firebase não carregou. Verifique sua conexão.");
             if (!window.location.pathname.includes('login.html')) {
-                // Opcional: Forçar reload ou ir para login em caso de falha crítica
-                // window.location.href = "login.html";
+                 alert("Erro de conexão com o servidor. Tente recarregar a página.");
             }
         }
     }, 100); // Verifica a cada 100ms
@@ -1013,8 +1012,9 @@ function renderCharts() {
 }
 
 // =============================================================================
-// 14. SISTEMA DE LEMBRETES
+// 14. SISTEMA DE LEMBRETES & RESET
 // =============================================================================
+
 function checkAndShowReminders() {
     const despesas = loadData(DB_KEYS.DESPESAS_GERAIS);
     const hoje = new Date().toISOString().split('T')[0];
@@ -1047,41 +1047,148 @@ function openReminderModal(pendentes) {
     modal.style.display = 'block';
 }
 
+function closeReminderModal() {
+    document.getElementById('reminderModal').style.display = 'none';
+}
+window.closeReminderModal = closeReminderModal;
+
+// Ações do Modal de Lembrete
+window.payExpense = function(id) {
+    let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
+    const idx = arr.findIndex(d => d.id === id);
+    if (idx >= 0) {
+        arr[idx].pago = true;
+        saveData(DB_KEYS.DESPESAS_GERAIS, arr);
+        const el = event.target.closest('.reminder-item');
+        if (el) el.remove();
+        if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
+        // Atualiza a tabela para refletir o pagamento
+        renderDespesasTable();
+    }
+};
+
+window.postponeExpense = function(id) {
+    let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
+    const idx = arr.findIndex(d => d.id === id);
+    if (idx >= 0) {
+        const atual = new Date(arr[idx].data + 'T00:00:00');
+        atual.setDate(atual.getDate() + 1); // Adia 1 dia
+        const y = atual.getFullYear();
+        const m = String(atual.getMonth() + 1).padStart(2, '0');
+        const dStr = String(atual.getDate()).padStart(2, '0');
+        
+        arr[idx].data = `${y}-${m}-${dStr}`;
+        saveData(DB_KEYS.DESPESAS_GERAIS, arr);
+        alert(`REAGENDADO PARA ${atual.toLocaleDateString('pt-BR')}`);
+        
+        const el = event.target.closest('.reminder-item');
+        if (el) el.remove();
+        if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
+        
+        renderDespesasTable();
+    }
+};
+
+window.cancelExpense = function(id) {
+    if(!confirm("TEM CERTEZA QUE DESEJA EXCLUIR ESTA DÍVIDA?")) return;
+    let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
+    arr = arr.filter(d => d.id !== id);
+    saveData(DB_KEYS.DESPESAS_GERAIS, arr);
+    
+    const el = event.target.closest('.reminder-item');
+    if (el) el.remove();
+    if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
+    
+    renderDespesasTable();
+};
+
+function fullSystemReset() {
+    if (confirm("ATENÇÃO: ISSO APAGARÁ TODOS OS DADOS DA NUVEM PARA SEMPRE (DE TODOS OS DISPOSITIVOS).\n\nTEM CERTEZA ABSOLUTA?")) {
+        // Para um reset real, teríamos que deletar documentos do Firebase.
+        // Como simplificação, salvaremos arrays vazios em cima dos dados existentes.
+        Object.values(DB_KEYS).forEach(k => {
+            saveData(k, k === DB_KEYS.MINHA_EMPRESA ? {} : []);
+        });
+        alert("SISTEMA RESETADO. AGUARDE A SINCRONIZAÇÃO.");
+    }
+}
+window.fullSystemReset = fullSystemReset;
+
 // =============================================================================
-// 15. SINCRONIZAÇÃO E INICIALIZAÇÃO
+// 15. INICIALIZAÇÃO E SINCRONIZAÇÃO (REALTIME)
 // =============================================================================
 
+// Esta função conecta o site ao Firebase e fica "escutando" mudanças.
 function setupRealtimeListeners() {
-    if (!window.dbRef) return; 
+    if (!window.dbRef) {
+        console.error("Firebase ainda não carregou. Tentando novamente em 500ms...");
+        setTimeout(setupRealtimeListeners, 500);
+        return;
+    }
+
+    // --- NOVA PROTEÇÃO DE ROTA (SEGURANÇA) ---
+    // Verifica se o usuário está logado. Se não, manda pro login.
+    const { auth } = window.dbRef;
+    if (auth) {
+        auth.onAuthStateChanged((user) => {
+            if (!user) {
+                // Se não tiver usuário logado, redireciona para login
+                window.location.href = "login.html";
+            } else {
+                console.log("Usuário autenticado:", user.email);
+            }
+        });
+    }
+    // -----------------------------------------
+
     const { db, doc, onSnapshot } = window.dbRef;
     const keys = Object.values(DB_KEYS);
 
-    console.log("Conectando ao Firebase...");
-    
+    console.log("Iniciando ouvintes do Firebase...");
+
     keys.forEach(key => {
+        // Escuta mudanças no documento 'full_list' de cada coleção em tempo real
         onSnapshot(doc(db, key, "full_list"), (docSnap) => {
             if (docSnap.exists()) {
-                APP_CACHE[key] = docSnap.data().items || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
+                const data = docSnap.data();
+                // Atualiza o cache local com os dados vindos da nuvem
+                APP_CACHE[key] = data.items || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
+                console.log(`Dados recebidos do Firebase: ${key}`);
             } else {
+                console.log(`Criando estrutura inicial: ${key}`);
                 saveData(key, key === DB_KEYS.MINHA_EMPRESA ? {} : []);
             }
+            // Chama a atualização com proteção de "Debounce"
             updateUI();
-        }, (error) => console.error(`Erro listener ${key}:`, error));
+        }, (error) => {
+            console.error(`Erro ao ouvir ${key}:`, error);
+        });
     });
 }
 
+// Variável para controlar o "Debounce" (evita atualizações excessivas)
 let _updateTimer = null;
+
 function updateUI() {
+    // Se já existe um agendamento, cancela o anterior
     if (_updateTimer) clearTimeout(_updateTimer);
+    
+    // Agenda uma nova atualização para daqui a 200ms
     _updateTimer = setTimeout(() => {
+        console.log("Executando atualização da interface (Debounced)...");
         populateAllSelects();
         renderOperacaoTable();
         renderDespesasTable();
         updateDashboardStats();
         renderCharts();
         checkAndShowReminders();
-        renderCalendar(currentDate); // Agora sempre redesenha o calendário
-    }, 200);
+        renderMinhaEmpresaInfo();
+        
+        // Garante que o calendário seja redesenhado com os dados atuais
+        if (typeof renderCalendar === 'function') {
+            renderCalendar(currentDate);
+        }
+    }, 200); // 200ms de espera
 }
 
 function setupInputFormattingListeners() {
@@ -1090,101 +1197,489 @@ function setupInputFormattingListeners() {
         const el = document.getElementById(id);
         if (el) el.addEventListener('blur', e => e.target.value = formatCPF_CNPJ(e.target.value));
     });
+    const phones = ['minhaEmpresaTelefone', 'contratanteTelefone', 'motoristaTelefone', 'ajudanteTelefone'];
+    phones.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', e => e.target.value = formatPhoneBr(e.target.value));
+    });
+
+    const motoristaPix = document.getElementById('motoristaPix');
+    if (motoristaPix) {
+        motoristaPix.addEventListener('input', () => document.getElementById('motoristaPixTipo').textContent = 'TIPO: ' + detectPixType(motoristaPix.value));
+        document.getElementById('btnMotoristaPixCopy').addEventListener('click', () => copyToClipboard(motoristaPix.value));
+    }
+    const ajudantePix = document.getElementById('ajudantePix');
+    if (ajudantePix) {
+        ajudantePix.addEventListener('input', () => document.getElementById('ajudantePixTipo').textContent = 'TIPO: ' + detectPixType(ajudantePix.value));
+        document.getElementById('btnAjudantePixCopy').addEventListener('click', () => copyToClipboard(ajudantePix.value));
+    }
+
+    const selAjud = document.getElementById('selectAjudantesOperacao');
+    if (selAjud) selAjud.addEventListener('change', handleAjudanteSelectionChange);
+    const selCurso = document.getElementById('motoristaTemCurso');
+    if (selCurso) selCurso.addEventListener('change', toggleCursoInput);
 }
 
 // =============================================================================
-// 17. BACKUP E IMPORTAÇÃO (CORRIGIDO PARA NUVEM)
+// 16. RECIBOS
+// =============================================================================
+
+function parseCompositeId(value) {
+    if (!value) return null;
+    const parts = value.split(':');
+    if (parts.length !== 2) return null;
+    return {
+        type: parts[0],
+        id: parts[1]
+    };
+}
+
+function getPersonByComposite(value) {
+    const p = parseCompositeId(value);
+    if (!p) return null;
+    if (p.type === 'motorista') return getMotorista(p.id);
+    if (p.type === 'ajudante') return getAjudante(p.id);
+    return null;
+}
+
+function setupReciboListeners() {
+    const btnGerar = document.getElementById('btnGerarRecibo');
+    const btnBaixar = document.getElementById('btnBaixarRecibo');
+    const btnZapRecibo = document.getElementById('btnWhatsappRecibo');
+
+    if (!btnGerar) return;
+    btnGerar.addEventListener('click', () => {
+        const comp = document.getElementById('selectMotoristaRecibo').value;
+        const inicio = document.getElementById('dataInicioRecibo').value;
+        const fim = document.getElementById('dataFimRecibo').value;
+        if (!comp) return alert('SELECIONE UM MOTORISTA OU AJUDANTE.');
+        if (!inicio || !fim) return alert('PREENCHA AS DATAS.');
+
+        const parsed = parseCompositeId(comp);
+        const person = getPersonByComposite(comp);
+        const empresa = getMinhaEmpresa();
+        const veiculoRecibo = document.getElementById('selectVeiculoRecibo').value;
+        const contratanteRecibo = document.getElementById('selectContratanteRecibo').value;
+        const ops = loadData(DB_KEYS.OPERACOES);
+        const di = new Date(inicio + 'T00:00:00');
+        const df = new Date(fim + 'T23:59:59');
+
+        const filtered = ops.filter(op => {
+            const d = new Date(op.data + 'T00:00:00');
+            if (d < di || d > df) return false;
+            let match = false;
+            if (parsed.type === 'motorista') match = String(op.motoristaId) === String(parsed.id);
+            if (parsed.type === 'ajudante') match = Array.isArray(op.ajudantes) && op.ajudantes.some(a => String(a.id) === String(parsed.id));
+            if (!match) return false;
+            if (veiculoRecibo && op.veiculoPlaca !== veiculoRecibo) return false;
+            if (contratanteRecibo && op.contratanteCNPJ !== contratanteRecibo) return false;
+            return true;
+        }).sort((a, b) => new Date(a.data) - new Date(b.data));
+
+        if (!filtered.length) {
+            document.getElementById('reciboContent').innerHTML = `<p style="text-align:center;color:var(--danger-color)">NENHUMA OPERAÇÃO ENCONTRADA PARA ESTE PERÍODO/PESSOA.</p>`;
+            document.getElementById('reciboTitle').style.display = 'none';
+            btnBaixar.style.display = 'none';
+            if (btnZapRecibo) btnZapRecibo.style.display = 'none';
+            return;
+        }
+
+        let totalValorRecibo = 0;
+        const linhas = filtered.map(op => {
+            const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
+            const contrat = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
+            let valorLinha = 0;
+            if (parsed.type === 'motorista') valorLinha = op.comissao || 0;
+            else if (parsed.type === 'ajudante') {
+                const ajudanteData = (op.ajudantes || []).find(a => String(a.id) === String(parsed.id));
+                valorLinha = ajudanteData ? (Number(ajudanteData.diaria) || 0) : 0;
+            }
+            totalValorRecibo += valorLinha;
+            return `<tr><td>${dataFmt}</td><td>${op.veiculoPlaca}</td><td>${contrat}</td><td style="text-align:right;">${formatCurrency(valorLinha)}</td></tr>`;
+        }).join('');
+
+        const totalExtenso = new ConverterMoeda(totalValorRecibo).getExtenso().toUpperCase();
+        const pessoaNome = person ? (person.nome || person.razaoSocial || 'RECEBEDOR') : 'RECEBEDOR';
+        const inicioFmt = new Date(inicio + 'T00:00:00').toLocaleDateString('pt-BR');
+        const fimFmt = new Date(fim + 'T00:00:00').toLocaleDateString('pt-BR');
+
+        if (btnZapRecibo) {
+            const msgRecibo = `OLÁ, SEGUE COMPROVANTE DE RECIBO DE PAGAMENTO.\nBENEFICIÁRIO: ${pessoaNome}\nPERÍODO: ${inicioFmt} A ${fimFmt}\nVALOR TOTAL: *${formatCurrency(totalValorRecibo)}*`;
+            btnZapRecibo.href = `https://wa.me/?text=${encodeURIComponent(msgRecibo)}`;
+            btnZapRecibo.style.display = 'inline-flex';
+        }
+
+        const html = `
+            <div class="recibo-template">
+                <div class="recibo-header"><h3>RECIBO DE PAGAMENTO</h3><p style="font-size:0.9rem;color:var(--secondary-color)">DOCUMENTO NÃO FISCAL</p></div>
+                <p>RECEBEMOS DE: <strong>${empresa.razaoSocial || 'EMPRESA'}</strong>${empresa.cnpj ? ` (CNPJ: ${formatCPF_CNPJ(empresa.cnpj)})` : ''}</p>
+                <div style="border:1px dashed #ccc;padding:10px;margin:10px 0;">
+                    <p><strong>${pessoaNome}</strong> (${parsed.type.toUpperCase()})</p>
+                    <p>PERÍODO: ${inicioFmt} A ${fimFmt}</p>
+                </div>
+                <table style="width:100%;border-collapse:collapse;">
+                    <thead><tr><th style="text-align:left">DATA</th><th style="text-align:left">VEÍCULO</th><th style="text-align:left">CONTRATANTE</th><th style="text-align:right">VALOR</th></tr></thead>
+                    <tbody>${linhas}</tbody>
+                </table>
+                <p class="recibo-total">TOTAL: ${formatCurrency(totalValorRecibo)} (${totalExtenso})</p>
+                <div style="margin: 20px 0; font-size: 0.85rem; text-align: justify; line-height: 1.4;">
+                    <p>DECLARO TER RECEBIDO A IMPORTÂNCIA SUPRAMENCIONADA, DANDO PLENA, RASA E GERAL QUITAÇÃO PELOS SERVIÇOS PRESTADOS NO PERÍODO INDICADO.</p>
+                    <p style="margin-top:8px;">
+                        <strong>FUNDAMENTAÇÃO LEGAL:</strong> DECLARAMOS QUE A PRESTAÇÃO DESTES SERVIÇOS OCORREU DE FORMA AUTÔNOMA E EVENTUAL, SEM SUBORDINAÇÃO JURÍDICA, NÃO CONFIGURANDO VÍNCULO EMPREGATÍCIO.
+                        ESTA RELAÇÃO REGE-SE PELO <strong>CÓDIGO CIVIL BRASILEIRO (ARTS. 593 A 609)</strong> E, NO CASO DE TRANSPORTE DE CARGAS, PELA <strong>LEI Nº 11.442/2007 (TRANSPORTADOR AUTÔNOMO DE CARGAS)</strong>.
+                    </p>
+                </div>
+                <div class="recibo-assinaturas" style="display:flex;gap:20px;margin-top:20px;">
+                    <div><p>_____________________________________</p><p>${pessoaNome}</p><p>RECEBEDOR</p></div>
+                    <div><p>_____________________________________</p><p>${empresa.razaoSocial || 'EMPRESA'}</p><p>${empresa.cnpj ? formatCPF_CNPJ(empresa.cnpj) : ''}</p><p>PAGADOR</p></div>
+                </div>
+            </div>
+        `;
+        document.getElementById('reciboContent').innerHTML = html;
+        document.getElementById('reciboTitle').style.display = 'block';
+        btnBaixar.style.display = 'inline-flex';
+        btnBaixar.onclick = function() {
+            const element = document.getElementById('reciboContent').querySelector('.recibo-template');
+            const nomeArq = `RECIBO_${pessoaNome.split(' ')[0]}_${inicio}.pdf`;
+            if (typeof html2pdf !== 'undefined') {
+                html2pdf().from(element).set({
+                    margin: 10,
+                    filename: nomeArq,
+                    image: {
+                        type: 'jpeg',
+                        quality: 0.98
+                    },
+                    html2canvas: {
+                        scale: 2,
+                        scrollY: 0
+                    },
+                    jsPDF: {
+                        unit: 'mm',
+                        format: 'a4',
+                        orientation: 'portrait'
+                    }
+                }).save();
+            } else alert('LIB HTML2PDF NÃO ENCONTRADA PARA GERAR PDF. INSTALE A LIB OU BAIXE MANUALMENTE.');
+        };
+    });
+}
+
+// =============================================================================
+// 17. BACKUP, RESTORE E RESET
 // =============================================================================
 
 function exportDataBackup() {
     const data = {};
     Object.values(DB_KEYS).forEach(k => data[k] = loadData(k));
-    const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json'
+    });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `backup_logimaster.json`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `logimaster_backup_${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    alert('BACKUP SALVO (DOWNLOAD).');
 }
 
-// Importa e salva na nuvem
 function importDataBackup(event) {
     const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = async function(e) {
+    reader.onload = function(e) {
         try {
             const data = JSON.parse(e.target.result);
-            let promises = [];
-            for (const key of Object.keys(data)) {
-                if (Object.values(DB_KEYS).includes(key)) {
-                    // Força o salvamento na nuvem
-                    promises.push(saveData(key, data[key]));
+            Object.keys(data).forEach(k => {
+                if (Object.values(DB_KEYS).includes(k)) {
+                    // Salva no Firebase em vez de localStorage
+                    saveData(k, data[k]);
                 }
-            }
-            await Promise.all(promises);
-            alert('Backup restaurado na nuvem com sucesso! Atualizando tela...');
-            updateUI();
+            });
+            alert('BACKUP IMPORTADO. AGUARDE A SINCRONIZAÇÃO...');
         } catch (err) {
-            alert('Erro ao processar backup: ' + err);
+            alert('ERRO AO IMPORTAR O BACKUP.');
         }
     };
     reader.readAsText(file);
 }
 
-// =============================================================================
-// 18. RELATÓRIOS
-// =============================================================================
-function gerarRelatorio(e) { 
-    e.preventDefault(); 
-    // Lógica de relatório simplificada para o exemplo, mas conectada aos dados reais
-    alert("Gerando relatório com dados do banco... (Funcionalidade pronta)");
+class ConverterMoeda {
+    constructor(valor) {
+        this.valor = Math.abs(Number(valor) || 0);
+    }
+    getExtenso() {
+        return `${this.valor.toFixed(2).replace('.',',')} REAIS`;
+    }
 }
-function gerarRelatorioCobranca() { alert("Gerando cobrança..."); }
-function exportReportToPDF() { alert("Exportando PDF..."); }
 
-document.addEventListener('DOMContentLoaded', () => {
-    setupFormHandlers();
-    setupInputFormattingListeners();
-    
-    // Navegação
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.addEventListener('click', () => {
-            if(item.textContent.includes("SAIR")) return;
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            item.classList.add('active');
-            const page = item.getAttribute('data-page');
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            document.getElementById(page).classList.add('active');
-            if (page === 'graficos') renderCharts();
-        });
+// =============================================================================
+// 18. GESTÃO DE RELATÓRIOS (PDF) E OUTROS
+// =============================================================================
+
+function gerarRelatorio(e) {
+    e.preventDefault();
+    const iniVal = document.getElementById('dataInicioRelatorio').value;
+    const fimVal = document.getElementById('dataFimRelatorio').value;
+    if (!iniVal || !fimVal) return alert('SELECIONE AS DATAS.');
+
+    const ini = new Date(iniVal + 'T00:00:00');
+    const fim = new Date(fimVal + 'T23:59:59');
+    const motId = document.getElementById('selectMotoristaRelatorio').value;
+    const vecPlaca = document.getElementById('selectVeiculoRelatorio').value;
+    const conCnpj = document.getElementById('selectContratanteRelatorio').value;
+
+    const ops = loadData(DB_KEYS.OPERACOES).filter(op => {
+        const d = new Date(op.data + 'T00:00:00');
+        if (d < ini || d > fim) return false;
+        if (motId && String(op.motoristaId) !== motId) return false;
+        if (vecPlaca && op.veiculoPlaca !== vecPlaca) return false;
+        if (conCnpj && op.contratanteCNPJ !== conCnpj) return false;
+        return true;
     });
 
+    const despesasGerais = loadData(DB_KEYS.DESPESAS_GERAIS).filter(d => {
+        const dt = new Date(d.data + 'T00:00:00');
+        if (dt < ini || dt > fim) return false;
+        if (vecPlaca && d.veiculoPlaca !== vecPlaca) return false;
+        return true;
+    });
+
+    let receitaTotal = 0;
+    let custoMotoristas = 0;
+    let custoAjudantes = 0;
+    let custoPedagios = 0;
+    let custoDieselEstimadoTotal = 0;
+    let kmTotalNoPeriodo = 0;
+    ops.forEach(op => {
+        receitaTotal += (op.faturamento || 0);
+        custoMotoristas += (op.comissao || 0);
+        custoPedagios += (op.despesas || 0);
+        kmTotalNoPeriodo += (Number(op.kmRodado) || 0);
+        if (op.ajudantes) op.ajudantes.forEach(a => custoAjudantes += (Number(a.diaria) || 0));
+        custoDieselEstimadoTotal += (calcularCustoConsumoViagem(op) || 0);
+    });
+    let custoGeral = despesasGerais.reduce((acc, d) => acc + (d.valor || 0), 0);
+    const gastosTotais = custoMotoristas + custoAjudantes + custoDieselEstimadoTotal + custoPedagios + custoGeral;
+    const lucroLiquido = receitaTotal - gastosTotais;
+
+    const textoWhatsapp = `*RELATÓRIO LOGIMASTER*\nPERÍODO: ${ini.toLocaleDateString('pt-BR')} A ${fim.toLocaleDateString('pt-BR')}\n\n*FINANCEIRO:*\nRECEITA: ${formatCurrency(receitaTotal)}\nGASTOS: ${formatCurrency(gastosTotais)}\n*LUCRO LÍQUIDO: ${formatCurrency(lucroLiquido)}*\n\n*DETALHES:*\nCOMBUSTÍVEL (ESTIMADO): ${formatCurrency(custoDieselEstimadoTotal)}\nMOTORISTAS/AJUDANTES: ${formatCurrency(custoMotoristas + custoAjudantes)}\nOUTROS: ${formatCurrency(custoPedagios + custoGeral)}\n\nKM TOTAL: ${kmTotalNoPeriodo.toFixed(1)} KM`;
+    const btnZap = document.getElementById('btnWhatsappReport');
+    if (btnZap) {
+        btnZap.href = `https://wa.me/?text=${encodeURIComponent(textoWhatsapp)}`;
+        btnZap.style.display = 'inline-flex';
+    }
+
+    const html = `
+        <div class="report-container">
+            <div style="text-align:center; margin-bottom:20px; border-bottom:2px solid #eee; padding-bottom:10px;">
+                <h3>RELATÓRIO GERENCIAL LOGIMASTER</h3>
+                <p>PERÍODO: ${ini.toLocaleDateString('pt-BR')} A ${fim.toLocaleDateString('pt-BR')}</p>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:20px;">
+                <div style="background:#e8f5e9; padding:15px; border-radius:8px; border:1px solid #c8e6c9;">
+                    <h4>RECEITA TOTAL</h4>
+                    <h2 style="color:var(--success-color);">${formatCurrency(receitaTotal)}</h2>
+                </div>
+                <div style="background:#ffebee; padding:15px; border-radius:8px; border:1px solid #ffcdd2;">
+                    <h4>GASTOS TOTAIS (OPERACIONAIS)</h4>
+                    <h2 style="color:var(--danger-color);">${formatCurrency(gastosTotais)}</h2>
+                </div>
+            </div>
+            <h4 style="border-left:4px solid var(--primary-color); padding-left:10px; margin-bottom:10px; background:#f0f0f0; padding:5px;">DETALHAMENTO DE GASTOS</h4>
+            <table class="report-table" style="width:100%; border-collapse:collapse; font-size:0.9rem; margin-bottom:20px;">
+                <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">COMBUSTÍVEL (CUSTO OPERACIONAL ESTIMADO)</td><td style="text-align:right; color:var(--danger-color); font-weight:bold;">${formatCurrency(custoDieselEstimadoTotal)}</td></tr>
+                <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">PAGAMENTO MOTORISTAS (COMISSÕES)</td><td style="text-align:right; color:var(--danger-color);">${formatCurrency(custoMotoristas)}</td></tr>
+                <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">PAGAMENTO AJUDANTES (DIÁRIAS)</td><td style="text-align:right; color:var(--danger-color);">${formatCurrency(custoAjudantes)}</td></tr>
+                <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">PEDÁGIOS</td><td style="text-align:right; color:var(--danger-color);">${formatCurrency(custoPedagios)}</td></tr>
+                <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">DESPESAS GERAIS/ADMINISTRATIVAS</td><td style="text-align:right; color:var(--danger-color);">${formatCurrency(custoGeral)}</td></tr>
+            </table>
+            <div style="margin-top:20px; padding:15px; background:#e0f7fa; border-radius:8px; text-align:center; border:1px solid #b2ebf2;">
+                <h3>RESULTADO LÍQUIDO: <span style="color:${lucroLiquido>=0?'green':'red'}">${formatCurrency(lucroLiquido)}</span></h3>
+            </div>
+            <div style="margin-top:30px; font-size:0.7rem; text-align:center; color:#aaa;">GERADO POR LOGIMASTER EM ${new Date().toLocaleString()}</div>
+        </div>
+    `;
+    document.getElementById('reportContent').innerHTML = html;
+    document.getElementById('reportResults').style.display = 'block';
+}
+
+function exportReportToPDF() {
+    const element = document.getElementById('reportResults');
+    if (!element || element.style.display === 'none') return alert('GERE UM RELATÓRIO PRIMEIRO.');
+    html2pdf().set({
+        margin: 10,
+        filename: 'RELATORIO_LOGIMASTER.pdf',
+        image: {
+            type: 'jpeg',
+            quality: 0.98
+        },
+        html2canvas: {
+            scale: 2,
+            scrollY: 0
+        },
+        jsPDF: {
+            unit: 'mm',
+            format: 'a4',
+            orientation: 'portrait'
+        }
+    }).from(element).save();
+}
+window.exportReportToPDF = exportReportToPDF;
+
+// --- RELATÓRIO DE COBRANÇA (Com Adiantamento) ---
+function gerarRelatorioCobranca() {
+    const iniVal = document.getElementById('dataInicioRelatorio').value;
+    const fimVal = document.getElementById('dataFimRelatorio').value;
+    const conCnpj = document.getElementById('selectContratanteRelatorio').value;
+
+    if (!iniVal || !fimVal) return alert('SELECIONE AS DATAS.');
+    if (!conCnpj) return alert('SELECIONE UMA CONTRATANTE PARA GERAR O RELATÓRIO DE COBRANÇA.');
+
+    const ini = new Date(iniVal + 'T00:00:00');
+    const fim = new Date(fimVal + 'T23:59:59');
+    const contratante = getContratante(conCnpj);
+    const ops = loadData(DB_KEYS.OPERACOES).filter(op => {
+        const d = new Date(op.data + 'T00:00:00');
+        return d >= ini && d <= fim && op.contratanteCNPJ === conCnpj;
+    }).sort((a, b) => new Date(a.data) - new Date(b.data));
+
+    if (ops.length === 0) return alert('NENHUMA OPERAÇÃO ENCONTRADA PARA ESTE CLIENTE NO PERÍODO.');
+
+    let totalSaldo = 0; // Total a Pagar (Saldo)
+    let rows = '';
+    ops.forEach(op => {
+        const d = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
+        const vec = op.veiculoPlaca;
+        const ativ = getAtividade(op.atividadeId)?.nome || '-';
+        const adiant = op.adiantamento || 0;
+        const saldo = (op.faturamento || 0) - adiant;
+
+        totalSaldo += saldo;
+
+        rows += `
+            <tr style="border-bottom:1px solid #ddd;">
+                <td style="padding:8px;">${d}</td>
+                <td style="padding:8px;">${vec}</td>
+                <td style="padding:8px;">${ativ}</td>
+                <td style="padding:8px; text-align:right;">${formatCurrency(op.faturamento)}</td>
+                <td style="padding:8px; text-align:right; color: var(--danger-color);">${formatCurrency(adiant)}</td>
+                <td style="padding:8px; text-align:right; font-weight:bold;">${formatCurrency(saldo)}</td>
+            </tr>
+        `;
+    });
+    const empresa = getMinhaEmpresa();
+    const nomeEmpresa = empresa.razaoSocial || 'MINHA EMPRESA';
+    const cnpjEmpresa = empresa.cnpj ? formatCPF_CNPJ(empresa.cnpj) : '';
+
+    const textoZap = `*RELATÓRIO DE COBRANÇA - ${nomeEmpresa}*\nCLIENTE: ${contratante.razaoSocial}\nPERÍODO: ${ini.toLocaleDateString('pt-BR')} A ${fim.toLocaleDateString('pt-BR')}\n\nTOTAL LÍQUIDO A PAGAR: *${formatCurrency(totalSaldo)}*`;
+    const btnZap = document.getElementById('btnWhatsappReport');
+    if (btnZap) {
+        btnZap.href = `https://wa.me/?text=${encodeURIComponent(textoZap)}`;
+        btnZap.style.display = 'inline-flex';
+    }
+
+    const html = `
+        <div class="report-container" style="max-width:800px; padding:40px;">
+            <div style="text-align:center; margin-bottom:30px; border-bottom:2px solid var(--primary-color); padding-bottom:20px;">
+                <h2 style="color:var(--primary-color); margin-bottom:5px;">RELATÓRIO DE COBRANÇA</h2>
+                <p style="font-size:1.1rem; font-weight:bold;">${nomeEmpresa}</p>
+                <p style="font-size:0.9rem;">${cnpjEmpresa}</p>
+            </div>
+            <div style="margin-bottom:30px; background:#f9f9f9; padding:15px; border-radius:8px;">
+                <p><strong>CLIENTE:</strong> ${contratante.razaoSocial}</p>
+                <p><strong>CNPJ:</strong> ${formatCPF_CNPJ(contratante.cnpj)}</p>
+                <p><strong>PERÍODO:</strong> ${ini.toLocaleDateString('pt-BR')} A ${fim.toLocaleDateString('pt-BR')}</p>
+            </div>
+            <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+                <thead style="background:#eee;">
+                    <tr>
+                        <th style="padding:10px; text-align:left;">DATA</th>
+                        <th style="padding:10px; text-align:left;">VEÍCULO</th>
+                        <th style="padding:10px; text-align:left;">ATIVIDADE</th>
+                        <th style="padding:10px; text-align:right;">TOTAL</th>
+                        <th style="padding:10px; text-align:right;">ADIANT.</th>
+                        <th style="padding:10px; text-align:right;">SALDO</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+                <tfoot>
+                    <tr style="background:#e0f2f1; font-weight:bold;">
+                        <td colspan="5" style="padding:10px; text-align:right;">TOTAL A PAGAR:</td>
+                        <td style="padding:10px; text-align:right; font-size:1.2rem; color:var(--primary-color);">${formatCurrency(totalSaldo)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+            <div style="margin-top:40px; text-align:center; font-size:0.9rem; color:#777;"><p>DOCUMENTO PARA FINS DE CONFERÊNCIA E COBRANÇA.</p><p>DATA DE EMISSÃO: ${new Date().toLocaleDateString('pt-BR')}</p></div>
+        </div>
+    `;
+    document.getElementById('reportContent').innerHTML = html;
+    document.getElementById('reportResults').style.display = 'block';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Configuração de Tabs e Navegação
     document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.cadastro-tab-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             const tab = btn.getAttribute('data-tab');
             document.querySelectorAll('.cadastro-form').forEach(f => f.classList.remove('active'));
-            document.getElementById(tab).classList.add('active');
+            const el = document.getElementById(tab);
+            if (el) el.classList.add('active');
         });
     });
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', () => {
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            item.classList.add('active');
+            const page = item.getAttribute('data-page');
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            const el = document.getElementById(page);
+            if (el) el.classList.add('active');
+            if (page === 'graficos') renderCharts();
+        });
+    });
+
+    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    if (mobileMenuBtn) {
+        mobileMenuBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+        });
+    }
+    if (overlay) {
+        overlay.addEventListener('click', () => {
+            sidebar.classList.remove('active');
+            overlay.classList.remove('active');
+        });
+    }
+
+    // Inicialização dos módulos
+    setupFormHandlers();
+    setupInputFormattingListeners();
+    setupReciboListeners();
     
-    // Mobile Menu
-    document.getElementById('mobileMenuBtn').addEventListener('click', () => {
-        document.getElementById('sidebar').classList.toggle('active');
-        document.getElementById('sidebarOverlay').classList.toggle('active');
-    });
-    document.getElementById('sidebarOverlay').addEventListener('click', () => {
-        document.getElementById('sidebar').classList.remove('active');
-        document.getElementById('sidebarOverlay').classList.remove('active');
-    });
+    // Inicia a conexão Realtime com Firebase
+    // Pequeno delay para garantir que o script do Firebase no HTML carregou antes
+    setTimeout(setupRealtimeListeners, 1000);
 });
 
-// Fecha modais ao clicar fora
-window.onclick = function(event) {
-    if (event.target.classList.contains('modal')) event.target.style.display = "none";
-}
+// Fechar modais ao clicar fora
+window.addEventListener('click', function(event) {
+    const viewModal = document.getElementById('viewItemModal');
+    const opModal = document.getElementById('operationDetailsModal');
+    const addAjModal = document.getElementById('modalAdicionarAjudante');
+    if (event.target === viewModal) viewModal.style.display = 'none';
+    if (event.target === opModal) opModal.style.display = 'none';
+    if (event.target === addAjModal) addAjModal.style.display = 'none';
+});
 
-// EXPORTS
+// GLOBALS EXPORT (Necessário para onclick no HTML funcionar)
 window.viewCadastro = viewCadastro;
 window.editCadastroItem = editCadastroItem;
 window.deleteItem = deleteItem;
@@ -1201,12 +1696,27 @@ window.closeReminderModal = closeReminderModal;
 window.closeViewModal = closeViewModal;
 window.closeModal = closeModal;
 
-// Edição Operação
+// --- FUNÇÃO DE EDIÇÃO ATUALIZADA (Carrega Adiantamento) ---
 window.editOperacaoItem = function(id) {
     const op = loadData(DB_KEYS.OPERACOES).find(o => o.id === id);
     if (!op) return;
+    document.getElementById('operacaoData').value = op.data || '';
+    document.getElementById('selectMotoristaOperacao').value = op.motoristaId || '';
+    document.getElementById('selectVeiculoOperacao').value = op.veiculoPlaca || '';
+    document.getElementById('selectContratanteOperacao').value = op.contratanteCNPJ || '';
+    document.getElementById('selectAtividadeOperacao').value = op.atividadeId || '';
+    document.getElementById('operacaoFaturamento').value = op.faturamento || '';
+    document.getElementById('operacaoAdiantamento').value = op.adiantamento || '';
+    document.getElementById('operacaoComissao').value = op.comissao || '';
+    document.getElementById('operacaoCombustivel').value = op.combustivel || '';
+    document.getElementById('operacaoPrecoLitro').value = op.precoLitro || '';
+    document.getElementById('operacaoDespesas').value = op.despesas || '';
+    document.getElementById('operacaoKmRodado').value = op.kmRodado || '';
+    window._operacaoAjudantesTempList = (op.ajudantes || []).map(a => ({
+        id: a.id,
+        diaria: Number(a.diaria) || 0
+    }));
+    renderAjudantesAdicionadosList();
     document.getElementById('operacaoId').value = op.id;
-    document.getElementById('operacaoData').value = op.data;
-    // ... preencher outros campos ...
-    alert('Modo edição ativado. Preencha os campos e salve.');
+    alert('DADOS DA OPERAÇÃO CARREGADOS NO FORMULÁRIO. ALTERE E SALVE PARA ATUALIZAR.');
 };
