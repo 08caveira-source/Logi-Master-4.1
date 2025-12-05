@@ -65,7 +65,8 @@ window.enableReadOnlyMode = function() {
         '.btn-danger',           // Botões de Perigo (Reset, Excluir)
         '.btn-warning',          // Botões de Edição/Pagamento
         '#inputImportBackup',    // Importar Backup
-        'label[for="inputImportBackup"]',
+        'label[for="inputImportBackup"]', // Label do Importar
+        'button[onclick="exportDataBackup()"]', // <--- NOVO: SALVAR BACKUP
         '#modalAjudanteAddBtn'
     ];
 
