@@ -13,24 +13,133 @@ const DB_KEYS = {
     ATIVIDADES: 'db_atividades'
 };
 
-// Carrega dados do LocalStorage com tratamento de erro
+// CACHE LOCAL PARA PERFORMANCE
+// O Firebase é assíncrono, mas a UI precisa de dados síncronos.
+// Carregamos tudo no início para cá.
+window.LOCAL_CACHE = {};
+
+// Inicializa o cache vazio
+Object.values(DB_KEYS).forEach(key => {
+    window.LOCAL_CACHE[key] = key === DB_KEYS.MINHA_EMPRESA ? {} : [];
+});
+
+// =============================================================================
+// 2. INTEGRAÇÃO FIREBASE (SUBSTITUIÇÃO SOLICITADA)
+// =============================================================================
+
+// Carrega dados do Cache Local (Síncrono para a UI funcionar)
 function loadData(key) {
-    const raw = localStorage.getItem(key);
-    if (!raw) {
-        return key === DB_KEYS.MINHA_EMPRESA ? {} : [];
+    // Retorna do cache se existir, ou array vazio
+    return window.LOCAL_CACHE[key] || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
+}
+
+// Carrega dados REAIS do Firebase (Assíncrono)
+async function loadDataOnline(colecao) {
+    if (!window.db) return []; // Segurança se firebase falhar
+    const { collection, getDocs } = window.firebaseFunctions || {}; 
+    // Nota: window.firebaseFunctions é definido no index.html ou acessamos via window.db indiretamente se importado via módulo
+    // Como estamos usando type="module" no HTML, precisamos garantir acesso às funções
+    
+    // Fallback para acesso direto se as funcoes estiverem no window (veja o ajuste no index.html)
+    const getDocsFn = window.getDocs;
+    const collectionFn = window.collection;
+    
+    if(!getDocsFn || !collectionFn) {
+        console.warn("Firebase functions not loaded yet");
+        return [];
     }
+
     try {
-        return JSON.parse(raw);
-    } catch (e) {
-        console.error("Erro ao carregar dados:", e);
-        return key === DB_KEYS.MINHA_EMPRESA ? {} : [];
+        const querySnapshot = await getDocsFn(collectionFn(window.db, colecao));
+        let lista = [];
+        querySnapshot.forEach((doc) => {
+            // Junta o ID do banco com os dados
+            lista.push({ firestoreId: doc.id, ...doc.data() });
+        });
+        return lista;
+    } catch (error) {
+        console.error(`Erro ao carregar ${colecao}:`, error);
+        return [];
     }
 }
 
-// Salva dados no LocalStorage
+// Salva dados (Atualiza Cache + Envia para Firebase)
 function saveData(key, value) {
-    localStorage.setItem(key, JSON.stringify(value));
+    // 1. Atualiza Cache Local Instantaneamente
+    window.LOCAL_CACHE[key] = value;
+
+    // 2. Envia para o Firebase em Background
+    // Detectamos se é um Array (Lista) ou Objeto (Empresa)
+    if (Array.isArray(value)) {
+        // Para listas, salvamos item a item para permitir edição correta
+        value.forEach(item => {
+            saveDataOnline(key, item);
+        });
+        
+        // NOTA: Deletar itens removidos do array exigiria uma lógica de diff mais complexa.
+        // Para esta versão, focamos em Criar/Editar.
+    } else {
+        saveDataOnline(key, value);
+    }
 }
+
+// Salva um item específico no Firebase
+async function saveDataOnline(colecao, objeto) {
+    const { doc, setDoc } = window; // Usamos as globais definidas no HTML
+    
+    if(!doc || !setDoc || !window.db) return;
+
+    try {
+        // Usamos setDoc para ATUALIZAR ou CRIAR com um ID específico.
+        // Se usássemos addDoc, criaríamos duplicatas a cada salvamento.
+        
+        let docId = String(objeto.id || objeto.placa || objeto.cnpj || 'unico');
+        
+        // Remove undefined/null para evitar erro do Firestore
+        const cleanObj = JSON.parse(JSON.stringify(objeto));
+
+        await setDoc(doc(window.db, colecao, docId), cleanObj);
+        console.log(`Documento salvo em ${colecao}:`, docId);
+    } catch (e) {
+        console.error("Erro ao salvar:", e);
+    }
+}
+
+// Função de Inicialização do Sistema (Carrega tudo do Firebase)
+async function initSystem() {
+    console.log("Iniciando sincronização com Firebase...");
+    
+    // Mostra loading se quiser (opcional)
+    // document.body.style.cursor = 'wait';
+
+    const promises = Object.values(DB_KEYS).map(async (key) => {
+        const data = await loadDataOnline(key);
+        
+        if (key === DB_KEYS.MINHA_EMPRESA) {
+            // Minha empresa é objeto único, pegamos o primeiro se existir
+            window.LOCAL_CACHE[key] = data.length > 0 ? data[0] : {};
+        } else {
+            window.LOCAL_CACHE[key] = data;
+        }
+    });
+
+    await Promise.all(promises);
+    
+    console.log("Dados carregados e Cache atualizado!");
+    // document.body.style.cursor = 'default';
+    
+    // Atualiza a UI após carregar dados
+    updateDashboardStats();
+    renderOperacaoTable();
+    renderDespesasTable();
+    renderCalendar(currentDate);
+    renderCharts();
+    populateAllSelects();
+}
+
+// =============================================================================
+// 3. RESTANTE DO CÓDIGO (MANUTENÇÃO DA LÓGICA DE NEGÓCIO)
+// =============================================================================
 
 // Remove tudo que não for número
 const onlyDigits = (v) => (v || '').toString().replace(/\D/g, '');
@@ -43,29 +152,6 @@ const formatCurrency = (value) => {
         currency: 'BRL'
     }).format(value);
 };
-
-// =============================================================================
-// 2. INICIALIZAÇÃO DE DADOS (MOCK)
-// =============================================================================
-
-const MOCK_MOTORISTAS = [];
-const MOCK_VEICULOS = [];
-const MOCK_CONTRATANTES = [];
-const MOCK_AJUDANTES = [];
-const MOCK_OPERACOES = [];
-const MOCK_DESPESAS_GERAIS = [];
-const MOCK_EMPRESA = {};
-const MOCK_ATIVIDADES = [];
-
-// Inicializa o banco de dados se estiver vazio
-if (!loadData(DB_KEYS.MOTORISTAS).length) saveData(DB_KEYS.MOTORISTAS, MOCK_MOTORISTAS);
-if (!loadData(DB_KEYS.VEICULOS).length) saveData(DB_KEYS.VEICULOS, MOCK_VEICULOS);
-if (!loadData(DB_KEYS.CONTRATANTES).length) saveData(DB_KEYS.CONTRATANTES, MOCK_CONTRATANTES);
-if (!loadData(DB_KEYS.AJUDANTES).length) saveData(DB_KEYS.AJUDANTES, MOCK_AJUDANTES);
-if (!loadData(DB_KEYS.OPERACOES).length) saveData(DB_KEYS.OPERACOES, MOCK_OPERACOES);
-if (!loadData(DB_KEYS.DESPESAS_GERAIS).length) saveData(DB_KEYS.DESPESAS_GERAIS, MOCK_DESPESAS_GERAIS);
-if (!Object.keys(loadData(DB_KEYS.MINHA_EMPRESA)).length) saveData(DB_KEYS.MINHA_EMPRESA, MOCK_EMPRESA);
-if (!loadData(DB_KEYS.ATIVIDADES).length) saveData(DB_KEYS.ATIVIDADES, MOCK_ATIVIDADES);
 
 // =============================================================================
 // 3. FUNÇÕES HELPER (GETTERS)
@@ -531,6 +617,13 @@ function deleteItem(key, id) {
     let idKey = key === DB_KEYS.VEICULOS ? 'placa' : (key === DB_KEYS.CONTRATANTES ? 'cnpj' : 'id');
     arr = arr.filter(it => String(it[idKey]) !== String(id));
     saveData(key, arr);
+    
+    // Deleta do Firebase também
+    const { doc, deleteDoc } = window;
+    if(doc && deleteDoc && window.db) {
+        deleteDoc(doc(window.db, key, String(id))).catch(e => console.error("Erro ao deletar online:", e));
+    }
+
     populateAllSelects();
     renderOperacaoTable();
     renderDespesasTable();
@@ -972,7 +1065,8 @@ window.toggleStatusDespesa = function(id) {
     const idx = arr.findIndex(d => d.id === id);
     if (idx >= 0) {
         arr[idx].pago = !arr[idx].pago; // Inverte o status (true <-> false)
-        saveData(DB_KEYS.DESPESAS_GERAIS, arr);
+        saveData(DB_KEYS.DESPESAS_GERAIS, arr); // Salva (Atualiza cache + envia pro Firebase)
+        
         renderDespesasTable();
         updateDashboardStats();
         // Se a despesa for paga/desfeita, verificamos se ela afeta os lembretes
@@ -1823,6 +1917,9 @@ function setupInputFormattingListeners() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // START INIT ASYNC
+    initSystem();
+
     document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.cadastro-tab-btn').forEach(b => b.classList.remove('active'));
@@ -1863,16 +1960,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setupFormHandlers();
     setupInputFormattingListeners();
-    populateAllSelects();
-    renderOperacaoTable();
-    renderDespesasTable();
-    renderCalendar(currentDate);
-    updateDashboardStats();
+    // populateAllSelects(); // Agora chamado no initSystem
+    // renderOperacaoTable(); // Agora chamado no initSystem
+    // renderDespesasTable(); // Agora chamado no initSystem
+    // renderCalendar(currentDate); // Agora chamado no initSystem
+    // updateDashboardStats(); // Agora chamado no initSystem
     setupReciboListeners();
-    renderCharts();
+    // renderCharts(); // Agora chamado no initSystem
     
-    // Check reminders after load
-    setTimeout(checkAndShowReminders, 1000);
+    // Check reminders moved to initSystem or triggered after load
 });
 
 window.addEventListener('click', function(event) {

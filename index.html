@@ -770,6 +770,30 @@
         </div>
     </div>
 
+    <!-- CONFIGURAÇÃO DO FIREBASE (BANCO DE DADOS ONLINE) -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+      import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+      // ATENÇÃO: SUBSTITUA AS STRINGS ABAIXO PELAS SUAS CHAVES DO FIREBASE CONSOLE
+      const firebaseConfig = {
+        apiKey: "AIzaSyBZjVdcyjbEoR_-X6_lZuTRDMeN2wIntZI",
+        authDomain: "logi-master-dd4cd.firebaseapp.com",
+        projectId: "logi-master-dd4cd",
+        storageBucket: "logi-master-dd4cd.firebasestorage.app",
+        messagingSenderId: "673000154258",
+        appId: "1:673000154258:web:fc9d6fced43e557076324b"
+      };
+
+      // Inicializa o Firebase
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+
+      // Disponibiliza o DB globalmente para testes ou migração futura
+      window.db = db;
+      console.log("Firebase inicializado!");
+    </script>
+
     <script src="script.js" defer></script>
 </body>
 </html>
