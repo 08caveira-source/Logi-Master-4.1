@@ -893,7 +893,7 @@ function viewOperacaoDetails(id) {
             <p><strong>ATIVIDADE:</strong> ${atividade}</p>
             <p style="font-size:1.1rem; color:var(--primary-color);"><strong>KM RODADO:</strong> ${op.kmRodado || 0} KM</p> <p><strong>FATURAMENTO:</strong> ${formatCurrency(op.faturamento)}</p>
             <p><strong>ADIANTAMENTO:</strong> ${formatCurrency(adiantamento)}</p>
-            <p style="font-weight:bold; color:var(--primary-color); font-size:1.1rem;">SALDO A RECEBER: ${formatCurrency(saldoReceber)}</p>
+            <p style="font-weight:700;">SALDO A RECEBER: ${formatCurrency(saldo)}</p>
             
             <hr style="margin:10px 0; border:0; border-top:1px solid #eee;">
             
