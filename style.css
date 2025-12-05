@@ -35,6 +35,11 @@ body, input, select, textarea, button, h1, h2, h3, h4, h5, h6, p, label, span, t
     text-transform: uppercase;
 }
 
+/* Exceção para inputs de senha e email no login (case sensitive) */
+input[type="password"], input[type="email"] {
+    text-transform: none;
+}
+
 body {
     background-color: var(--background-color);
     display: flex;
