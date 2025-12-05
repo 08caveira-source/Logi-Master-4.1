@@ -2,6 +2,34 @@
 // 1. CONFIGURAÇÕES E UTILITÁRIOS (COM FIREBASE)
 // =============================================================================
 
+// --- PROTEÇÃO DE ROTA IMEDIATA (SEGURANÇA CRÍTICA) ---
+// Esta verificação deve rodar antes de qualquer outra coisa para proteger a página index.html
+(function checkAuthImmediate() {
+    // Pequeno delay para garantir que o Firebase SDK carregou no HTML
+    // Se em 2 segundos não detectar auth, redireciona por segurança
+    setTimeout(() => {
+        if (window.dbRef && window.dbRef.auth) {
+            window.dbRef.auth.onAuthStateChanged((user) => {
+                if (!user) {
+                    // Se não estiver logado e não estiver na página de login, redireciona
+                    if (!window.location.pathname.includes('login.html')) {
+                        window.location.href = "login.html";
+                    }
+                } else {
+                    console.log("Acesso permitido: " + user.email);
+                }
+            });
+        } else {
+            // Se o Firebase não carregar, manda pro login por segurança (exceto se já estiver lá)
+            if (!window.location.pathname.includes('login.html')) {
+                console.warn("Firebase não detectado ou demorando. Redirecionando para segurança.");
+                // Descomente a linha abaixo em produção se quiser forçar o login ao falhar o carregamento
+                // window.location.href = "login.html";
+            }
+        }
+    }, 500);
+})();
+
 const DB_KEYS = {
     MOTORISTAS: 'db_motoristas',
     VEICULOS: 'db_veiculos',
@@ -42,6 +70,7 @@ async function saveData(key, value) {
         const { db, doc, setDoc } = window.dbRef;
         try {
             // Usamos um documento único chamado 'full_list' para armazenar o array inteiro da coleção.
+            // Esta é a estratégia mais simples para migrar de localStorage para Firestore sem reescrever toda a lógica de IDs do seu sistema atual.
             await setDoc(doc(db, key, 'full_list'), { items: value });
             console.log(`Dados de ${key} salvos na nuvem.`);
         } catch (e) {
@@ -974,9 +1003,8 @@ function editDespesaItem(id) {
 // 12. CALENDÁRIO E DASHBOARD
 // =============================================================================
 
-// Removidas declarações globais de DOM elements que causavam erro na inicialização
-let currentMonthYear = null; 
-let calendarGrid = null;
+const calendarGrid = document.getElementById('calendarGrid');
+const currentMonthYear = document.getElementById('currentMonthYear');
 
 function renderCalendar(date) {
     // ATENÇÃO: Busca os elementos SEMPRE que a função roda para garantir que existem
