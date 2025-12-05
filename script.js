@@ -42,7 +42,6 @@ async function saveData(key, value) {
         const { db, doc, setDoc } = window.dbRef;
         try {
             // Usamos um documento único chamado 'full_list' para armazenar o array inteiro da coleção.
-            // Esta é a estratégia mais simples para migrar de localStorage para Firestore sem reescrever toda a lógica de IDs do seu sistema atual.
             await setDoc(doc(db, key, 'full_list'), { items: value });
             console.log(`Dados de ${key} salvos na nuvem.`);
         } catch (e) {
@@ -51,7 +50,7 @@ async function saveData(key, value) {
         }
     } else {
         console.error("Firebase não inicializado ou window.dbRef indisponível.");
-        // Fallback: Se não tiver firebase, tenta salvar no localStorage para não perder dados na sessão
+        // Fallback para localStorage se desconectado
         localStorage.setItem(key, JSON.stringify(value));
     }
 }
@@ -520,8 +519,7 @@ function deleteItem(key, id) {
     let idKey = key === DB_KEYS.VEICULOS ? 'placa' : (key === DB_KEYS.CONTRATANTES ? 'cnpj' : 'id');
     arr = arr.filter(it => String(it[idKey]) !== String(id));
     saveData(key, arr);
-    // As renderizações serão automáticas pelo listener do Firebase (setupRealtimeListeners), 
-    // mas deixamos o alert para feedback do usuário.
+    // As renderizações serão automáticas pelo listener do Firebase (setupRealtimeListeners)
     alert('ITEM EXCLUÍDO (PROCESSANDO...).');
 }
 
@@ -1418,6 +1416,8 @@ function updateUI() {
     renderCharts();
     checkAndShowReminders();
     renderMinhaEmpresaInfo();
+    // CORREÇÃO: Força o redesenho do calendário para o mês atual
+    renderCalendar(currentDate);
 }
 
 function setupInputFormattingListeners() {
