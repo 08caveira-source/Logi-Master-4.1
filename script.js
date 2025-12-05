@@ -4,51 +4,44 @@
 
 // --- PROTEÇÃO DE ROTA E INICIALIZAÇÃO SEGURA ---
 (function initSystemSecurity() {
-    let attempts = 0;
-    const maxAttempts = 100; // Tenta por 10 segundos (aumentado para conexões lentas)
-
+    // Intervalo de verificação para garantir que o Firebase carregou
     const checkInterval = setInterval(() => {
-        attempts++;
-        // Aguarda o objeto dbRef estar disponível (carregado pelo módulo no HTML)
         if (window.dbRef && window.dbRef.auth) {
             clearInterval(checkInterval);
             
-            const isLoginPage = window.location.pathname.includes('login.html');
+            // Verifica se estamos na página de login
+            const isLoginPage = window.location.href.includes('login.html');
             
             window.dbRef.auth.onAuthStateChanged((user) => {
                 if (!user) {
-                    // Se não houver usuário e não estiver no login, manda pro login
+                    // NÃO LOGADO: Se não estiver no login, expulsa imediatamente
                     if (!isLoginPage) {
                         console.warn("Acesso negado. Redirecionando para Login...");
+                        // Redirecionamento forçado
                         window.location.href = "login.html";
                     }
                 } else {
+                    // LOGADO:
                     console.log("Usuário autenticado:", user.email);
                     
-                    // Se estiver no login mas já logado, manda pro index
+                    // Se tentar acessar login.html estando logado, manda pro index
                     if (isLoginPage) {
                         window.location.href = "index.html";
                         return;
                     }
 
-                    // Inicializa componentes de usuário
+                    // 1. Renderiza a barra de usuário no topo
                     renderTopBar(user.email);
                     
-                    // Tenta migrar dados locais antigos para a nuvem se necessário
-                    setTimeout(migrateLocalToCloud, 2000);
+                    // 2. Tenta migrar dados locais antigos para a nuvem se necessário
+                    setTimeout(migrateLocalToCloud, 1500);
                     
-                    // Inicia a escuta de dados em tempo real
+                    // 3. Inicia a escuta de dados em tempo real
                     setupRealtimeListeners();
                 }
             });
-        } else if (attempts >= maxAttempts) {
-            clearInterval(checkInterval);
-            console.error("Falha crítica: Firebase não carregou. Verifique sua conexão.");
-            if (!window.location.pathname.includes('login.html')) {
-                 alert("Erro de conexão com o servidor. Tente recarregar a página.");
-            }
         }
-    }, 100); // Verifica a cada 100ms
+    }, 100); // Verifica a cada 100ms (rápido)
 })();
 
 const DB_KEYS = {
@@ -75,11 +68,9 @@ const APP_CACHE = {
 };
 
 function loadData(key) {
-    // Retorna uma cópia segura para evitar mutação direta no cache
     const data = APP_CACHE[key];
     if (!data) return (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
-    
-    // Se for objeto (Minha Empresa), retorna cópia do objeto. Se array, cópia do array.
+    // Retorna cópia para evitar mutação direta
     return Array.isArray(data) ? [...data] : {...data};
 }
 
@@ -93,10 +84,9 @@ async function saveData(key, value) {
         try {
             // Salva na nuvem na coleção correspondente, documento 'full_list'
             await setDoc(doc(db, key, 'full_list'), { items: value });
-            console.log(`[NUVEM] ${key} sincronizado com sucesso.`);
+            console.log(`[NUVEM] ${key} sincronizado.`);
         } catch (e) {
             console.error(`Erro ao salvar ${key} na nuvem:`, e);
-            // Não mostra alert a cada erro para não travar o uso, apenas loga
         }
     } else {
         console.warn("Firebase offline. Salvando apenas localmente.");
@@ -111,17 +101,15 @@ function migrateLocalToCloud() {
 
     keys.forEach(key => {
         const localRaw = localStorage.getItem(key);
-        // Se existe dado local
         if (localRaw) {
             try {
                 const localData = JSON.parse(localRaw);
                 const cloudData = APP_CACHE[key];
                 
-                // Verifica se a nuvem está vazia
                 const isCloudEmpty = Array.isArray(cloudData) ? cloudData.length === 0 : Object.keys(cloudData).length === 0;
                 const hasLocalData = Array.isArray(localData) ? localData.length > 0 : Object.keys(localData).length > 0;
 
-                // Só migra se tiver dados locais E a nuvem estiver vazia (evita sobrescrever dados novos da nuvem)
+                // Só migra se a nuvem estiver vazia para evitar sobrescrever dados novos
                 if (hasLocalData && isCloudEmpty) {
                     console.log(`Migrando ${key} do LocalStorage para o Firebase...`);
                     saveData(key, localData); 
@@ -130,46 +118,44 @@ function migrateLocalToCloud() {
             } catch (e) { console.error(`Erro migração ${key}:`, e); }
         }
     });
-    if(migrated > 0) {
-        console.log(`${migrated} tabelas migradas para a nuvem.`);
-        alert("Seus dados antigos foram recuperados e salvos na nuvem com sucesso!");
-    }
+    if(migrated > 0) console.log(`${migrated} tabelas migradas para a nuvem.`);
 }
 
-// --- BARRA SUPERIOR DE USUÁRIO (PERSISTENTE) ---
+// --- BARRA SUPERIOR DE USUÁRIO (CORRIGIDA) ---
 function renderTopBar(email) {
     const existing = document.getElementById('topUserBar');
     if (existing) existing.remove();
 
     const bar = document.createElement('div');
     bar.id = 'topUserBar';
-    // Z-index muito alto para ficar acima de tudo
+    // Z-index 99999 garante que fique acima do menu mobile e sidebar
     bar.style.cssText = `
         position: fixed; top: 0; right: 0; 
-        height: 60px; background: white; 
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        height: 50px; background: #263238; color: white;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
         display: flex; justify-content: flex-end; align-items: center; 
-        padding: 0 20px; z-index: 9999; gap: 15px;
+        padding: 0 20px; z-index: 99999; gap: 15px;
         border-bottom-left-radius: 10px;
+        font-family: 'Inter', sans-serif;
     `;
     
-    // Ajuste responsivo para mobile
+    // Ajuste para telas pequenas (Mobile)
     if (window.innerWidth <= 768) {
-        bar.style.top = '60px'; // Abaixo do header mobile
         bar.style.width = '100%';
+        bar.style.top = '0'; 
         bar.style.justifyContent = 'space-between';
-        bar.style.background = '#f1f1f1';
-        bar.style.height = '50px';
-        bar.style.borderBottom = '1px solid #ddd';
-        bar.style.left = '0';
+        bar.style.background = 'rgba(38, 50, 56, 0.95)';
+        bar.style.backdropFilter = 'blur(5px)';
+        // Adiciona padding top para não colar no topo da tela
+        document.body.style.paddingTop = '50px';
     }
 
     bar.innerHTML = `
-        <div style="display:flex; flex-direction:column; text-align:right;">
-            <span style="font-weight:bold; color:var(--primary-color); font-size:0.7rem;">LOGADO COMO</span>
-            <span style="font-size:0.85rem; font-weight:600;">${email}</span>
+        <div style="display:flex; flex-direction:column; text-align:right; line-height: 1.2;">
+            <span style="font-weight:bold; color:#4db6ac; font-size:0.65rem; letter-spacing:1px;">USUÁRIO</span>
+            <span style="font-size:0.8rem; color: white;">${email}</span>
         </div>
-        <button onclick="logoutSystem()" class="btn-danger btn-mini" style="padding: 6px 12px; font-size:0.8rem; display:flex; align-items:center; gap:5px; cursor:pointer;">
+        <button onclick="logoutSystem()" class="btn-danger btn-mini" style="padding: 6px 12px; font-size:0.75rem; display:flex; align-items:center; gap:5px; cursor:pointer; border:1px solid #ef5350;">
             <i class="fas fa-sign-out-alt"></i> SAIR
         </button>
     `;
@@ -180,11 +166,14 @@ function renderTopBar(email) {
 window.logoutSystem = function() {
     if(confirm("Tem certeza que deseja sair do sistema?")) {
         if (window.dbRef && window.dbRef.auth) {
-            window.dbRef.signOut(window.dbRef.auth).then(() => {
+            window.dbRef.auth.signOut().then(() => {
                 window.location.href = "login.html";
-            }).catch(err => alert("Erro ao sair: " + err));
+            }).catch(err => {
+                alert("Erro ao sair: " + err);
+                // Força redirecionamento mesmo com erro
+                window.location.href = "login.html";
+            });
         } else {
-            // Fallback
             window.location.href = "login.html";
         }
     }
@@ -339,7 +328,7 @@ function renderAjudantesAdicionadosList() {
     l.innerHTML = arr.map(a => `<li>${(getAjudante(a.id)||{}).nome || 'ID: '+a.id} - ${formatCurrency(a.diaria)} <button type="button" class="btn-mini" onclick="removeAjudanteFromOperation(${a.id})"><i class="fas fa-trash"></i></button></li>`).join('') || '<li>Nenhum</li>';
 }
 function removeAjudanteFromOperation(id) {
-    window._operacaoAjudantesTempList = (window._operacaoAjudantesTempList || []).filter(a => Number(a.id) !== Number(id));
+    window._operacaoAjudantesTempList = window._operacaoAjudantesTempList.filter(a => a.id !== id);
     renderAjudantesAdicionadosList();
 }
 
@@ -351,7 +340,6 @@ function populateSelect(id, data, valKey, txtKey, def) {
     if(!s) return;
     const prev = s.value;
     s.innerHTML = `<option value="">${def}</option>` + data.map(i => `<option value="${i[valKey]}">${i[txtKey]}</option>`).join('');
-    // Tenta restaurar seleção anterior se ainda válida
     if(prev && Array.from(s.options).some(o => o.value === prev)) {
         s.value = prev;
     }
@@ -594,7 +582,6 @@ function setupFormHandlers() {
                 }
 
                 const valorParcela = valorTotal / numParcelas;
-                // Conversão de data segura
                 const [y_ini, m_ini, d_ini] = dataBaseStr.split('-').map(Number);
                 const dataBase = new Date(y_ini, m_ini - 1, d_ini);
 
@@ -1126,21 +1113,6 @@ function setupRealtimeListeners() {
         return;
     }
 
-    // --- NOVA PROTEÇÃO DE ROTA (SEGURANÇA) ---
-    // Verifica se o usuário está logado. Se não, manda pro login.
-    const { auth } = window.dbRef;
-    if (auth) {
-        auth.onAuthStateChanged((user) => {
-            if (!user) {
-                // Se não tiver usuário logado, redireciona para login
-                window.location.href = "login.html";
-            } else {
-                console.log("Usuário autenticado:", user.email);
-            }
-        });
-    }
-    // -----------------------------------------
-
     const { db, doc, onSnapshot } = window.dbRef;
     const keys = Object.values(DB_KEYS);
 
@@ -1155,10 +1127,12 @@ function setupRealtimeListeners() {
                 APP_CACHE[key] = data.items || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
                 console.log(`Dados recebidos do Firebase: ${key}`);
             } else {
-                console.log(`Criando estrutura inicial: ${key}`);
+                console.log(`Criando estrutura inicial na nuvem para: ${key}`);
+                // Se não existir, inicializa no banco (como o antigo 'Mock')
                 saveData(key, key === DB_KEYS.MINHA_EMPRESA ? {} : []);
             }
-            // Chama a atualização com proteção de "Debounce"
+            
+            // ATUALIZA TODA A TELA APÓS RECEBER DADOS NOVOS
             updateUI();
         }, (error) => {
             console.error(`Erro ao ouvir ${key}:`, error);
@@ -1365,54 +1339,41 @@ function setupReciboListeners() {
 }
 
 // =============================================================================
-// 17. BACKUP, RESTORE E RESET
+// 17. BACKUP E IMPORTAÇÃO (CORRIGIDO PARA NUVEM)
 // =============================================================================
 
 function exportDataBackup() {
     const data = {};
     Object.values(DB_KEYS).forEach(k => data[k] = loadData(k));
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-        type: 'application/json'
-    });
+    const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `logimaster_backup_${new Date().toISOString().slice(0,10)}.json`;
-    document.body.appendChild(a);
+    const a = document.createElement('a'); a.href = url; a.download = `backup_logimaster.json`;
     a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    alert('BACKUP SALVO (DOWNLOAD).');
 }
 
+// Importa e salva na nuvem
 function importDataBackup(event) {
     const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
         try {
             const data = JSON.parse(e.target.result);
-            Object.keys(data).forEach(k => {
-                if (Object.values(DB_KEYS).includes(k)) {
-                    // Salva no Firebase em vez de localStorage
-                    saveData(k, data[k]);
+            let promises = [];
+            for (const key of Object.keys(data)) {
+                if (Object.values(DB_KEYS).includes(key)) {
+                    // Força o salvamento na nuvem
+                    promises.push(saveData(key, data[key]));
                 }
-            });
-            alert('BACKUP IMPORTADO. AGUARDE A SINCRONIZAÇÃO...');
+            }
+            await Promise.all(promises);
+            alert('Backup restaurado na nuvem com sucesso! Atualizando tela...');
+            updateUI();
         } catch (err) {
-            alert('ERRO AO IMPORTAR O BACKUP.');
+            alert('Erro ao processar backup: ' + err);
         }
     };
     reader.readAsText(file);
-}
-
-class ConverterMoeda {
-    constructor(valor) {
-        this.valor = Math.abs(Number(valor) || 0);
-    }
-    getExtenso() {
-        return `${this.valor.toFixed(2).replace('.',',')} REAIS`;
-    }
 }
 
 // =============================================================================
