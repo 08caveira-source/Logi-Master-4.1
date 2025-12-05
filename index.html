@@ -9,14 +9,18 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
-<body>
-    <div class="mobile-nav">
+<body style="display:none;"> <div class="mobile-nav">
         <button id="mobileMenuBtn"><i class="fas fa-bars"></i></button>
         <span class="logo-mobile">LOGI<span style="color:var(--primary-color);">MASTER</span></span>
     </div>
 
     <header class="sidebar" id="sidebar">
         <h1 class="logo">LOGI<span style="color:var(--primary-color);">MASTER</span></h1>
+        
+        <div class="user-profile-section" style="padding: 0 25px 20px; color: #b0bec5; font-size: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 10px;">
+            <p><i class="fas fa-user-circle"></i> <span id="userEmailDisplay">CARREGANDO...</span></p>
+        </div>
+
         <nav>
             <ul>
                 <li class="nav-item active" data-page="home"><i class="fas fa-calendar-alt"></i> DASHBOARD / CALENDÁRIO</li>
@@ -29,15 +33,18 @@
                 <li class="nav-item" data-page="config"><i class="fas fa-cog"></i> CONFIGURAÇÕES</li>
             </ul>
         </nav>
-        <div class="sidebar-footer">
-            <p>&copy; LOGIMASTER 2024</p>
+        
+        <div class="sidebar-footer" style="padding-top: 10px;">
+            <button onclick="logoutSystem()" class="btn-danger" style="width: 100%; justify-content: center; margin-bottom: 15px;">
+                <i class="fas fa-sign-out-alt"></i> SAIR
+            </button>
+            <p>&copy; LOGIMASTER 2025</p>
         </div>
     </header>
 
     <div class="overlay" id="sidebarOverlay"></div>
 
     <main class="content">
-        
         <section id="home" class="page active">
             <h2>DASHBOARD</h2>
             <div class="card-grid">
@@ -126,7 +133,6 @@
                             <input type="number" id="operacaoFaturamento" step="0.01" min="0" required>
                         </div>
                         
-                        <!-- NOVO CAMPO ADIANTAMENTO (Opcional, mas útil) -->
                         <div class="form-group">
                             <label for="operacaoAdiantamento">ADIANTAMENTO RECEBIDO (R$):</label>
                             <input type="number" id="operacaoAdiantamento" step="0.01" min="0">
@@ -153,7 +159,6 @@
                         </div>
 
                         <div class="form-group">
-                            <!-- ATUALIZADO: step="any" para aceitar decimais -->
                             <label for="operacaoKmRodado">KM RODADO:</label>
                             <input type="number" id="operacaoKmRodado" min="0" step="any">
                         </div>
@@ -171,7 +176,6 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                         <!-- Botão de submit garantido -->
                          <button type="submit" class="btn-primary"><i class="fas fa-save"></i> SALVAR OPERAÇÃO</button>
                          <button type="reset" class="btn-secondary"><i class="fas fa-undo"></i> LIMPAR FORMULÁRIO</button>
                     </div>
@@ -224,7 +228,6 @@
                             <input type="number" id="despesaGeralValor" step="0.01" min="0" required>
                         </div>
                         
-                        <!-- NOVOS CAMPOS DE PAGAMENTO -->
                         <div class="form-group">
                             <label for="despesaFormaPagamento">FORMA DE PAGAMENTO:</label>
                             <select id="despesaFormaPagamento">
@@ -245,11 +248,9 @@
                             </select>
                         </div>
 
-                        <!-- DIV CONTAINER PARA CAMPOS DE PARCELAMENTO (ESCONDIDO POR PADRÃO) -->
                         <div id="divDespesaParcelas" style="display:none; grid-column:1/-1; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:20px;">
                             <div class="form-group">
                                 <label for="despesaParcelas">QUANTIDADE DE PARCELAS:</label>
-                                <!-- MUDANÇA: INPUT LIVRE PARA QUALQUER NÚMERO DE PARCELAS -->
                                 <input type="number" id="despesaParcelas" min="2" value="2" placeholder="EX: 12">
                             </div>
                             <div class="form-group">
@@ -257,7 +258,6 @@
                                 <input type="number" id="despesaIntervaloDias" value="30" min="1">
                                 <small style="color:var(--secondary-color)">EX: 30 PARA MENSAL, 15 PARA QUINZENAL</small>
                             </div>
-                            <!-- MUDANÇA: CAMPO PARA PARCELAS JÁ PAGAS -->
                             <div class="form-group">
                                 <label for="despesaParcelasPagas">JÁ PAGAS (QUANTIDADE):</label>
                                 <input type="number" id="despesaParcelasPagas" min="0" value="0">
@@ -720,8 +720,6 @@
 
     </main>
 
-    <!-- MODAIS DO SISTEMA -->
-
     <div id="operationDetailsModal" class="modal">
         <div class="modal-content">
             <h3 id="modalTitle"></h3>
@@ -757,12 +755,10 @@
         </div>
     </div>
 
-    <!-- NOVO: MODAL DE LEMBRETES DE PAGAMENTO -->
     <div id="reminderModal" class="modal">
         <div class="modal-content">
             <h3 style="color:var(--danger-color);"><i class="fas fa-bell"></i> LEMBRETES DE PAGAMENTO</h3>
             <div id="reminderList" style="max-height:400px; overflow-y:auto;">
-                <!-- Lista de lembretes será injetada via JS -->
             </div>
             <div style="text-align:right; margin-top:15px;">
                 <button class="btn-secondary" onclick="closeReminderModal()">FECHAR</button>
@@ -770,12 +766,12 @@
         </div>
     </div>
 
-    <!-- CONFIGURAÇÃO DO FIREBASE (BANCO DE DADOS ONLINE) -->
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
       import { getFirestore, collection, setDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+      // Importações Adicionadas para Autenticação e Logout
+      import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
-      // ATENÇÃO: SUBSTITUA AS STRINGS ABAIXO PELAS SUAS CHAVES DO FIREBASE CONSOLE
       const firebaseConfig = {
         apiKey: "AIzaSyBZjVdcyjbEoR_-X6_lZuTRDMeN2wIntZI",
         authDomain: "logi-master-dd4cd.firebaseapp.com",
@@ -785,20 +781,35 @@
         appId: "1:673000154258:web:fc9d6fced43e557076324b"
       };
 
-      // Inicializa o Firebase
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);
+      const auth = getAuth(app);
 
-      // Disponibiliza as funções do Firestore globalmente para o script.js usar
+      // Disponibiliza as funções do Firestore globalmente
       window.dbRef = {
           db,
           doc,
           setDoc,
           onSnapshot,
-          collection
+          collection,
+          auth,    // Adicionado ao escopo global
+          signOut  // Adicionado ao escopo global
       };
       
-      console.log("Firebase inicializado! Pronto para sincronização.");
+      // VERIFICAÇÃO DE SEGURANÇA: Só mostra o site se estiver logado
+      onAuthStateChanged(auth, (user) => {
+          if (user) {
+              // Usuário Logado: Mostra o site e preenche o perfil
+              document.body.style.display = 'flex';
+              const emailDisplay = document.getElementById('userEmailDisplay');
+              if(emailDisplay) emailDisplay.textContent = user.email.toUpperCase();
+          } else {
+              // Não Logado: Manda para o Login imediatamente
+              window.location.replace("login.html");
+          }
+      });
+
+      console.log("Firebase e Auth inicializados.");
     </script>
 
     <script src="script.js" defer></script>

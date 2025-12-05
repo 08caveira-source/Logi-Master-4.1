@@ -31,8 +31,7 @@ function loadData(key) {
     return APP_CACHE[key] || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
 }
 
-// Salva dados no Firebase (Nuvem)
-// Isso atualizará o banco de dados online. O Firebase avisará todos os dispositivos conectados.
+// Salva dados no Firebase (Nuvem) - ATUALIZADO PARA RETORNAR PROMESSA (IMPORTANTE PARA O BACKUP)
 async function saveData(key, value) {
     // 1. Atualiza cache local imediatamente (Optimistic UI - Sensação de rapidez)
     APP_CACHE[key] = value;
@@ -42,16 +41,17 @@ async function saveData(key, value) {
         const { db, doc, setDoc } = window.dbRef;
         try {
             // Usamos um documento único chamado 'full_list' para armazenar o array inteiro da coleção.
-            await setDoc(doc(db, key, 'full_list'), { items: value });
-            console.log(`Dados de ${key} salvos na nuvem.`);
+            // Retorna a promessa para que quem chamou possa esperar (await)
+            return await setDoc(doc(db, key, 'full_list'), { items: value });
         } catch (e) {
             console.error("Erro ao salvar no Firebase:", e);
             alert("Erro ao salvar online. Verifique sua conexão ou permissões no Firebase.");
+            throw e; // Lança erro para ser pego pelo processo de backup se necessário
         }
     } else {
-        console.error("Firebase não inicializado ou window.dbRef indisponível.");
         // Fallback para localStorage se desconectado
         localStorage.setItem(key, JSON.stringify(value));
+        return Promise.resolve();
     }
 }
 
@@ -891,7 +891,7 @@ function viewOperacaoDetails(id) {
             <p><strong>ATIVIDADE:</strong> ${atividade}</p>
             <p style="font-size:1.1rem; color:var(--primary-color);"><strong>KM RODADO:</strong> ${op.kmRodado || 0} KM</p> <p><strong>FATURAMENTO:</strong> ${formatCurrency(op.faturamento)}</p>
             <p><strong>ADIANTAMENTO:</strong> ${formatCurrency(adiantamento)}</p>
-            <p style="font-weight:700;">SALDO A RECEBER: ${formatCurrency(saldo)}</p>
+            <p style="font-weight:700;">SALDO A RECEBER: ${formatCurrency(saldoReceber)}</p>
             
             <hr style="margin:10px 0; border:0; border-top:1px solid #eee;">
             
@@ -1611,25 +1611,45 @@ function exportDataBackup() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    alert('BACKUP SALVO (DOWNLOAD).');
+    alert('BACKUP GERADO COM SUCESSO. O DOWNLOAD INICIARÁ EM BREVE.');
 }
 
 function importDataBackup(event) {
     const file = event.target.files[0];
     if (!file) return;
+
+    if(!confirm("ATENÇÃO: IMPORTAR UM BACKUP IRÁ SUBSTITUIR TODOS OS DADOS ATUAIS PELOS DO ARQUIVO.\n\nDESEJA CONTINUAR?")) {
+        event.target.value = ''; // Limpa o input
+        return;
+    }
+
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
         try {
             const data = JSON.parse(e.target.result);
+            const promises = [];
+            
+            // Cria uma lista de tarefas de salvamento
             Object.keys(data).forEach(k => {
                 if (Object.values(DB_KEYS).includes(k)) {
-                    // Salva no Firebase em vez de localStorage
-                    saveData(k, data[k]);
+                    // Adiciona a promessa de salvamento na lista
+                    promises.push(saveData(k, data[k]));
                 }
             });
-            alert('BACKUP IMPORTADO. AGUARDE A SINCRONIZAÇÃO...');
+
+            // Espera TODAS as gravações no banco terminarem
+            if (promises.length > 0) {
+                alert('PROCESSANDO ARQUIVO E ENVIANDO PARA O BANCO DE DADOS... AGUARDE.');
+                await Promise.all(promises);
+                alert('BACKUP IMPORTADO E SINCRONIZADO COM O BANCO DE DADOS COM SUCESSO!');
+                window.location.reload(); // Recarrega para garantir visualização limpa
+            } else {
+                alert('O ARQUIVO NÃO PARECE CONTER DADOS VÁLIDOS DO LOGIMASTER.');
+            }
+
         } catch (err) {
-            alert('ERRO AO IMPORTAR O BACKUP.');
+            console.error(err);
+            alert('ERRO AO IMPORTAR O BACKUP. VERIFIQUE SE O ARQUIVO ESTÁ CORRETO.');
         }
     };
     reader.readAsText(file);
@@ -1942,4 +1962,24 @@ window.editOperacaoItem = function(id) {
     renderAjudantesAdicionadosList();
     document.getElementById('operacaoId').value = op.id;
     alert('DADOS DA OPERAÇÃO CARREGADOS NO FORMULÁRIO. ALTERE E SALVE PARA ATUALIZAR.');
+};
+
+// =============================================================================
+// 19. AUTH & LOGOUT
+// =============================================================================
+
+window.logoutSystem = function() {
+    if (window.dbRef && window.dbRef.auth && window.dbRef.signOut) {
+        if(confirm("Deseja realmente sair do sistema?")) {
+            window.dbRef.signOut(window.dbRef.auth).then(() => {
+                window.location.href = "login.html";
+            }).catch((error) => {
+                console.error("Erro ao sair:", error);
+                alert("Erro ao tentar sair.");
+            });
+        }
+    } else {
+        // Fallback se firebase não carregou
+        window.location.href = "login.html";
+    }
 };
