@@ -14,6 +14,7 @@ const DB_KEYS = {
 };
 
 // CACHE GLOBAL DA APLICAÇÃO (Substitui o localStorage direto)
+// Os dados do Firebase serão espelhados aqui para acesso imediato pela interface.
 const APP_CACHE = {
     [DB_KEYS.MOTORISTAS]: [],
     [DB_KEYS.VEICULOS]: [],
@@ -25,34 +26,39 @@ const APP_CACHE = {
     [DB_KEYS.ATIVIDADES]: []
 };
 
-// Carrega dados do Cache Local
+// Carrega dados do Cache Local (Síncrono para a UI não travar)
 function loadData(key) {
     return APP_CACHE[key] || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
 }
 
-// Salva dados no Firebase
+// Salva dados no Firebase (Nuvem)
+// Isso atualizará o banco de dados online. O Firebase avisará todos os dispositivos conectados.
 async function saveData(key, value) {
-    // 1. Atualiza cache local imediatamente
+    // 1. Atualiza cache local imediatamente (Optimistic UI - Sensação de rapidez)
     APP_CACHE[key] = value;
     
-    // 2. Envia para o Firebase
+    // 2. Envia para o Firebase se estiver disponível
     if (window.dbRef) {
         const { db, doc, setDoc } = window.dbRef;
         try {
+            // Usamos um documento único chamado 'full_list' para armazenar o array inteiro da coleção.
             await setDoc(doc(db, key, 'full_list'), { items: value });
             console.log(`Dados de ${key} salvos na nuvem.`);
         } catch (e) {
             console.error("Erro ao salvar no Firebase:", e);
-            alert("Erro ao salvar online. Verifique conexão/permissões.");
+            alert("Erro ao salvar online. Verifique sua conexão ou permissões no Firebase.");
         }
     } else {
-        console.error("Firebase não inicializado.");
+        console.error("Firebase não inicializado ou window.dbRef indisponível.");
+        // Fallback para localStorage se desconectado
         localStorage.setItem(key, JSON.stringify(value));
     }
 }
 
+// Remove tudo que não for número
 const onlyDigits = (v) => (v || '').toString().replace(/\D/g, '');
 
+// Formata valor para Moeda Brasileira (R$)
 const formatCurrency = (value) => {
     if (typeof value !== 'number' || isNaN(value)) value = 0;
     return new Intl.NumberFormat('pt-BR', {
@@ -96,11 +102,16 @@ function getMinhaEmpresa() {
 function obterUltimoPrecoCombustivel(placa) {
     if (!placa) return 0;
     const todasOps = loadData(DB_KEYS.OPERACOES) || [];
+    // Filtra operações que tem preço preenchido
     const opsComPreco = todasOps.filter(op => 
         op && op.veiculoPlaca === placa && op.precoLitro && Number(op.precoLitro) > 0
     );
+    
     if (opsComPreco.length === 0) return 0;
+    
+    // Ordena da mais recente para a mais antiga
     opsComPreco.sort((a, b) => new Date(b.data || '1970-01-01') - new Date(a.data || '1970-01-01'));
+    
     return Number(opsComPreco[0].precoLitro) || 0;
 }
 
@@ -114,8 +125,10 @@ function calcularMediaHistoricaVeiculo(placa) {
 
     opsVeiculo.forEach(op => {
         if(op.kmRodado) totalKmAcumulado += Number(op.kmRodado);
+        
         const vlrCombustivel = Number(op.combustivel) || 0;
         const vlrPreco = Number(op.precoLitro) || 0;
+        
         if (vlrCombustivel > 0 && vlrPreco > 0) {
             totalLitrosAbastecidos += (vlrCombustivel / vlrPreco);
         }
@@ -127,14 +140,19 @@ function calcularMediaHistoricaVeiculo(placa) {
 
 function calcularCustoConsumoViagem(op) {
     if (!op || !op.veiculoPlaca) return 0;
+    
     const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca);
     const kmRodado = Number(op.kmRodado) || 0;
+    
     if (mediaKmL <= 0 || kmRodado <= 0) return 0;
+
     let precoParaCalculo = Number(op.precoLitro) || 0;
     if (precoParaCalculo <= 0) {
         precoParaCalculo = obterUltimoPrecoCombustivel(op.veiculoPlaca);
     }
+
     if (precoParaCalculo <= 0) return 0; 
+
     const litrosConsumidos = kmRodado / mediaKmL;
     return litrosConsumidos * precoParaCalculo;
 }
@@ -312,7 +330,7 @@ function removeAjudanteFromOperation(id) {
 }
 
 // =============================================================================
-// 7. POPULATE SELECTS
+// 7. POPULATE SELECTS (PREENCHER DROPDOWNS)
 // =============================================================================
 
 function populateSelect(selectId, data, valueKey, textKey, initialText) {
@@ -501,11 +519,12 @@ function deleteItem(key, id) {
     let idKey = key === DB_KEYS.VEICULOS ? 'placa' : (key === DB_KEYS.CONTRATANTES ? 'cnpj' : 'id');
     arr = arr.filter(it => String(it[idKey]) !== String(id));
     saveData(key, arr);
+    // As renderizações serão automáticas pelo listener do Firebase (setupRealtimeListeners)
     alert('ITEM EXCLUÍDO (PROCESSANDO...).');
 }
 
 // =============================================================================
-// 10. FORM HANDLERS
+// 10. FORM HANDLERS (SUBMISSÃO DE FORMULÁRIOS)
 // =============================================================================
 
 function setupFormHandlers() {
@@ -513,7 +532,7 @@ function setupFormHandlers() {
     if (formMotorista) {
         formMotorista.addEventListener('submit', (e) => {
             e.preventDefault();
-            let arr = loadData(DB_KEYS.MOTORISTAS).slice();
+            let arr = loadData(DB_KEYS.MOTORISTAS).slice(); // Copia array para evitar mutação direta
             const idHidden = document.getElementById('motoristaId').value;
             const obj = {
                 id: idHidden ? Number(idHidden) : (arr.length ? Math.max(...arr.map(a => a.id)) + 1 : 101),
@@ -641,7 +660,7 @@ function setupFormHandlers() {
         });
     }
 
-    // DESPESA GERAL
+    // DESPESA GERAL (Lógica de Parcelamento Atualizada)
     const formDespesa = document.getElementById('formDespesaGeral');
     if (formDespesa) {
         formDespesa.addEventListener('submit', (e) => {
@@ -649,6 +668,7 @@ function setupFormHandlers() {
             let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
             const idHidden = document.getElementById('despesaGeralId').value;
             
+            // Edição simples
             if (idHidden) {
                 const idx = arr.findIndex(d => d.id == idHidden);
                 if (idx >= 0) {
@@ -658,6 +678,7 @@ function setupFormHandlers() {
                      arr[idx].valor = Number(document.getElementById('despesaGeralValor').value) || 0;
                 }
             } else {
+                // Nova Despesa (Com Parcelamento Inteligente)
                 const dataBaseStr = document.getElementById('despesaGeralData').value;
                 const veiculoPlaca = document.getElementById('selectVeiculoDespesaGeral').value || null;
                 const descricaoBase = document.getElementById('despesaGeralDescricao').value.toUpperCase();
@@ -671,6 +692,7 @@ function setupFormHandlers() {
                 let parcelasJaPagas = 0;
                 
                 if (modoPagamento === 'parcelado') {
+                    // Pega os valores dos inputs livres que adicionamos no HTML
                     numParcelas = parseInt(document.getElementById('despesaParcelas').value) || 2; 
                     intervaloDias = parseInt(document.getElementById('despesaIntervaloDias').value) || 30;
                     
@@ -687,6 +709,7 @@ function setupFormHandlers() {
                 for (let i = 0; i < numParcelas; i++) {
                     const id = arr.length ? Math.max(...arr.map(d => d.id)) + 1 : 1;
                     const dataObj = new Date(dataBase);
+                    // Calcula a data da parcela baseado no intervalo escolhido
                     dataObj.setDate(dataBase.getDate() + (i * intervaloDias));
                     
                     const y = dataObj.getFullYear();
@@ -695,6 +718,8 @@ function setupFormHandlers() {
                     const dataParcela = `${y}-${m}-${d}`;
                     
                     const descFinal = numParcelas > 1 ? `${descricaoBase} (${i+1}/${numParcelas})` : descricaoBase;
+                    
+                    // Lógica para marcar como paga automaticamente se estiver dentro da qtd "Já Pagas"
                     const estaPaga = i < parcelasJaPagas;
 
                     arr.push({
@@ -897,9 +922,10 @@ function renderDespesasTable() {
         const dataFmt = new Date(d.data + 'T00:00:00').toLocaleDateString('pt-BR');
         const statusPag = d.pago ? '<span style="color:green; font-weight:bold;">PAGO</span>' : '<span style="color:red; font-weight:bold;">PENDENTE</span>';
         
+        // Lógica do botão de pagamento (Check/X)
         const btnPagoIcon = d.pago ? 'fa-times-circle' : 'fa-check-circle';
         const btnPagoTitle = d.pago ? 'MARCAR COMO PENDENTE' : 'MARCAR COMO PAGO';
-        const btnPagoClass = d.pago ? 'btn-warning' : 'btn-success';
+        const btnPagoClass = d.pago ? 'btn-warning' : 'btn-success'; // Laranja para desfazer, Verde para pagar
 
         rows += `<tr>
             <td>${dataFmt}</td>
@@ -917,11 +943,13 @@ function renderDespesasTable() {
     tabela.querySelector('tbody').innerHTML = rows;
 }
 
+// NOVA FUNÇÃO GLOBAL: Alternar status de pagamento na tabela
 window.toggleStatusDespesa = function(id) {
     let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
     const idx = arr.findIndex(d => d.id === id);
     if (idx >= 0) {
-        arr[idx].pago = !arr[idx].pago; 
+        arr[idx].pago = !arr[idx].pago; // Inverte o status (true <-> false)
+        // Salva e atualiza no Firebase
         saveData(DB_KEYS.DESPESAS_GERAIS, arr);
     }
 };
@@ -935,6 +963,9 @@ function editDespesaItem(id) {
     document.getElementById('despesaGeralDescricao').value = d.descricao;
     document.getElementById('despesaGeralValor').value = d.valor;
     
+    // Na edição simples, não permitimos mudar a estrutura de parcelamento/modo
+    // para evitar complexidade em despesas já parceladas. O usuário edita valor/data.
+    
     window.location.hash = '#despesas';
     alert('MODO DE EDIÇÃO: ALTERE DATA, VEÍCULO, DESCRIÇÃO OU VALOR. PARA REPARCELAR, EXCLUA E CRIE NOVAMENTE.');
 }
@@ -943,24 +974,17 @@ function editDespesaItem(id) {
 // 12. CALENDÁRIO E DASHBOARD
 // =============================================================================
 
-// Removidas declarações globais de DOM elements que causavam erro na inicialização
-let currentMonthYear = null; 
-let calendarGrid = null;
+const calendarGrid = document.getElementById('calendarGrid');
+const currentMonthYear = document.getElementById('currentMonthYear');
 
 function renderCalendar(date) {
-    // ATENÇÃO: Busca os elementos SEMPRE que a função roda para garantir que existem
-    const calendarGrid = document.getElementById('calendarGrid');
-    const currentMonthYear = document.getElementById('currentMonthYear');
-
-    if (!calendarGrid || !currentMonthYear) return;
-
     const year = date.getFullYear();
     const month = date.getMonth();
     currentMonthYear.textContent = date.toLocaleDateString('pt-BR', {
         month: 'long',
         year: 'numeric'
     }).toUpperCase();
-    
+    if (!calendarGrid) return;
     calendarGrid.innerHTML = '';
     const dayNames = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
     dayNames.forEach(n => {
@@ -1012,7 +1036,7 @@ function showOperationDetails(date) {
         const ajudantesHtml = (op.ajudantes || []).map(a => `<li>${(getAjudante(a.id)?.nome)||'ID:'+a.id} — ${formatCurrency(Number(a.diaria)||0)}</li>`).join('') || '<li>NENHUM</li>';
         const totalDiarias = (op.ajudantes || []).reduce((s, a) => s + (Number(a.diaria) || 0), 0);
 
-        const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca) || 0;
+        const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca) || 0; // MÉDIA
         const custoDieselEstimado = calcularCustoConsumoViagem(op) || 0;
         const custosViagem = (op.comissao || 0) + totalDiarias + (op.despesas || 0) + custoDieselEstimado;
         const liquido = (op.faturamento || 0) - custosViagem;
@@ -1069,7 +1093,7 @@ function updateDashboardStats() {
 }
 
 // =============================================================================
-// 13. GRÁFICOS
+// 13. GRÁFICOS (COM PORCENTAGEM CORRIGIDA)
 // =============================================================================
 
 let chartInstance = null;
@@ -1084,7 +1108,7 @@ function renderCharts() {
     const dataOutrasDespesas = [];
     const dataLucro = [];
     const dataKm = [];
-    const dataRevenue = [];
+    const dataRevenue = []; // Para cálculo de porcentagem
 
     let totalReceitaHistorica = 0;
     ops.forEach(o => totalReceitaHistorica += (o.faturamento || 0));
@@ -1128,11 +1152,12 @@ function renderCharts() {
         dataOutrasDespesas.push(sumOutros);
         dataLucro.push(lucro);
         dataKm.push(sumKm);
-        dataRevenue.push(sumFaturamento);
+        dataRevenue.push(sumFaturamento); // Armazena faturamento total do mês para referência na tooltip
     }
 
     if (chartInstance) chartInstance.destroy();
 
+    // Verificação de segurança para o array de Revenue no callback
     const revenueDataSafe = dataRevenue;
 
     chartInstance = new Chart(ctx, {
@@ -1207,15 +1232,20 @@ function renderCharts() {
                         label: function(context) {
                             let label = context.dataset.label || '';
                             if (label) label += ': ';
+
+                            // Se for linha de KM
                             if (context.dataset.type === 'line' || context.dataset.label === 'KM RODADO') {
                                 return label + context.parsed.y + ' KM';
                             }
+
+                            // Cálculo de Porcentagem para Barras Financeiras
                             const val = context.parsed.y;
                             const totalRevenue = revenueDataSafe[context.dataIndex];
                             let percent = 0;
                             if (totalRevenue > 0) {
                                 percent = (val / totalRevenue) * 100;
                             }
+
                             return `${label}${formatCurrency(val)} (${percent.toFixed(1)}%)`;
                         }
                     }
@@ -1232,6 +1262,8 @@ function renderCharts() {
 function checkAndShowReminders() {
     const despesas = loadData(DB_KEYS.DESPESAS_GERAIS);
     const hoje = new Date().toISOString().split('T')[0];
+    
+    // Filtra despesas vencidas ou vencendo hoje que NÃO estão pagas
     const pendentes = despesas.filter(d => {
         const isPago = !!d.pago; 
         return d.data <= hoje && !isPago;
@@ -1245,6 +1277,7 @@ function checkAndShowReminders() {
 function openReminderModal(pendentes) {
     const modal = document.getElementById('reminderModal');
     const lista = document.getElementById('reminderList');
+    
     let html = '';
     pendentes.forEach(d => {
         const dataFmt = new Date(d.data + 'T00:00:00').toLocaleDateString('pt-BR');
@@ -1263,6 +1296,7 @@ function openReminderModal(pendentes) {
             </div>
         `;
     });
+    
     lista.innerHTML = html;
     modal.style.display = 'block';
 }
@@ -1272,6 +1306,7 @@ function closeReminderModal() {
 }
 window.closeReminderModal = closeReminderModal;
 
+// Ações do Modal de Lembrete
 window.payExpense = function(id) {
     let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
     const idx = arr.findIndex(d => d.id === id);
@@ -1281,6 +1316,7 @@ window.payExpense = function(id) {
         const el = event.target.closest('.reminder-item');
         if (el) el.remove();
         if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
+        // Atualiza a tabela para refletir o pagamento
         renderDespesasTable();
     }
 };
@@ -1290,16 +1326,19 @@ window.postponeExpense = function(id) {
     const idx = arr.findIndex(d => d.id === id);
     if (idx >= 0) {
         const atual = new Date(arr[idx].data + 'T00:00:00');
-        atual.setDate(atual.getDate() + 1);
+        atual.setDate(atual.getDate() + 1); // Adia 1 dia
         const y = atual.getFullYear();
         const m = String(atual.getMonth() + 1).padStart(2, '0');
         const dStr = String(atual.getDate()).padStart(2, '0');
+        
         arr[idx].data = `${y}-${m}-${dStr}`;
         saveData(DB_KEYS.DESPESAS_GERAIS, arr);
         alert(`REAGENDADO PARA ${atual.toLocaleDateString('pt-BR')}`);
+        
         const el = event.target.closest('.reminder-item');
         if (el) el.remove();
         if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
+        
         renderDespesasTable();
     }
 };
@@ -1309,14 +1348,18 @@ window.cancelExpense = function(id) {
     let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
     arr = arr.filter(d => d.id !== id);
     saveData(DB_KEYS.DESPESAS_GERAIS, arr);
+    
     const el = event.target.closest('.reminder-item');
     if (el) el.remove();
     if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
+    
     renderDespesasTable();
 };
 
 function fullSystemReset() {
     if (confirm("ATENÇÃO: ISSO APAGARÁ TODOS OS DADOS DA NUVEM PARA SEMPRE (DE TODOS OS DISPOSITIVOS).\n\nTEM CERTEZA ABSOLUTA?")) {
+        // Para um reset real, teríamos que deletar documentos do Firebase.
+        // Como simplificação, salvaremos arrays vazios em cima dos dados existentes.
         Object.values(DB_KEYS).forEach(k => {
             saveData(k, k === DB_KEYS.MINHA_EMPRESA ? {} : []);
         });
@@ -1329,6 +1372,7 @@ window.fullSystemReset = fullSystemReset;
 // 15. INICIALIZAÇÃO E SINCRONIZAÇÃO (REALTIME)
 // =============================================================================
 
+// Esta função conecta o site ao Firebase e fica "escutando" mudanças.
 function setupRealtimeListeners() {
     if (!window.dbRef) {
         console.error("Firebase ainda não carregou. Tentando novamente em 500ms...");
@@ -1336,37 +1380,26 @@ function setupRealtimeListeners() {
         return;
     }
 
-    // --- NOVA PROTEÇÃO DE ROTA (SEGURANÇA) ---
-    // Verifica se o usuário está logado. Se não, manda pro login.
-    const { auth } = window.dbRef;
-    if (auth) {
-        auth.onAuthStateChanged((user) => {
-            if (!user) {
-                // Se não tiver usuário logado, redireciona para login
-                window.location.href = "login.html";
-            } else {
-                console.log("Usuário autenticado:", user.email);
-            }
-        });
-    }
-    // -----------------------------------------
-
     const { db, doc, onSnapshot } = window.dbRef;
     const keys = Object.values(DB_KEYS);
 
     console.log("Iniciando ouvintes do Firebase...");
 
     keys.forEach(key => {
+        // Escuta mudanças no documento 'full_list' de cada coleção em tempo real
         onSnapshot(doc(db, key, "full_list"), (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
+                // Atualiza o cache local com os dados vindos da nuvem
                 APP_CACHE[key] = data.items || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
-                console.log(`Dados recebidos do Firebase: ${key}`);
+                console.log(`Dados atualizados via nuvem: ${key}`);
             } else {
-                console.log(`Criando estrutura inicial: ${key}`);
+                console.log(`Criando estrutura inicial na nuvem para: ${key}`);
+                // Se não existir, inicializa no banco (como o antigo 'Mock')
                 saveData(key, key === DB_KEYS.MINHA_EMPRESA ? {} : []);
             }
-            // Chama a atualização com proteção de "Debounce"
+            
+            // ATUALIZA TODA A TELA APÓS RECEBER DADOS NOVOS
             updateUI();
         }, (error) => {
             console.error(`Erro ao ouvir ${key}:`, error);
@@ -1374,29 +1407,17 @@ function setupRealtimeListeners() {
     });
 }
 
-// Variável para controlar o "Debounce" (evita atualizações excessivas)
-let _updateTimer = null;
-
+// Função central para atualizar toda a interface quando dados mudam (local ou remotamente)
 function updateUI() {
-    // Se já existe um agendamento, cancela o anterior
-    if (_updateTimer) clearTimeout(_updateTimer);
-    
-    // Agenda uma nova atualização para daqui a 200ms
-    _updateTimer = setTimeout(() => {
-        console.log("Executando atualização da interface (Debounced)...");
-        populateAllSelects();
-        renderOperacaoTable();
-        renderDespesasTable();
-        updateDashboardStats();
-        renderCharts();
-        checkAndShowReminders();
-        renderMinhaEmpresaInfo();
-        
-        // Garante que o calendário seja redesenhado com os dados atuais
-        if (typeof renderCalendar === 'function') {
-            renderCalendar(currentDate);
-        }
-    }, 200); // 200ms de espera
+    populateAllSelects();
+    renderOperacaoTable();
+    renderDespesasTable();
+    updateDashboardStats();
+    renderCharts();
+    checkAndShowReminders();
+    renderMinhaEmpresaInfo();
+    // CORREÇÃO: Força o redesenho do calendário para o mês atual
+    renderCalendar(currentDate);
 }
 
 function setupInputFormattingListeners() {
@@ -1897,21 +1918,6 @@ window.exportDataBackup = exportDataBackup;
 window.importDataBackup = importDataBackup;
 window.viewOperacaoDetails = viewOperacaoDetails;
 window.renderCharts = renderCharts;
-
-// NOVA FUNÇÃO DE LOGOUT
-window.logoutSystem = function() {
-    if(confirm("DESEJA REALMENTE SAIR DO SISTEMA?")) {
-        if(window.dbRef && window.dbRef.auth) {
-            window.dbRef.signOut(window.dbRef.auth).then(() => {
-                window.location.href = "login.html";
-            }).catch((error) => {
-                console.error("Erro ao sair", error);
-            });
-        } else {
-            window.location.href = "login.html";
-        }
-    }
-};
 
 // --- FUNÇÃO DE EDIÇÃO ATUALIZADA (Carrega Adiantamento) ---
 window.editOperacaoItem = function(id) {
