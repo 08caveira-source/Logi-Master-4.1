@@ -14,7 +14,6 @@ const DB_KEYS = {
 };
 
 // CACHE GLOBAL DA APLICAÇÃO (Substitui o localStorage direto)
-// Os dados do Firebase serão espelhados aqui para acesso imediato pela interface.
 const APP_CACHE = {
     [DB_KEYS.MOTORISTAS]: [],
     [DB_KEYS.VEICULOS]: [],
@@ -26,30 +25,90 @@ const APP_CACHE = {
     [DB_KEYS.ATIVIDADES]: []
 };
 
-// Carrega dados do Cache Local (Síncrono para a UI não travar)
+// VARIÁVEL GLOBAL DE CONTROLE DE PERMISSÃO
+window.IS_READ_ONLY = false;
+
+// Função chamada pelo index.html se o usuário for visitante
+window.enableReadOnlyMode = function() {
+    window.IS_READ_ONLY = true;
+    console.log("MODO APENAS LEITURA ATIVADO - VISITANTE");
+
+    // 1. Desabilitar inputs dos formulários de CADASTRO e LANÇAMENTO
+    const formIdsToDisable = [
+        'formOperacao', 
+        'formDespesaGeral', 
+        'formMotorista', 
+        'formVeiculo', 
+        'formContratante', 
+        'formAjudante', 
+        'formAtividade', 
+        'formMinhaEmpresa',
+        'modalAdicionarAjudante' 
+    ];
+
+    formIdsToDisable.forEach(id => {
+        const form = document.getElementById(id);
+        if (form) {
+            const elements = form.querySelectorAll('input, select, textarea, button');
+            elements.forEach(el => {
+                // Não desabilita botões de fechar modal ou abas de navegação
+                if (!el.classList.contains('close-btn') && !el.classList.contains('btn-secondary')) {
+                   el.disabled = true;
+                }
+            });
+        }
+    });
+
+    // 2. Esconder botões de Salvar/Excluir/Ação específicos da tela
+    const selectorsToHide = [
+        'button[type="submit"]', // Botões de Salvar
+        '.btn-danger',           // Botões de Perigo (Reset, Excluir)
+        '.btn-warning',          // Botões de Edição/Pagamento
+        '#inputImportBackup',    // Importar Backup
+        'label[for="inputImportBackup"]',
+        '#modalAjudanteAddBtn'
+    ];
+
+    selectorsToHide.forEach(sel => {
+        document.querySelectorAll(sel).forEach(el => {
+            // Exceção: Não esconder o botão de SAIR (Logout) nem botões de fechar
+            if (!el.textContent.includes('SAIR') && !el.textContent.includes('FECHAR')) {
+                el.style.display = 'none';
+            }
+        });
+    });
+    
+    // Atualiza a UI para garantir que tabelas redesenhem sem os botões de ação
+    updateUI();
+};
+
+// Carrega dados do Cache Local
 function loadData(key) {
     return APP_CACHE[key] || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
 }
 
-// Salva dados no Firebase (Nuvem) - ATUALIZADO PARA RETORNAR PROMESSA (IMPORTANTE PARA O BACKUP)
+// Salva dados no Firebase (Nuvem)
 async function saveData(key, value) {
-    // 1. Atualiza cache local imediatamente (Optimistic UI - Sensação de rapidez)
+    // BLOQUEIO DE SEGURANÇA
+    if (window.IS_READ_ONLY) {
+        alert("SEU PERFIL É APENAS DE VISUALIZAÇÃO. AS ALTERAÇÕES NÃO SERÃO SALVAS.");
+        return Promise.reject("Read Only Mode");
+    }
+
+    // 1. Atualiza cache local
     APP_CACHE[key] = value;
     
-    // 2. Envia para o Firebase se estiver disponível
+    // 2. Envia para o Firebase
     if (window.dbRef) {
         const { db, doc, setDoc } = window.dbRef;
         try {
-            // Usamos um documento único chamado 'full_list' para armazenar o array inteiro da coleção.
-            // Retorna a promessa para que quem chamou possa esperar (await)
             return await setDoc(doc(db, key, 'full_list'), { items: value });
         } catch (e) {
             console.error("Erro ao salvar no Firebase:", e);
-            alert("Erro ao salvar online. Verifique sua conexão ou permissões no Firebase.");
-            throw e; // Lança erro para ser pego pelo processo de backup se necessário
+            alert("Erro ao salvar online. Verifique sua conexão.");
+            throw e;
         }
     } else {
-        // Fallback para localStorage se desconectado
         localStorage.setItem(key, JSON.stringify(value));
         return Promise.resolve();
     }
@@ -102,16 +161,12 @@ function getMinhaEmpresa() {
 function obterUltimoPrecoCombustivel(placa) {
     if (!placa) return 0;
     const todasOps = loadData(DB_KEYS.OPERACOES) || [];
-    // Filtra operações que tem preço preenchido
     const opsComPreco = todasOps.filter(op => 
         op && op.veiculoPlaca === placa && op.precoLitro && Number(op.precoLitro) > 0
     );
     
     if (opsComPreco.length === 0) return 0;
-    
-    // Ordena da mais recente para a mais antiga
     opsComPreco.sort((a, b) => new Date(b.data || '1970-01-01') - new Date(a.data || '1970-01-01'));
-    
     return Number(opsComPreco[0].precoLitro) || 0;
 }
 
@@ -252,6 +307,7 @@ function closeModal() {
 let _pendingAjudanteToAdd = null;
 
 function openAdicionarAjudanteModal(ajudanteObj, onAddCallback) {
+    if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA: NÃO É POSSÍVEL ADICIONAR.");
     _pendingAjudanteToAdd = {
         ajudanteObj,
         onAddCallback
@@ -290,6 +346,7 @@ document.addEventListener('click', (e) => {
 window._operacaoAjudantesTempList = [];
 
 function handleAjudanteSelectionChange() {
+    if (window.IS_READ_ONLY) return;
     const sel = document.getElementById('selectAjudantesOperacao');
     if (!sel || !sel.value) return;
     const id = Number(sel.value);
@@ -319,12 +376,14 @@ function renderAjudantesAdicionadosList() {
     }
     const html = arr.map(a => {
         const ajud = getAjudante(a.id) || {};
-        return `<li>${ajud.nome || 'ID:'+a.id} — DIÁRIA: ${formatCurrency(Number(a.diaria)||0)} <button class="btn-mini" type="button" style="margin-left:8px;" onclick="removeAjudanteFromOperation(${a.id})"><i class="fas fa-trash"></i></button></li>`;
+        const btnDelete = window.IS_READ_ONLY ? '' : `<button class="btn-mini" type="button" style="margin-left:8px;" onclick="removeAjudanteFromOperation(${a.id})"><i class="fas fa-trash"></i></button>`;
+        return `<li>${ajud.nome || 'ID:'+a.id} — DIÁRIA: ${formatCurrency(Number(a.diaria)||0)} ${btnDelete}</li>`;
     }).join('');
     list.innerHTML = html;
 }
 
 function removeAjudanteFromOperation(id) {
+    if (window.IS_READ_ONLY) return;
     window._operacaoAjudantesTempList = (window._operacaoAjudantesTempList || []).filter(a => Number(a.id) !== Number(id));
     renderAjudantesAdicionadosList();
 }
@@ -432,7 +491,18 @@ function renderCadastroTable(key) {
             col2 = item.nome;
             col3 = '';
         }
-        rowsHtml += `<tr><td>${col1}</td><td>${col2}</td>${col3 !== '' ? `<td>${col3}</td>` : ''}<td>${key !== DB_KEYS.ATIVIDADES ? `<button class="btn-action view-btn" title="VISUALIZAR" onclick="viewCadastro('${key}', '${item[idKey]}')"><i class="fas fa-eye"></i></button>` : ''}<button class="btn-action edit-btn" title="EDITAR" onclick="editCadastroItem('${key}', '${item[idKey]}')"><i class="fas fa-edit"></i></button><button class="btn-action delete-btn" title="EXCLUIR" onclick="deleteItem('${key}', '${item[idKey]}')"><i class="fas fa-trash"></i></button></td></tr>`;
+        
+        let btns = '';
+        if (key !== DB_KEYS.ATIVIDADES) {
+             btns += `<button class="btn-action view-btn" title="VISUALIZAR" onclick="viewCadastro('${key}', '${item[idKey]}')"><i class="fas fa-eye"></i></button>`;
+        }
+        
+        if (!window.IS_READ_ONLY) {
+            btns += `<button class="btn-action edit-btn" title="EDITAR" onclick="editCadastroItem('${key}', '${item[idKey]}')"><i class="fas fa-edit"></i></button>
+                     <button class="btn-action delete-btn" title="EXCLUIR" onclick="deleteItem('${key}', '${item[idKey]}')"><i class="fas fa-trash"></i></button>`;
+        }
+
+        rowsHtml += `<tr><td>${col1}</td><td>${col2}</td>${col3 !== '' ? `<td>${col3}</td>` : ''}<td>${btns}</td></tr>`;
     });
     if (tabela && tabela.querySelector('tbody')) tabela.querySelector('tbody').innerHTML = rowsHtml || `<tr><td colspan="10" style="text-align:center;">NENHUM CADASTRO ENCONTRADO.</td></tr>`;
 }
@@ -464,6 +534,8 @@ function viewCadastro(key, id) {
 }
 
 function editCadastroItem(key, id) {
+    if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA.");
+    
     if (key === DB_KEYS.MOTORISTAS) {
         const m = getMotorista(id);
         if (!m) return;
@@ -513,6 +585,8 @@ function editCadastroItem(key, id) {
 }
 
 function deleteItem(key, id) {
+    if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA.");
+    
     if (!confirm('CONFIRMA EXCLUSÃO?')) return;
     let arr = loadData(key);
     if (!arr || !arr.length) return;
@@ -549,11 +623,12 @@ function setupFormHandlers() {
             const idx = arr.findIndex(a => a.id === obj.id);
             if (idx >= 0) arr[idx] = obj;
             else arr.push(obj);
-            saveData(DB_KEYS.MOTORISTAS, arr);
-            formMotorista.reset();
-            toggleCursoInput();
-            document.getElementById('motoristaId').value = '';
-            alert('MOTORISTA SALVO.');
+            saveData(DB_KEYS.MOTORISTAS, arr).then(() => {
+                 formMotorista.reset();
+                 toggleCursoInput();
+                 document.getElementById('motoristaId').value = '';
+                 alert('MOTORISTA SALVO.');
+            });
         });
     }
 
@@ -574,10 +649,11 @@ function setupFormHandlers() {
             const idx = arr.findIndex(a => a.id === obj.id);
             if (idx >= 0) arr[idx] = obj;
             else arr.push(obj);
-            saveData(DB_KEYS.AJUDANTES, arr);
-            formAjudante.reset();
-            document.getElementById('ajudanteId').value = '';
-            alert('AJUDANTE SALVO.');
+            saveData(DB_KEYS.AJUDANTES, arr).then(() => {
+                formAjudante.reset();
+                document.getElementById('ajudanteId').value = '';
+                alert('AJUDANTE SALVO.');
+            });
         });
     }
 
@@ -597,9 +673,10 @@ function setupFormHandlers() {
             const idx = arr.findIndex(v => v.placa === placa);
             if (idx >= 0) arr[idx] = obj;
             else arr.push(obj);
-            saveData(DB_KEYS.VEICULOS, arr);
-            formVeiculo.reset();
-            alert('VEÍCULO SALVO.');
+            saveData(DB_KEYS.VEICULOS, arr).then(() => {
+                formVeiculo.reset();
+                alert('VEÍCULO SALVO.');
+            });
         });
         formVeiculo.addEventListener('reset', () => document.getElementById('veiculoId').value = '');
     }
@@ -618,9 +695,10 @@ function setupFormHandlers() {
             const idx = arr.findIndex(c => c.cnpj === cnpj);
             if (idx >= 0) arr[idx] = obj;
             else arr.push(obj);
-            saveData(DB_KEYS.CONTRATANTES, arr);
-            formContratante.reset();
-            alert('CONTRATANTE SALVA.');
+            saveData(DB_KEYS.CONTRATANTES, arr).then(() => {
+                formContratante.reset();
+                alert('CONTRATANTE SALVA.');
+            });
         });
         formContratante.addEventListener('reset', () => document.getElementById('contratanteId').value = '');
     }
@@ -638,10 +716,11 @@ function setupFormHandlers() {
             const idx = arr.findIndex(a => a.id === obj.id);
             if (idx >= 0) arr[idx] = obj;
             else arr.push(obj);
-            saveData(DB_KEYS.ATIVIDADES, arr);
-            formAtividade.reset();
-            document.getElementById('atividadeId').value = '';
-            alert('ATIVIDADE SALVA.');
+            saveData(DB_KEYS.ATIVIDADES, arr).then(() => {
+                formAtividade.reset();
+                document.getElementById('atividadeId').value = '';
+                alert('ATIVIDADE SALVA.');
+            });
         });
         formAtividade.addEventListener('reset', () => document.getElementById('atividadeId').value = '');
     }
@@ -655,8 +734,7 @@ function setupFormHandlers() {
                 cnpj: document.getElementById('minhaEmpresaCNPJ').value,
                 telefone: document.getElementById('minhaEmpresaTelefone').value
             };
-            saveData(DB_KEYS.MINHA_EMPRESA, obj);
-            alert('DADOS DA EMPRESA SALVOS.');
+            saveData(DB_KEYS.MINHA_EMPRESA, obj).then(() => alert('DADOS DA EMPRESA SALVOS.'));
         });
     }
 
@@ -735,11 +813,12 @@ function setupFormHandlers() {
                 }
             }
 
-            saveData(DB_KEYS.DESPESAS_GERAIS, arr);
-            formDespesa.reset();
-            document.getElementById('despesaGeralId').value = '';
-            toggleDespesaParcelas(); 
-            alert('DESPESA(S) SALVA(S).');
+            saveData(DB_KEYS.DESPESAS_GERAIS, arr).then(() => {
+                formDespesa.reset();
+                document.getElementById('despesaGeralId').value = '';
+                toggleDespesaParcelas(); 
+                alert('DESPESA(S) SALVA(S).');
+            });
         });
         
         formDespesa.addEventListener('reset', () => {
@@ -780,14 +859,14 @@ function setupFormHandlers() {
             const idx = arr.findIndex(o => o.id === obj.id);
             if (idx >= 0) arr[idx] = obj;
             else arr.push(obj);
-            saveData(DB_KEYS.OPERACOES, arr);
             
-            window._operacaoAjudantesTempList = [];
-            document.getElementById('listaAjudantesAdicionados').innerHTML = '';
-            formOperacao.reset();
-            document.getElementById('operacaoId').value = '';
-            
-            alert('OPERAÇÃO SALVA COM SUCESSO!');
+            saveData(DB_KEYS.OPERACOES, arr).then(() => {
+                window._operacaoAjudantesTempList = [];
+                document.getElementById('listaAjudantesAdicionados').innerHTML = '';
+                formOperacao.reset();
+                document.getElementById('operacaoId').value = '';
+                alert('OPERAÇÃO SALVA COM SUCESSO!');
+            });
         });
         
         formOperacao.addEventListener('reset', () => {
@@ -840,7 +919,13 @@ function renderOperacaoTable() {
         const liquido = (op.faturamento || 0) - custosOperacionais;
 
         const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
-        rows += `<tr><td>${dataFmt}</td><td>${motorista}</td><td>${atividade}</td><td>${formatCurrency(op.faturamento)}</td><td style="color:${liquido>=0?'var(--success-color)':'var(--danger-color)'}">${formatCurrency(liquido)}</td><td><button class="btn-action edit-btn" onclick="editOperacaoItem(${op.id})"><i class="fas fa-edit"></i></button><button class="btn-action view-btn" onclick="viewOperacaoDetails(${op.id})"><i class="fas fa-eye"></i></button><button class="btn-action delete-btn" onclick="deleteItem('${DB_KEYS.OPERACOES}', ${op.id})"><i class="fas fa-trash"></i></button></td></tr>`;
+        
+        let btns = `<button class="btn-action view-btn" onclick="viewOperacaoDetails(${op.id})"><i class="fas fa-eye"></i></button>`;
+        if (!window.IS_READ_ONLY) {
+            btns += `<button class="btn-action edit-btn" onclick="editOperacaoItem(${op.id})"><i class="fas fa-edit"></i></button><button class="btn-action delete-btn" onclick="deleteItem('${DB_KEYS.OPERACOES}', ${op.id})"><i class="fas fa-trash"></i></button>`;
+        }
+
+        rows += `<tr><td>${dataFmt}</td><td>${motorista}</td><td>${atividade}</td><td>${formatCurrency(op.faturamento)}</td><td style="color:${liquido>=0?'var(--success-color)':'var(--danger-color)'}">${formatCurrency(liquido)}</td><td>${btns}</td></tr>`;
     });
     tabela.querySelector('tbody').innerHTML = rows;
 }
@@ -922,10 +1007,17 @@ function renderDespesasTable() {
         const dataFmt = new Date(d.data + 'T00:00:00').toLocaleDateString('pt-BR');
         const statusPag = d.pago ? '<span style="color:green; font-weight:bold;">PAGO</span>' : '<span style="color:red; font-weight:bold;">PENDENTE</span>';
         
-        // Lógica do botão de pagamento (Check/X)
-        const btnPagoIcon = d.pago ? 'fa-times-circle' : 'fa-check-circle';
-        const btnPagoTitle = d.pago ? 'MARCAR COMO PENDENTE' : 'MARCAR COMO PAGO';
-        const btnPagoClass = d.pago ? 'btn-warning' : 'btn-success'; // Laranja para desfazer, Verde para pagar
+        let btns = '';
+        if (!window.IS_READ_ONLY) {
+            const btnPagoIcon = d.pago ? 'fa-times-circle' : 'fa-check-circle';
+            const btnPagoTitle = d.pago ? 'MARCAR COMO PENDENTE' : 'MARCAR COMO PAGO';
+            const btnPagoClass = d.pago ? 'btn-warning' : 'btn-success'; // Laranja para desfazer, Verde para pagar
+            btns += `<button class="btn-action ${btnPagoClass}" title="${btnPagoTitle}" onclick="toggleStatusDespesa(${d.id})"><i class="fas ${btnPagoIcon}"></i></button>`;
+            btns += `<button class="btn-action edit-btn" onclick="editDespesaItem(${d.id})"><i class="fas fa-edit"></i></button>`;
+            btns += `<button class="btn-action delete-btn" onclick="deleteItem('${DB_KEYS.DESPESAS_GERAIS}', ${d.id})"><i class="fas fa-trash"></i></button>`;
+        } else {
+            btns = '<span style="color:#999;font-size:0.8rem;">(VISUALIZAÇÃO)</span>';
+        }
 
         rows += `<tr>
             <td>${dataFmt}</td>
@@ -933,11 +1025,7 @@ function renderDespesasTable() {
             <td>${d.descricao}</td>
             <td>${formatCurrency(d.valor)}</td>
             <td>${statusPag}</td>
-            <td>
-                <button class="btn-action ${btnPagoClass}" title="${btnPagoTitle}" onclick="toggleStatusDespesa(${d.id})"><i class="fas ${btnPagoIcon}"></i></button>
-                <button class="btn-action edit-btn" onclick="editDespesaItem(${d.id})"><i class="fas fa-edit"></i></button>
-                <button class="btn-action delete-btn" onclick="deleteItem('${DB_KEYS.DESPESAS_GERAIS}', ${d.id})"><i class="fas fa-trash"></i></button>
-            </td>
+            <td>${btns}</td>
         </tr>`;
     });
     tabela.querySelector('tbody').innerHTML = rows;
@@ -945,6 +1033,7 @@ function renderDespesasTable() {
 
 // NOVA FUNÇÃO GLOBAL: Alternar status de pagamento na tabela
 window.toggleStatusDespesa = function(id) {
+    if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA.");
     let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
     const idx = arr.findIndex(d => d.id === id);
     if (idx >= 0) {
@@ -955,6 +1044,7 @@ window.toggleStatusDespesa = function(id) {
 };
 
 function editDespesaItem(id) {
+    if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA.");
     const d = loadData(DB_KEYS.DESPESAS_GERAIS).find(x => x.id === id);
     if (!d) return;
     document.getElementById('despesaGeralId').value = d.id;
@@ -962,9 +1052,6 @@ function editDespesaItem(id) {
     document.getElementById('selectVeiculoDespesaGeral').value = d.veiculoPlaca || '';
     document.getElementById('despesaGeralDescricao').value = d.descricao;
     document.getElementById('despesaGeralValor').value = d.valor;
-    
-    // Na edição simples, não permitimos mudar a estrutura de parcelamento/modo
-    // para evitar complexidade em despesas já parceladas. O usuário edita valor/data.
     
     window.location.hash = '#despesas';
     alert('MODO DE EDIÇÃO: ALTERE DATA, VEÍCULO, DESCRIÇÃO OU VALOR. PARA REPARCELAR, EXCLUA E CRIE NOVAMENTE.');
@@ -1043,6 +1130,14 @@ function showOperationDetails(date) {
         const adiantamento = op.adiantamento || 0;
         const saldo = (op.faturamento || 0) - adiantamento;
 
+        let btns = '';
+        if (!window.IS_READ_ONLY) {
+             btns = `<div style="text-align:right;">
+                <button class="btn-action edit-btn" onclick="editOperacaoItem(${op.id})"><i class="fas fa-edit"></i> EDITAR</button>
+                <button class="btn-action delete-btn" onclick="deleteItem('${DB_KEYS.OPERACOES}', ${op.id})"><i class="fas fa-trash"></i> EXCLUIR</button>
+            </div>`;
+        }
+
         html += `<div class="card" style="margin-bottom:10px;">
             <p><strong>MOTORISTA:</strong> ${motorista}</p>
             <p><strong>VEÍCULO:</strong> ${op.veiculoPlaca}</p>
@@ -1054,10 +1149,7 @@ function showOperationDetails(date) {
             <p style="font-size:0.9rem; color:#555;">CUSTO DIESEL (ESTIMADO): ${formatCurrency(custoDieselEstimado)}</p>
             <p style="font-weight:700;color:${liquido>=0?'var(--success-color)':'var(--danger-color)'}">LUCRO OPERACIONAL: ${formatCurrency(liquido)}</p>
             <div><strong>AJUDANTES:</strong><ul>${ajudantesHtml}</ul></div>
-            <div style="text-align:right;">
-                <button class="btn-action edit-btn" onclick="editOperacaoItem(${op.id})"><i class="fas fa-edit"></i> EDITAR</button>
-                <button class="btn-action delete-btn" onclick="deleteItem('${DB_KEYS.OPERACOES}', ${op.id})"><i class="fas fa-trash"></i> EXCLUIR</button>
-            </div>
+            ${btns}
         </div>`;
     });
     openOperationDetails(modalTitle, html);
@@ -1281,6 +1373,18 @@ function openReminderModal(pendentes) {
     let html = '';
     pendentes.forEach(d => {
         const dataFmt = new Date(d.data + 'T00:00:00').toLocaleDateString('pt-BR');
+        
+        let actions = '';
+        if (!window.IS_READ_ONLY) {
+             actions = `<div class="reminder-actions">
+                    <button class="btn-success btn-mini" title="MARCAR COMO PAGO" onclick="payExpense(${d.id})"><i class="fas fa-check"></i> PAGO</button>
+                    <button class="btn-warning btn-mini" title="REAGENDAR (+1 DIA)" onclick="postponeExpense(${d.id})"><i class="fas fa-clock"></i> ADIAR</button>
+                    <button class="btn-danger btn-mini" title="EXCLUIR DÍVIDA" onclick="cancelExpense(${d.id})"><i class="fas fa-trash"></i></button>
+                </div>`;
+        } else {
+            actions = '<small style="color:#666;">(VISUALIZAÇÃO)</small>';
+        }
+
         html += `
             <div class="reminder-item">
                 <div class="reminder-info">
@@ -1288,11 +1392,7 @@ function openReminderModal(pendentes) {
                     <p>${d.descricao} - ${formatCurrency(d.valor)}</p>
                     ${d.veiculoPlaca ? `<small>VEÍCULO: ${d.veiculoPlaca}</small>` : ''}
                 </div>
-                <div class="reminder-actions">
-                    <button class="btn-success btn-mini" title="MARCAR COMO PAGO" onclick="payExpense(${d.id})"><i class="fas fa-check"></i> PAGO</button>
-                    <button class="btn-warning btn-mini" title="REAGENDAR (+1 DIA)" onclick="postponeExpense(${d.id})"><i class="fas fa-clock"></i> ADIAR</button>
-                    <button class="btn-danger btn-mini" title="EXCLUIR DÍVIDA" onclick="cancelExpense(${d.id})"><i class="fas fa-trash"></i></button>
-                </div>
+                ${actions}
             </div>
         `;
     });
@@ -1308,6 +1408,7 @@ window.closeReminderModal = closeReminderModal;
 
 // Ações do Modal de Lembrete
 window.payExpense = function(id) {
+    if (window.IS_READ_ONLY) return;
     let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
     const idx = arr.findIndex(d => d.id === id);
     if (idx >= 0) {
@@ -1322,6 +1423,7 @@ window.payExpense = function(id) {
 };
 
 window.postponeExpense = function(id) {
+    if (window.IS_READ_ONLY) return;
     let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
     const idx = arr.findIndex(d => d.id === id);
     if (idx >= 0) {
@@ -1344,6 +1446,7 @@ window.postponeExpense = function(id) {
 };
 
 window.cancelExpense = function(id) {
+    if (window.IS_READ_ONLY) return;
     if(!confirm("TEM CERTEZA QUE DESEJA EXCLUIR ESTA DÍVIDA?")) return;
     let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
     arr = arr.filter(d => d.id !== id);
@@ -1357,6 +1460,7 @@ window.cancelExpense = function(id) {
 };
 
 function fullSystemReset() {
+    if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA: AÇÃO BLOQUEADA.");
     if (confirm("ATENÇÃO: ISSO APAGARÁ TODOS OS DADOS DA NUVEM PARA SEMPRE (DE TODOS OS DISPOSITIVOS).\n\nTEM CERTEZA ABSOLUTA?")) {
         // Para um reset real, teríamos que deletar documentos do Firebase.
         // Como simplificação, salvaremos arrays vazios em cima dos dados existentes.
@@ -1418,6 +1522,11 @@ function updateUI() {
     renderMinhaEmpresaInfo();
     // CORREÇÃO: Força o redesenho do calendário para o mês atual
     renderCalendar(currentDate);
+
+    // Re-aplica bloqueio se estiver em read-only (para garantir que novos elementos renderizados também fiquem bloqueados)
+    if (window.IS_READ_ONLY && window.enableReadOnlyMode) {
+        window.enableReadOnlyMode();
+    }
 }
 
 function setupInputFormattingListeners() {
@@ -1615,6 +1724,8 @@ function exportDataBackup() {
 }
 
 function importDataBackup(event) {
+    if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA.");
+    
     const file = event.target.files[0];
     if (!file) return;
 
@@ -1941,6 +2052,8 @@ window.renderCharts = renderCharts;
 
 // --- FUNÇÃO DE EDIÇÃO ATUALIZADA (Carrega Adiantamento) ---
 window.editOperacaoItem = function(id) {
+    if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA.");
+    
     const op = loadData(DB_KEYS.OPERACOES).find(o => o.id === id);
     if (!op) return;
     document.getElementById('operacaoData').value = op.data || '';

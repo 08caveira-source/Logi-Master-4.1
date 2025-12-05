@@ -45,6 +45,7 @@
     <div class="overlay" id="sidebarOverlay"></div>
 
     <main class="content">
+        
         <section id="home" class="page active">
             <h2>DASHBOARD</h2>
             <div class="card-grid">
@@ -769,7 +770,6 @@
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
       import { getFirestore, collection, setDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-      // Importações Adicionadas para Autenticação e Logout
       import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
       const firebaseConfig = {
@@ -785,26 +785,31 @@
       const db = getFirestore(app);
       const auth = getAuth(app);
 
-      // Disponibiliza as funções do Firestore globalmente
       window.dbRef = {
           db,
           doc,
           setDoc,
           onSnapshot,
           collection,
-          auth,    // Adicionado ao escopo global
-          signOut  // Adicionado ao escopo global
+          auth,    
+          signOut  
       };
       
-      // VERIFICAÇÃO DE SEGURANÇA: Só mostra o site se estiver logado
       onAuthStateChanged(auth, (user) => {
           if (user) {
-              // Usuário Logado: Mostra o site e preenche o perfil
               document.body.style.display = 'flex';
               const emailDisplay = document.getElementById('userEmailDisplay');
               if(emailDisplay) emailDisplay.textContent = user.email.toUpperCase();
+
+              // === LÓGICA DE VISITANTE (APENAS LEITURA) ===
+              if (user.email === 'visitante@logimaster.com') {
+                  setTimeout(() => {
+                      if (window.enableReadOnlyMode) window.enableReadOnlyMode();
+                  }, 500);
+              }
+              // ===========================================
+
           } else {
-              // Não Logado: Manda para o Login imediatamente
               window.location.replace("login.html");
           }
       });
