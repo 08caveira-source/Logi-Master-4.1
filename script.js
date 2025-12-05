@@ -1336,6 +1336,21 @@ function setupRealtimeListeners() {
         return;
     }
 
+    // --- NOVA PROTEÇÃO DE ROTA (SEGURANÇA) ---
+    // Verifica se o usuário está logado. Se não, manda pro login.
+    const { auth } = window.dbRef;
+    if (auth) {
+        auth.onAuthStateChanged((user) => {
+            if (!user) {
+                // Se não tiver usuário logado, redireciona para login
+                window.location.href = "login.html";
+            } else {
+                console.log("Usuário autenticado:", user.email);
+            }
+        });
+    }
+    // -----------------------------------------
+
     const { db, doc, onSnapshot } = window.dbRef;
     const keys = Object.values(DB_KEYS);
 
@@ -1882,6 +1897,21 @@ window.exportDataBackup = exportDataBackup;
 window.importDataBackup = importDataBackup;
 window.viewOperacaoDetails = viewOperacaoDetails;
 window.renderCharts = renderCharts;
+
+// NOVA FUNÇÃO DE LOGOUT
+window.logoutSystem = function() {
+    if(confirm("DESEJA REALMENTE SAIR DO SISTEMA?")) {
+        if(window.dbRef && window.dbRef.auth) {
+            window.dbRef.signOut(window.dbRef.auth).then(() => {
+                window.location.href = "login.html";
+            }).catch((error) => {
+                console.error("Erro ao sair", error);
+            });
+        } else {
+            window.location.href = "login.html";
+        }
+    }
+};
 
 // --- FUNÇÃO DE EDIÇÃO ATUALIZADA (Carrega Adiantamento) ---
 window.editOperacaoItem = function(id) {

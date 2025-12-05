@@ -235,7 +235,9 @@ nav ul {
 .form-group input[type="text"],
 .form-group input[type="number"],
 .form-group input[type="date"],
-.form-group select {
+.form-group select,
+.form-group input[type="password"],
+.form-group input[type="email"] {
     padding: 10px;
     border: 1px solid #ddd;
     border-radius: 4px;
@@ -748,4 +750,42 @@ button.btn-mini:not(.btn-primary):not(.btn-secondary):not(.btn-danger):not(.btn-
         justify-content: flex-end;
         margin-top: 10px;
     }
+}
+
+/* --- ESTILOS DA TELA DE LOGIN --- */
+.login-body {
+    background-color: var(--header-bg); /* Fundo escuro */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    padding: 20px;
+}
+
+.login-container {
+    background-color: white;
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    width: 100%;
+    max-width: 400px;
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 30px;
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 20px;
+}
+
+.login-header h1 {
+    color: var(--text-color);
+    font-size: 2rem;
+}
+
+.login-header p {
+    color: var(--secondary-color);
+    font-weight: 600;
+    letter-spacing: 1px;
+    font-size: 0.9rem;
 }
