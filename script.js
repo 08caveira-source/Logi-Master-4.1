@@ -965,6 +965,11 @@ function renderDespesasTable() {
         const dataFmt = new Date(d.data + 'T00:00:00').toLocaleDateString('pt-BR');
         const statusPag = d.pago ? '<span style="color:green; font-weight:bold;">PAGO</span>' : '<span style="color:red; font-weight:bold;">PENDENTE</span>';
         
+        // Lógica do botão de pagamento
+        const btnPagoIcon = d.pago ? 'fa-times-circle' : 'fa-check-circle';
+        const btnPagoTitle = d.pago ? 'MARCAR COMO PENDENTE' : 'MARCAR COMO PAGO';
+        const btnPagoClass = d.pago ? 'btn-warning' : 'btn-success'; // Laranja para desfazer, Verde para pagar
+
         rows += `<tr>
             <td>${dataFmt}</td>
             <td>${d.veiculoPlaca || 'GERAL'}</td>
@@ -972,6 +977,7 @@ function renderDespesasTable() {
             <td>${formatCurrency(d.valor)}</td>
             <td>${statusPag}</td>
             <td>
+                <button class="btn-action ${btnPagoClass}" title="${btnPagoTitle}" onclick="toggleStatusDespesa(${d.id})"><i class="fas ${btnPagoIcon}"></i></button>
                 <button class="btn-action edit-btn" onclick="editDespesaItem(${d.id})"><i class="fas fa-edit"></i></button>
                 <button class="btn-action delete-btn" onclick="deleteItem('${DB_KEYS.DESPESAS_GERAIS}', ${d.id})"><i class="fas fa-trash"></i></button>
             </td>
@@ -979,6 +985,20 @@ function renderDespesasTable() {
     });
     tabela.querySelector('tbody').innerHTML = rows;
 }
+
+// NOVA FUNÇÃO: Alternar status de pagamento na tabela
+window.toggleStatusDespesa = function(id) {
+    let arr = loadData(DB_KEYS.DESPESAS_GERAIS);
+    const idx = arr.findIndex(d => d.id === id);
+    if (idx >= 0) {
+        arr[idx].pago = !arr[idx].pago; // Inverte o status (true <-> false)
+        saveData(DB_KEYS.DESPESAS_GERAIS, arr);
+        renderDespesasTable();
+        updateDashboardStats();
+        // Se a despesa for paga/desfeita, verificamos se ela afeta os lembretes
+        checkAndShowReminders(); 
+    }
+};
 
 function editDespesaItem(id) {
     const d = loadData(DB_KEYS.DESPESAS_GERAIS).find(x => x.id === id);
