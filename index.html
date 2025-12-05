@@ -773,7 +773,7 @@
     <!-- CONFIGURAÇÃO DO FIREBASE (BANCO DE DADOS ONLINE) -->
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-      import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+      import { getFirestore, collection, setDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
       // ATENÇÃO: SUBSTITUA AS STRINGS ABAIXO PELAS SUAS CHAVES DO FIREBASE CONSOLE
       const firebaseConfig = {
@@ -789,9 +789,16 @@
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);
 
-      // Disponibiliza o DB globalmente para testes ou migração futura
-      window.db = db;
-      console.log("Firebase inicializado!");
+      // Disponibiliza as funções do Firestore globalmente para o script.js usar
+      window.dbRef = {
+          db,
+          doc,
+          setDoc,
+          onSnapshot,
+          collection
+      };
+      
+      console.log("Firebase inicializado! Pronto para sincronização.");
     </script>
 
     <script src="script.js" defer></script>

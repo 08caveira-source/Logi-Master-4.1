@@ -1,5 +1,5 @@
 // =============================================================================
-// 1. CONFIGURAÇÕES E UTILITÁRIOS
+// 1. CONFIGURAÇÕES E UTILITÁRIOS (COM FIREBASE)
 // =============================================================================
 
 const DB_KEYS = {
@@ -13,133 +13,48 @@ const DB_KEYS = {
     ATIVIDADES: 'db_atividades'
 };
 
-// CACHE LOCAL PARA PERFORMANCE
-// O Firebase é assíncrono, mas a UI precisa de dados síncronos.
-// Carregamos tudo no início para cá.
-window.LOCAL_CACHE = {};
+// CACHE GLOBAL DA APLICAÇÃO (Substitui o localStorage direto)
+// Os dados do Firebase serão espelhados aqui para acesso imediato pela interface.
+const APP_CACHE = {
+    [DB_KEYS.MOTORISTAS]: [],
+    [DB_KEYS.VEICULOS]: [],
+    [DB_KEYS.CONTRATANTES]: [],
+    [DB_KEYS.OPERACOES]: [],
+    [DB_KEYS.MINHA_EMPRESA]: {},
+    [DB_KEYS.DESPESAS_GERAIS]: [],
+    [DB_KEYS.AJUDANTES]: [],
+    [DB_KEYS.ATIVIDADES]: []
+};
 
-// Inicializa o cache vazio
-Object.values(DB_KEYS).forEach(key => {
-    window.LOCAL_CACHE[key] = key === DB_KEYS.MINHA_EMPRESA ? {} : [];
-});
-
-// =============================================================================
-// 2. INTEGRAÇÃO FIREBASE (SUBSTITUIÇÃO SOLICITADA)
-// =============================================================================
-
-// Carrega dados do Cache Local (Síncrono para a UI funcionar)
+// Carrega dados do Cache Local (Síncrono para a UI não travar)
 function loadData(key) {
-    // Retorna do cache se existir, ou array vazio
-    return window.LOCAL_CACHE[key] || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
+    return APP_CACHE[key] || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
 }
 
-// Carrega dados REAIS do Firebase (Assíncrono)
-async function loadDataOnline(colecao) {
-    if (!window.db) return []; // Segurança se firebase falhar
-    const { collection, getDocs } = window.firebaseFunctions || {}; 
-    // Nota: window.firebaseFunctions é definido no index.html ou acessamos via window.db indiretamente se importado via módulo
-    // Como estamos usando type="module" no HTML, precisamos garantir acesso às funções
+// Salva dados no Firebase (Nuvem)
+// Isso atualizará o banco de dados online. O Firebase avisará todos os dispositivos conectados.
+async function saveData(key, value) {
+    // 1. Atualiza cache local imediatamente (Optimistic UI - Sensação de rapidez)
+    APP_CACHE[key] = value;
     
-    // Fallback para acesso direto se as funcoes estiverem no window (veja o ajuste no index.html)
-    const getDocsFn = window.getDocs;
-    const collectionFn = window.collection;
-    
-    if(!getDocsFn || !collectionFn) {
-        console.warn("Firebase functions not loaded yet");
-        return [];
-    }
-
-    try {
-        const querySnapshot = await getDocsFn(collectionFn(window.db, colecao));
-        let lista = [];
-        querySnapshot.forEach((doc) => {
-            // Junta o ID do banco com os dados
-            lista.push({ firestoreId: doc.id, ...doc.data() });
-        });
-        return lista;
-    } catch (error) {
-        console.error(`Erro ao carregar ${colecao}:`, error);
-        return [];
-    }
-}
-
-// Salva dados (Atualiza Cache + Envia para Firebase)
-function saveData(key, value) {
-    // 1. Atualiza Cache Local Instantaneamente
-    window.LOCAL_CACHE[key] = value;
-
-    // 2. Envia para o Firebase em Background
-    // Detectamos se é um Array (Lista) ou Objeto (Empresa)
-    if (Array.isArray(value)) {
-        // Para listas, salvamos item a item para permitir edição correta
-        value.forEach(item => {
-            saveDataOnline(key, item);
-        });
-        
-        // NOTA: Deletar itens removidos do array exigiria uma lógica de diff mais complexa.
-        // Para esta versão, focamos em Criar/Editar.
-    } else {
-        saveDataOnline(key, value);
-    }
-}
-
-// Salva um item específico no Firebase
-async function saveDataOnline(colecao, objeto) {
-    const { doc, setDoc } = window; // Usamos as globais definidas no HTML
-    
-    if(!doc || !setDoc || !window.db) return;
-
-    try {
-        // Usamos setDoc para ATUALIZAR ou CRIAR com um ID específico.
-        // Se usássemos addDoc, criaríamos duplicatas a cada salvamento.
-        
-        let docId = String(objeto.id || objeto.placa || objeto.cnpj || 'unico');
-        
-        // Remove undefined/null para evitar erro do Firestore
-        const cleanObj = JSON.parse(JSON.stringify(objeto));
-
-        await setDoc(doc(window.db, colecao, docId), cleanObj);
-        console.log(`Documento salvo em ${colecao}:`, docId);
-    } catch (e) {
-        console.error("Erro ao salvar:", e);
-    }
-}
-
-// Função de Inicialização do Sistema (Carrega tudo do Firebase)
-async function initSystem() {
-    console.log("Iniciando sincronização com Firebase...");
-    
-    // Mostra loading se quiser (opcional)
-    // document.body.style.cursor = 'wait';
-
-    const promises = Object.values(DB_KEYS).map(async (key) => {
-        const data = await loadDataOnline(key);
-        
-        if (key === DB_KEYS.MINHA_EMPRESA) {
-            // Minha empresa é objeto único, pegamos o primeiro se existir
-            window.LOCAL_CACHE[key] = data.length > 0 ? data[0] : {};
-        } else {
-            window.LOCAL_CACHE[key] = data;
+    // 2. Envia para o Firebase se estiver disponível
+    if (window.dbRef) {
+        const { db, doc, setDoc } = window.dbRef;
+        try {
+            // Usamos um documento único chamado 'full_list' para armazenar o array inteiro da coleção.
+            // Esta é a estratégia mais simples para migrar de localStorage para Firestore sem reescrever toda a lógica de IDs do seu sistema atual.
+            await setDoc(doc(db, key, 'full_list'), { items: value });
+            console.log(`Dados de ${key} salvos na nuvem.`);
+        } catch (e) {
+            console.error("Erro ao salvar no Firebase:", e);
+            alert("Erro ao salvar online. Verifique sua conexão ou permissões no Firebase.");
         }
-    });
-
-    await Promise.all(promises);
-    
-    console.log("Dados carregados e Cache atualizado!");
-    // document.body.style.cursor = 'default';
-    
-    // Atualiza a UI após carregar dados
-    updateDashboardStats();
-    renderOperacaoTable();
-    renderDespesasTable();
-    renderCalendar(currentDate);
-    renderCharts();
-    populateAllSelects();
+    } else {
+        console.error("Firebase não inicializado ou window.dbRef indisponível.");
+        // Fallback: Se não tiver firebase, tenta salvar no localStorage para não perder dados na sessão
+        localStorage.setItem(key, JSON.stringify(value));
+    }
 }
-
-// =============================================================================
-// 3. RESTANTE DO CÓDIGO (MANUTENÇÃO DA LÓGICA DE NEGÓCIO)
-// =============================================================================
 
 // Remove tudo que não for número
 const onlyDigits = (v) => (v || '').toString().replace(/\D/g, '');
@@ -154,7 +69,7 @@ const formatCurrency = (value) => {
 };
 
 // =============================================================================
-// 3. FUNÇÕES HELPER (GETTERS)
+// 2. FUNÇÕES HELPER (GETTERS)
 // =============================================================================
 
 function getMotorista(id) {
@@ -182,16 +97,12 @@ function getMinhaEmpresa() {
 }
 
 // =============================================================================
-// 4. INTELIGÊNCIA DE CÁLCULO DE FROTA
+// 3. INTELIGÊNCIA DE CÁLCULO DE FROTA
 // =============================================================================
 
-/**
- * Busca o último preço de combustível válido registrado para um veículo.
- */
 function obterUltimoPrecoCombustivel(placa) {
     if (!placa) return 0;
     const todasOps = loadData(DB_KEYS.OPERACOES) || [];
-    
     // Filtra operações que tem preço preenchido
     const opsComPreco = todasOps.filter(op => 
         op && op.veiculoPlaca === placa && op.precoLitro && Number(op.precoLitro) > 0
@@ -205,9 +116,6 @@ function obterUltimoPrecoCombustivel(placa) {
     return Number(opsComPreco[0].precoLitro) || 0;
 }
 
-/**
- * Calcula a média histórica (KM Total / Litros Totais)
- */
 function calcularMediaHistoricaVeiculo(placa) {
     if (!placa) return 0;
     const todasOps = loadData(DB_KEYS.OPERACOES) || [];
@@ -217,10 +125,8 @@ function calcularMediaHistoricaVeiculo(placa) {
     let totalLitrosAbastecidos = 0;
 
     opsVeiculo.forEach(op => {
-        // Soma KM se existir
         if(op.kmRodado) totalKmAcumulado += Number(op.kmRodado);
         
-        // Soma Litros baseados no valor abastecido e preço do litro no dia
         const vlrCombustivel = Number(op.combustivel) || 0;
         const vlrPreco = Number(op.precoLitro) || 0;
         
@@ -233,32 +139,27 @@ function calcularMediaHistoricaVeiculo(placa) {
     return totalKmAcumulado / totalLitrosAbastecidos; 
 }
 
-/**
- * Calcula o Custo Estimado do Diesel para uma viagem específica
- */
 function calcularCustoConsumoViagem(op) {
     if (!op || !op.veiculoPlaca) return 0;
     
     const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca);
     const kmRodado = Number(op.kmRodado) || 0;
     
-    // Se não tem média ou não rodou, custo é zero
     if (mediaKmL <= 0 || kmRodado <= 0) return 0;
 
-    // Define preço: Ou o do dia, ou o último registrado
     let precoParaCalculo = Number(op.precoLitro) || 0;
     if (precoParaCalculo <= 0) {
         precoParaCalculo = obterUltimoPrecoCombustivel(op.veiculoPlaca);
     }
 
-    if (precoParaCalculo <= 0) return 0; // Sem preço referência, sem custo
+    if (precoParaCalculo <= 0) return 0; 
 
     const litrosConsumidos = kmRodado / mediaKmL;
     return litrosConsumidos * precoParaCalculo;
 }
 
 // =============================================================================
-// 5. FORMATADORES
+// 4. FORMATADORES
 // =============================================================================
 
 function formatCPF_CNPJ(value) {
@@ -303,7 +204,7 @@ function copyToClipboard(text, silent = false) {
 }
 
 // =============================================================================
-// 6. VALIDAÇÕES E UI
+// 5. VALIDAÇÕES E UI
 // =============================================================================
 
 function verificarValidadeCNH(motoristaId) {
@@ -346,7 +247,7 @@ function closeModal() {
 }
 
 // =============================================================================
-// 7. LÓGICA DE AJUDANTES
+// 6. LÓGICA DE AJUDANTES
 // =============================================================================
 
 let _pendingAjudanteToAdd = null;
@@ -430,7 +331,7 @@ function removeAjudanteFromOperation(id) {
 }
 
 // =============================================================================
-// 8. POPULATE SELECTS (PREENCHER DROPDOWNS)
+// 7. POPULATE SELECTS (PREENCHER DROPDOWNS)
 // =============================================================================
 
 function populateSelect(selectId, data, valueKey, textKey, initialText) {
@@ -505,7 +406,7 @@ function renderMinhaEmpresaInfo() {
 }
 
 // =============================================================================
-// 9. TABELAS DE CADASTRO
+// 8. TABELAS DE CADASTRO
 // =============================================================================
 
 function renderCadastroTable(key) {
@@ -520,6 +421,8 @@ function renderCadastroTable(key) {
     else if (key === DB_KEYS.VEICULOS) tabela = document.getElementById('tabelaVeiculos');
     else if (key === DB_KEYS.CONTRATANTES) tabela = document.getElementById('tabelaContratantes');
     else if (key === DB_KEYS.ATIVIDADES) tabela = document.getElementById('tabelaAtividades');
+
+    if (!tabela) return;
 
     data.forEach(item => {
         let col1 = item.id || item.placa || formatCPF_CNPJ(item.cnpj);
@@ -536,7 +439,7 @@ function renderCadastroTable(key) {
 }
 
 // =============================================================================
-// 10. CRUD GENÉRICO
+// 9. CRUD GENÉRICO
 // =============================================================================
 
 function viewCadastro(key, id) {
@@ -617,23 +520,13 @@ function deleteItem(key, id) {
     let idKey = key === DB_KEYS.VEICULOS ? 'placa' : (key === DB_KEYS.CONTRATANTES ? 'cnpj' : 'id');
     arr = arr.filter(it => String(it[idKey]) !== String(id));
     saveData(key, arr);
-    
-    // Deleta do Firebase também
-    const { doc, deleteDoc } = window;
-    if(doc && deleteDoc && window.db) {
-        deleteDoc(doc(window.db, key, String(id))).catch(e => console.error("Erro ao deletar online:", e));
-    }
-
-    populateAllSelects();
-    renderOperacaoTable();
-    renderDespesasTable();
-    updateDashboardStats();
-    renderCharts();
-    alert('ITEM EXCLUÍDO.');
+    // As renderizações serão automáticas pelo listener do Firebase (setupRealtimeListeners), 
+    // mas deixamos o alert para feedback do usuário.
+    alert('ITEM EXCLUÍDO (PROCESSANDO...).');
 }
 
 // =============================================================================
-// 11. FORM HANDLERS (SUBMISSÃO DE FORMULÁRIOS)
+// 10. FORM HANDLERS (SUBMISSÃO DE FORMULÁRIOS)
 // =============================================================================
 
 function setupFormHandlers() {
@@ -641,7 +534,7 @@ function setupFormHandlers() {
     if (formMotorista) {
         formMotorista.addEventListener('submit', (e) => {
             e.preventDefault();
-            let arr = loadData(DB_KEYS.MOTORISTAS);
+            let arr = loadData(DB_KEYS.MOTORISTAS).slice(); // Copia array para evitar mutação direta
             const idHidden = document.getElementById('motoristaId').value;
             const obj = {
                 id: idHidden ? Number(idHidden) : (arr.length ? Math.max(...arr.map(a => a.id)) + 1 : 101),
@@ -662,7 +555,6 @@ function setupFormHandlers() {
             formMotorista.reset();
             toggleCursoInput();
             document.getElementById('motoristaId').value = '';
-            populateAllSelects();
             alert('MOTORISTA SALVO.');
         });
     }
@@ -671,7 +563,7 @@ function setupFormHandlers() {
     if (formAjudante) {
         formAjudante.addEventListener('submit', (e) => {
             e.preventDefault();
-            let arr = loadData(DB_KEYS.AJUDANTES);
+            let arr = loadData(DB_KEYS.AJUDANTES).slice();
             const idHidden = document.getElementById('ajudanteId').value;
             const obj = {
                 id: idHidden ? Number(idHidden) : (arr.length ? Math.max(...arr.map(a => a.id)) + 1 : 201),
@@ -687,7 +579,6 @@ function setupFormHandlers() {
             saveData(DB_KEYS.AJUDANTES, arr);
             formAjudante.reset();
             document.getElementById('ajudanteId').value = '';
-            populateAllSelects();
             alert('AJUDANTE SALVO.');
         });
     }
@@ -696,7 +587,7 @@ function setupFormHandlers() {
     if (formVeiculo) {
         formVeiculo.addEventListener('submit', (e) => {
             e.preventDefault();
-            let arr = loadData(DB_KEYS.VEICULOS);
+            let arr = loadData(DB_KEYS.VEICULOS).slice();
             const placa = document.getElementById('veiculoPlaca').value.toUpperCase();
             const obj = {
                 placa,
@@ -710,7 +601,6 @@ function setupFormHandlers() {
             else arr.push(obj);
             saveData(DB_KEYS.VEICULOS, arr);
             formVeiculo.reset();
-            populateAllSelects();
             alert('VEÍCULO SALVO.');
         });
         formVeiculo.addEventListener('reset', () => document.getElementById('veiculoId').value = '');
@@ -720,7 +610,7 @@ function setupFormHandlers() {
     if (formContratante) {
         formContratante.addEventListener('submit', (e) => {
             e.preventDefault();
-            let arr = loadData(DB_KEYS.CONTRATANTES);
+            let arr = loadData(DB_KEYS.CONTRATANTES).slice();
             const cnpj = document.getElementById('contratanteCNPJ').value;
             const obj = {
                 cnpj,
@@ -732,7 +622,6 @@ function setupFormHandlers() {
             else arr.push(obj);
             saveData(DB_KEYS.CONTRATANTES, arr);
             formContratante.reset();
-            populateAllSelects();
             alert('CONTRATANTE SALVA.');
         });
         formContratante.addEventListener('reset', () => document.getElementById('contratanteId').value = '');
@@ -742,7 +631,7 @@ function setupFormHandlers() {
     if (formAtividade) {
         formAtividade.addEventListener('submit', (e) => {
             e.preventDefault();
-            let arr = loadData(DB_KEYS.ATIVIDADES);
+            let arr = loadData(DB_KEYS.ATIVIDADES).slice();
             const idHidden = document.getElementById('atividadeId').value;
             const obj = {
                 id: idHidden ? Number(idHidden) : (arr.length ? Math.max(...arr.map(a => a.id)) + 1 : 1),
@@ -754,7 +643,6 @@ function setupFormHandlers() {
             saveData(DB_KEYS.ATIVIDADES, arr);
             formAtividade.reset();
             document.getElementById('atividadeId').value = '';
-            populateAllSelects();
             alert('ATIVIDADE SALVA.');
         });
         formAtividade.addEventListener('reset', () => document.getElementById('atividadeId').value = '');
@@ -770,19 +658,19 @@ function setupFormHandlers() {
                 telefone: document.getElementById('minhaEmpresaTelefone').value
             };
             saveData(DB_KEYS.MINHA_EMPRESA, obj);
-            renderMinhaEmpresaInfo();
             alert('DADOS DA EMPRESA SALVOS.');
         });
     }
 
-    // DESPESA GERAL
+    // DESPESA GERAL (Lógica de Parcelamento Atualizada)
     const formDespesa = document.getElementById('formDespesaGeral');
     if (formDespesa) {
         formDespesa.addEventListener('submit', (e) => {
             e.preventDefault();
-            let arr = loadData(DB_KEYS.DESPESAS_GERAIS);
+            let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
             const idHidden = document.getElementById('despesaGeralId').value;
             
+            // Edição simples
             if (idHidden) {
                 const idx = arr.findIndex(d => d.id == idHidden);
                 if (idx >= 0) {
@@ -792,6 +680,7 @@ function setupFormHandlers() {
                      arr[idx].valor = Number(document.getElementById('despesaGeralValor').value) || 0;
                 }
             } else {
+                // Nova Despesa (Com Parcelamento Inteligente)
                 const dataBaseStr = document.getElementById('despesaGeralData').value;
                 const veiculoPlaca = document.getElementById('selectVeiculoDespesaGeral').value || null;
                 const descricaoBase = document.getElementById('despesaGeralDescricao').value.toUpperCase();
@@ -805,6 +694,7 @@ function setupFormHandlers() {
                 let parcelasJaPagas = 0;
                 
                 if (modoPagamento === 'parcelado') {
+                    // Pega os valores dos inputs livres que adicionamos no HTML
                     numParcelas = parseInt(document.getElementById('despesaParcelas').value) || 2; 
                     intervaloDias = parseInt(document.getElementById('despesaIntervaloDias').value) || 30;
                     
@@ -821,12 +711,17 @@ function setupFormHandlers() {
                 for (let i = 0; i < numParcelas; i++) {
                     const id = arr.length ? Math.max(...arr.map(d => d.id)) + 1 : 1;
                     const dataObj = new Date(dataBase);
+                    // Calcula a data da parcela baseado no intervalo escolhido
                     dataObj.setDate(dataBase.getDate() + (i * intervaloDias));
+                    
                     const y = dataObj.getFullYear();
                     const m = String(dataObj.getMonth() + 1).padStart(2, '0');
                     const d = String(dataObj.getDate()).padStart(2, '0');
                     const dataParcela = `${y}-${m}-${d}`;
+                    
                     const descFinal = numParcelas > 1 ? `${descricaoBase} (${i+1}/${numParcelas})` : descricaoBase;
+                    
+                    // Lógica para marcar como paga automaticamente se estiver dentro da qtd "Já Pagas"
                     const estaPaga = i < parcelasJaPagas;
 
                     arr.push({
@@ -846,9 +741,6 @@ function setupFormHandlers() {
             formDespesa.reset();
             document.getElementById('despesaGeralId').value = '';
             toggleDespesaParcelas(); 
-            renderDespesasTable();
-            updateDashboardStats();
-            renderCharts();
             alert('DESPESA(S) SALVA(S).');
         });
         
@@ -867,7 +759,7 @@ function setupFormHandlers() {
             const motId = document.getElementById('selectMotoristaOperacao').value;
             if (motId) verificarValidadeCNH(motId);
 
-            let arr = loadData(DB_KEYS.OPERACOES);
+            let arr = loadData(DB_KEYS.OPERACOES).slice();
             const idHidden = document.getElementById('operacaoId').value;
             const ajudantesVisual = window._operacaoAjudantesTempList || [];
 
@@ -897,11 +789,6 @@ function setupFormHandlers() {
             formOperacao.reset();
             document.getElementById('operacaoId').value = '';
             
-            renderOperacaoTable();
-            updateDashboardStats();
-            renderCalendar(currentDate);
-            renderCharts();
-            
             alert('OPERAÇÃO SALVA COM SUCESSO!');
         });
         
@@ -918,7 +805,6 @@ function setupFormHandlers() {
     if (formRel) formRel.addEventListener('submit', gerarRelatorio);
 }
 
-// Handler para mostrar/esconder campos de parcelamento
 function toggleDespesaParcelas() {
     const modo = document.getElementById('despesaModoPagamento').value;
     const divParcelas = document.getElementById('divDespesaParcelas');
@@ -932,7 +818,7 @@ function toggleDespesaParcelas() {
 window.toggleDespesaParcelas = toggleDespesaParcelas; 
 
 // =============================================================================
-// 12. TABELA DE OPERAÇÕES E VISUALIZAÇÃO
+// 11. TABELA DE OPERAÇÕES E VISUALIZAÇÃO
 // =============================================================================
 
 let currentDate = new Date();
@@ -1038,7 +924,7 @@ function renderDespesasTable() {
         const dataFmt = new Date(d.data + 'T00:00:00').toLocaleDateString('pt-BR');
         const statusPag = d.pago ? '<span style="color:green; font-weight:bold;">PAGO</span>' : '<span style="color:red; font-weight:bold;">PENDENTE</span>';
         
-        // Lógica do botão de pagamento
+        // Lógica do botão de pagamento (Check/X)
         const btnPagoIcon = d.pago ? 'fa-times-circle' : 'fa-check-circle';
         const btnPagoTitle = d.pago ? 'MARCAR COMO PENDENTE' : 'MARCAR COMO PAGO';
         const btnPagoClass = d.pago ? 'btn-warning' : 'btn-success'; // Laranja para desfazer, Verde para pagar
@@ -1059,18 +945,14 @@ function renderDespesasTable() {
     tabela.querySelector('tbody').innerHTML = rows;
 }
 
-// NOVA FUNÇÃO: Alternar status de pagamento na tabela
+// NOVA FUNÇÃO GLOBAL: Alternar status de pagamento na tabela
 window.toggleStatusDespesa = function(id) {
-    let arr = loadData(DB_KEYS.DESPESAS_GERAIS);
+    let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
     const idx = arr.findIndex(d => d.id === id);
     if (idx >= 0) {
         arr[idx].pago = !arr[idx].pago; // Inverte o status (true <-> false)
-        saveData(DB_KEYS.DESPESAS_GERAIS, arr); // Salva (Atualiza cache + envia pro Firebase)
-        
-        renderDespesasTable();
-        updateDashboardStats();
-        // Se a despesa for paga/desfeita, verificamos se ela afeta os lembretes
-        checkAndShowReminders(); 
+        // Salva e atualiza no Firebase
+        saveData(DB_KEYS.DESPESAS_GERAIS, arr);
     }
 };
 
@@ -1083,12 +965,15 @@ function editDespesaItem(id) {
     document.getElementById('despesaGeralDescricao').value = d.descricao;
     document.getElementById('despesaGeralValor').value = d.valor;
     
+    // Na edição simples, não permitimos mudar a estrutura de parcelamento/modo
+    // para evitar complexidade em despesas já parceladas. O usuário edita valor/data.
+    
     window.location.hash = '#despesas';
     alert('MODO DE EDIÇÃO: ALTERE DATA, VEÍCULO, DESCRIÇÃO OU VALOR. PARA REPARCELAR, EXCLUA E CRIE NOVAMENTE.');
 }
 
 // =============================================================================
-// 13. CALENDÁRIO E DASHBOARD
+// 12. CALENDÁRIO E DASHBOARD
 // =============================================================================
 
 const calendarGrid = document.getElementById('calendarGrid');
@@ -1210,7 +1095,7 @@ function updateDashboardStats() {
 }
 
 // =============================================================================
-// 14. GRÁFICOS (COM PORCENTAGEM CORRIGIDA)
+// 13. GRÁFICOS (COM PORCENTAGEM CORRIGIDA)
 // =============================================================================
 
 let chartInstance = null;
@@ -1373,7 +1258,394 @@ function renderCharts() {
 }
 
 // =============================================================================
-// 15. RELATÓRIOS
+// 14. SISTEMA DE LEMBRETES & RESET
+// =============================================================================
+
+function checkAndShowReminders() {
+    const despesas = loadData(DB_KEYS.DESPESAS_GERAIS);
+    const hoje = new Date().toISOString().split('T')[0];
+    
+    // Filtra despesas vencidas ou vencendo hoje que NÃO estão pagas
+    const pendentes = despesas.filter(d => {
+        const isPago = !!d.pago; 
+        return d.data <= hoje && !isPago;
+    }).sort((a,b) => new Date(a.data) - new Date(b.data));
+
+    if (pendentes.length > 0) {
+        openReminderModal(pendentes);
+    }
+}
+
+function openReminderModal(pendentes) {
+    const modal = document.getElementById('reminderModal');
+    const lista = document.getElementById('reminderList');
+    
+    let html = '';
+    pendentes.forEach(d => {
+        const dataFmt = new Date(d.data + 'T00:00:00').toLocaleDateString('pt-BR');
+        html += `
+            <div class="reminder-item">
+                <div class="reminder-info">
+                    <strong>VENCIMENTO: ${dataFmt}</strong>
+                    <p>${d.descricao} - ${formatCurrency(d.valor)}</p>
+                    ${d.veiculoPlaca ? `<small>VEÍCULO: ${d.veiculoPlaca}</small>` : ''}
+                </div>
+                <div class="reminder-actions">
+                    <button class="btn-success btn-mini" title="MARCAR COMO PAGO" onclick="payExpense(${d.id})"><i class="fas fa-check"></i> PAGO</button>
+                    <button class="btn-warning btn-mini" title="REAGENDAR (+1 DIA)" onclick="postponeExpense(${d.id})"><i class="fas fa-clock"></i> ADIAR</button>
+                    <button class="btn-danger btn-mini" title="EXCLUIR DÍVIDA" onclick="cancelExpense(${d.id})"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>
+        `;
+    });
+    
+    lista.innerHTML = html;
+    modal.style.display = 'block';
+}
+
+function closeReminderModal() {
+    document.getElementById('reminderModal').style.display = 'none';
+}
+window.closeReminderModal = closeReminderModal;
+
+// Ações do Modal de Lembrete
+window.payExpense = function(id) {
+    let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
+    const idx = arr.findIndex(d => d.id === id);
+    if (idx >= 0) {
+        arr[idx].pago = true;
+        saveData(DB_KEYS.DESPESAS_GERAIS, arr);
+        const el = event.target.closest('.reminder-item');
+        if (el) el.remove();
+        if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
+        // Atualiza a tabela para refletir o pagamento
+        renderDespesasTable();
+    }
+};
+
+window.postponeExpense = function(id) {
+    let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
+    const idx = arr.findIndex(d => d.id === id);
+    if (idx >= 0) {
+        const atual = new Date(arr[idx].data + 'T00:00:00');
+        atual.setDate(atual.getDate() + 1); // Adia 1 dia
+        const y = atual.getFullYear();
+        const m = String(atual.getMonth() + 1).padStart(2, '0');
+        const dStr = String(atual.getDate()).padStart(2, '0');
+        
+        arr[idx].data = `${y}-${m}-${dStr}`;
+        saveData(DB_KEYS.DESPESAS_GERAIS, arr);
+        alert(`REAGENDADO PARA ${atual.toLocaleDateString('pt-BR')}`);
+        
+        const el = event.target.closest('.reminder-item');
+        if (el) el.remove();
+        if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
+        
+        renderDespesasTable();
+    }
+};
+
+window.cancelExpense = function(id) {
+    if(!confirm("TEM CERTEZA QUE DESEJA EXCLUIR ESTA DÍVIDA?")) return;
+    let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
+    arr = arr.filter(d => d.id !== id);
+    saveData(DB_KEYS.DESPESAS_GERAIS, arr);
+    
+    const el = event.target.closest('.reminder-item');
+    if (el) el.remove();
+    if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
+    
+    renderDespesasTable();
+};
+
+function fullSystemReset() {
+    if (confirm("ATENÇÃO: ISSO APAGARÁ TODOS OS DADOS DA NUVEM PARA SEMPRE (DE TODOS OS DISPOSITIVOS).\n\nTEM CERTEZA ABSOLUTA?")) {
+        // Para um reset real, teríamos que deletar documentos do Firebase.
+        // Como simplificação, salvaremos arrays vazios em cima dos dados existentes.
+        Object.values(DB_KEYS).forEach(k => {
+            saveData(k, k === DB_KEYS.MINHA_EMPRESA ? {} : []);
+        });
+        alert("SISTEMA RESETADO. AGUARDE A SINCRONIZAÇÃO.");
+    }
+}
+window.fullSystemReset = fullSystemReset;
+
+// =============================================================================
+// 15. INICIALIZAÇÃO E SINCRONIZAÇÃO (REALTIME)
+// =============================================================================
+
+// Esta função conecta o site ao Firebase e fica "escutando" mudanças.
+function setupRealtimeListeners() {
+    if (!window.dbRef) {
+        console.error("Firebase ainda não carregou. Tentando novamente em 500ms...");
+        setTimeout(setupRealtimeListeners, 500);
+        return;
+    }
+
+    const { db, doc, onSnapshot } = window.dbRef;
+    const keys = Object.values(DB_KEYS);
+
+    console.log("Iniciando ouvintes do Firebase...");
+
+    keys.forEach(key => {
+        // Escuta mudanças no documento 'full_list' de cada coleção em tempo real
+        onSnapshot(doc(db, key, "full_list"), (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                // Atualiza o cache local com os dados vindos da nuvem
+                APP_CACHE[key] = data.items || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
+                console.log(`Dados atualizados via nuvem: ${key}`);
+            } else {
+                console.log(`Criando estrutura inicial na nuvem para: ${key}`);
+                // Se não existir, inicializa no banco (como o antigo 'Mock')
+                saveData(key, key === DB_KEYS.MINHA_EMPRESA ? {} : []);
+            }
+            
+            // ATUALIZA TODA A TELA APÓS RECEBER DADOS NOVOS
+            updateUI();
+        }, (error) => {
+            console.error(`Erro ao ouvir ${key}:`, error);
+        });
+    });
+}
+
+// Função central para atualizar toda a interface quando dados mudam (local ou remotamente)
+function updateUI() {
+    populateAllSelects();
+    renderOperacaoTable();
+    renderDespesasTable();
+    updateDashboardStats();
+    renderCharts();
+    checkAndShowReminders();
+    renderMinhaEmpresaInfo();
+}
+
+function setupInputFormattingListeners() {
+    const inputs = ['minhaEmpresaCNPJ', 'contratanteCNPJ'];
+    inputs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('blur', e => e.target.value = formatCPF_CNPJ(e.target.value));
+    });
+    const phones = ['minhaEmpresaTelefone', 'contratanteTelefone', 'motoristaTelefone', 'ajudanteTelefone'];
+    phones.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', e => e.target.value = formatPhoneBr(e.target.value));
+    });
+
+    const motoristaPix = document.getElementById('motoristaPix');
+    if (motoristaPix) {
+        motoristaPix.addEventListener('input', () => document.getElementById('motoristaPixTipo').textContent = 'TIPO: ' + detectPixType(motoristaPix.value));
+        document.getElementById('btnMotoristaPixCopy').addEventListener('click', () => copyToClipboard(motoristaPix.value));
+    }
+    const ajudantePix = document.getElementById('ajudantePix');
+    if (ajudantePix) {
+        ajudantePix.addEventListener('input', () => document.getElementById('ajudantePixTipo').textContent = 'TIPO: ' + detectPixType(ajudantePix.value));
+        document.getElementById('btnAjudantePixCopy').addEventListener('click', () => copyToClipboard(ajudantePix.value));
+    }
+
+    const selAjud = document.getElementById('selectAjudantesOperacao');
+    if (selAjud) selAjud.addEventListener('change', handleAjudanteSelectionChange);
+    const selCurso = document.getElementById('motoristaTemCurso');
+    if (selCurso) selCurso.addEventListener('change', toggleCursoInput);
+}
+
+// =============================================================================
+// 16. RECIBOS
+// =============================================================================
+
+function parseCompositeId(value) {
+    if (!value) return null;
+    const parts = value.split(':');
+    if (parts.length !== 2) return null;
+    return {
+        type: parts[0],
+        id: parts[1]
+    };
+}
+
+function getPersonByComposite(value) {
+    const p = parseCompositeId(value);
+    if (!p) return null;
+    if (p.type === 'motorista') return getMotorista(p.id);
+    if (p.type === 'ajudante') return getAjudante(p.id);
+    return null;
+}
+
+function setupReciboListeners() {
+    const btnGerar = document.getElementById('btnGerarRecibo');
+    const btnBaixar = document.getElementById('btnBaixarRecibo');
+    const btnZapRecibo = document.getElementById('btnWhatsappRecibo');
+
+    if (!btnGerar) return;
+    btnGerar.addEventListener('click', () => {
+        const comp = document.getElementById('selectMotoristaRecibo').value;
+        const inicio = document.getElementById('dataInicioRecibo').value;
+        const fim = document.getElementById('dataFimRecibo').value;
+        if (!comp) return alert('SELECIONE UM MOTORISTA OU AJUDANTE.');
+        if (!inicio || !fim) return alert('PREENCHA AS DATAS.');
+
+        const parsed = parseCompositeId(comp);
+        const person = getPersonByComposite(comp);
+        const empresa = getMinhaEmpresa();
+        const veiculoRecibo = document.getElementById('selectVeiculoRecibo').value;
+        const contratanteRecibo = document.getElementById('selectContratanteRecibo').value;
+        const ops = loadData(DB_KEYS.OPERACOES);
+        const di = new Date(inicio + 'T00:00:00');
+        const df = new Date(fim + 'T23:59:59');
+
+        const filtered = ops.filter(op => {
+            const d = new Date(op.data + 'T00:00:00');
+            if (d < di || d > df) return false;
+            let match = false;
+            if (parsed.type === 'motorista') match = String(op.motoristaId) === String(parsed.id);
+            if (parsed.type === 'ajudante') match = Array.isArray(op.ajudantes) && op.ajudantes.some(a => String(a.id) === String(parsed.id));
+            if (!match) return false;
+            if (veiculoRecibo && op.veiculoPlaca !== veiculoRecibo) return false;
+            if (contratanteRecibo && op.contratanteCNPJ !== contratanteRecibo) return false;
+            return true;
+        }).sort((a, b) => new Date(a.data) - new Date(b.data));
+
+        if (!filtered.length) {
+            document.getElementById('reciboContent').innerHTML = `<p style="text-align:center;color:var(--danger-color)">NENHUMA OPERAÇÃO ENCONTRADA PARA ESTE PERÍODO/PESSOA.</p>`;
+            document.getElementById('reciboTitle').style.display = 'none';
+            btnBaixar.style.display = 'none';
+            if (btnZapRecibo) btnZapRecibo.style.display = 'none';
+            return;
+        }
+
+        let totalValorRecibo = 0;
+        const linhas = filtered.map(op => {
+            const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
+            const contrat = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
+            let valorLinha = 0;
+            if (parsed.type === 'motorista') valorLinha = op.comissao || 0;
+            else if (parsed.type === 'ajudante') {
+                const ajudanteData = (op.ajudantes || []).find(a => String(a.id) === String(parsed.id));
+                valorLinha = ajudanteData ? (Number(ajudanteData.diaria) || 0) : 0;
+            }
+            totalValorRecibo += valorLinha;
+            return `<tr><td>${dataFmt}</td><td>${op.veiculoPlaca}</td><td>${contrat}</td><td style="text-align:right;">${formatCurrency(valorLinha)}</td></tr>`;
+        }).join('');
+
+        const totalExtenso = new ConverterMoeda(totalValorRecibo).getExtenso().toUpperCase();
+        const pessoaNome = person ? (person.nome || person.razaoSocial || 'RECEBEDOR') : 'RECEBEDOR';
+        const inicioFmt = new Date(inicio + 'T00:00:00').toLocaleDateString('pt-BR');
+        const fimFmt = new Date(fim + 'T00:00:00').toLocaleDateString('pt-BR');
+
+        if (btnZapRecibo) {
+            const msgRecibo = `OLÁ, SEGUE COMPROVANTE DE RECIBO DE PAGAMENTO.\nBENEFICIÁRIO: ${pessoaNome}\nPERÍODO: ${inicioFmt} A ${fimFmt}\nVALOR TOTAL: *${formatCurrency(totalValorRecibo)}*`;
+            btnZapRecibo.href = `https://wa.me/?text=${encodeURIComponent(msgRecibo)}`;
+            btnZapRecibo.style.display = 'inline-flex';
+        }
+
+        const html = `
+            <div class="recibo-template">
+                <div class="recibo-header"><h3>RECIBO DE PAGAMENTO</h3><p style="font-size:0.9rem;color:var(--secondary-color)">DOCUMENTO NÃO FISCAL</p></div>
+                <p>RECEBEMOS DE: <strong>${empresa.razaoSocial || 'EMPRESA'}</strong>${empresa.cnpj ? ` (CNPJ: ${formatCPF_CNPJ(empresa.cnpj)})` : ''}</p>
+                <div style="border:1px dashed #ccc;padding:10px;margin:10px 0;">
+                    <p><strong>${pessoaNome}</strong> (${parsed.type.toUpperCase()})</p>
+                    <p>PERÍODO: ${inicioFmt} A ${fimFmt}</p>
+                </div>
+                <table style="width:100%;border-collapse:collapse;">
+                    <thead><tr><th style="text-align:left">DATA</th><th style="text-align:left">VEÍCULO</th><th style="text-align:left">CONTRATANTE</th><th style="text-align:right">VALOR</th></tr></thead>
+                    <tbody>${linhas}</tbody>
+                </table>
+                <p class="recibo-total">TOTAL: ${formatCurrency(totalValorRecibo)} (${totalExtenso})</p>
+                <div style="margin: 20px 0; font-size: 0.85rem; text-align: justify; line-height: 1.4;">
+                    <p>DECLARO TER RECEBIDO A IMPORTÂNCIA SUPRAMENCIONADA, DANDO PLENA, RASA E GERAL QUITAÇÃO PELOS SERVIÇOS PRESTADOS NO PERÍODO INDICADO.</p>
+                    <p style="margin-top:8px;">
+                        <strong>FUNDAMENTAÇÃO LEGAL:</strong> DECLARAMOS QUE A PRESTAÇÃO DESTES SERVIÇOS OCORREU DE FORMA AUTÔNOMA E EVENTUAL, SEM SUBORDINAÇÃO JURÍDICA, NÃO CONFIGURANDO VÍNCULO EMPREGATÍCIO.
+                        ESTA RELAÇÃO REGE-SE PELO <strong>CÓDIGO CIVIL BRASILEIRO (ARTS. 593 A 609)</strong> E, NO CASO DE TRANSPORTE DE CARGAS, PELA <strong>LEI Nº 11.442/2007 (TRANSPORTADOR AUTÔNOMO DE CARGAS)</strong>.
+                    </p>
+                </div>
+                <div class="recibo-assinaturas" style="display:flex;gap:20px;margin-top:20px;">
+                    <div><p>_____________________________________</p><p>${pessoaNome}</p><p>RECEBEDOR</p></div>
+                    <div><p>_____________________________________</p><p>${empresa.razaoSocial || 'EMPRESA'}</p><p>${empresa.cnpj ? formatCPF_CNPJ(empresa.cnpj) : ''}</p><p>PAGADOR</p></div>
+                </div>
+            </div>
+        `;
+        document.getElementById('reciboContent').innerHTML = html;
+        document.getElementById('reciboTitle').style.display = 'block';
+        btnBaixar.style.display = 'inline-flex';
+        btnBaixar.onclick = function() {
+            const element = document.getElementById('reciboContent').querySelector('.recibo-template');
+            const nomeArq = `RECIBO_${pessoaNome.split(' ')[0]}_${inicio}.pdf`;
+            if (typeof html2pdf !== 'undefined') {
+                html2pdf().from(element).set({
+                    margin: 10,
+                    filename: nomeArq,
+                    image: {
+                        type: 'jpeg',
+                        quality: 0.98
+                    },
+                    html2canvas: {
+                        scale: 2,
+                        scrollY: 0
+                    },
+                    jsPDF: {
+                        unit: 'mm',
+                        format: 'a4',
+                        orientation: 'portrait'
+                    }
+                }).save();
+            } else alert('LIB HTML2PDF NÃO ENCONTRADA PARA GERAR PDF. INSTALE A LIB OU BAIXE MANUALMENTE.');
+        };
+    });
+}
+
+// =============================================================================
+// 17. BACKUP, RESTORE E RESET
+// =============================================================================
+
+function exportDataBackup() {
+    const data = {};
+    Object.values(DB_KEYS).forEach(k => data[k] = loadData(k));
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json'
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `logimaster_backup_${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    alert('BACKUP SALVO (DOWNLOAD).');
+}
+
+function importDataBackup(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = JSON.parse(e.target.result);
+            Object.keys(data).forEach(k => {
+                if (Object.values(DB_KEYS).includes(k)) {
+                    // Salva no Firebase em vez de localStorage
+                    saveData(k, data[k]);
+                }
+            });
+            alert('BACKUP IMPORTADO. AGUARDE A SINCRONIZAÇÃO...');
+        } catch (err) {
+            alert('ERRO AO IMPORTAR O BACKUP.');
+        }
+    };
+    reader.readAsText(file);
+}
+
+class ConverterMoeda {
+    constructor(valor) {
+        this.valor = Math.abs(Number(valor) || 0);
+    }
+    getExtenso() {
+        return `${this.valor.toFixed(2).replace('.',',')} REAIS`;
+    }
+}
+
+// =============================================================================
+// 18. GESTÃO DE RELATÓRIOS (PDF) E OUTROS
 // =============================================================================
 
 function gerarRelatorio(e) {
@@ -1576,350 +1848,8 @@ function gerarRelatorioCobranca() {
     document.getElementById('reportResults').style.display = 'block';
 }
 
-// =============================================================================
-// 16. RECIBOS
-// =============================================================================
-
-function parseCompositeId(value) {
-    if (!value) return null;
-    const parts = value.split(':');
-    if (parts.length !== 2) return null;
-    return {
-        type: parts[0],
-        id: parts[1]
-    };
-}
-
-function getPersonByComposite(value) {
-    const p = parseCompositeId(value);
-    if (!p) return null;
-    if (p.type === 'motorista') return getMotorista(p.id);
-    if (p.type === 'ajudante') return getAjudante(p.id);
-    return null;
-}
-
-function setupReciboListeners() {
-    const btnGerar = document.getElementById('btnGerarRecibo');
-    const btnBaixar = document.getElementById('btnBaixarRecibo');
-    const btnZapRecibo = document.getElementById('btnWhatsappRecibo');
-
-    if (!btnGerar) return;
-    btnGerar.addEventListener('click', () => {
-        const comp = document.getElementById('selectMotoristaRecibo').value;
-        const inicio = document.getElementById('dataInicioRecibo').value;
-        const fim = document.getElementById('dataFimRecibo').value;
-        if (!comp) return alert('SELECIONE UM MOTORISTA OU AJUDANTE.');
-        if (!inicio || !fim) return alert('PREENCHA AS DATAS.');
-
-        const parsed = parseCompositeId(comp);
-        const person = getPersonByComposite(comp);
-        const empresa = getMinhaEmpresa();
-        const veiculoRecibo = document.getElementById('selectVeiculoRecibo').value;
-        const contratanteRecibo = document.getElementById('selectContratanteRecibo').value;
-        const ops = loadData(DB_KEYS.OPERACOES);
-        const di = new Date(inicio + 'T00:00:00');
-        const df = new Date(fim + 'T23:59:59');
-
-        const filtered = ops.filter(op => {
-            const d = new Date(op.data + 'T00:00:00');
-            if (d < di || d > df) return false;
-            let match = false;
-            if (parsed.type === 'motorista') match = String(op.motoristaId) === String(parsed.id);
-            if (parsed.type === 'ajudante') match = Array.isArray(op.ajudantes) && op.ajudantes.some(a => String(a.id) === String(parsed.id));
-            if (!match) return false;
-            if (veiculoRecibo && op.veiculoPlaca !== veiculoRecibo) return false;
-            if (contratanteRecibo && op.contratanteCNPJ !== contratanteRecibo) return false;
-            return true;
-        }).sort((a, b) => new Date(a.data) - new Date(b.data));
-
-        if (!filtered.length) {
-            document.getElementById('reciboContent').innerHTML = `<p style="text-align:center;color:var(--danger-color)">NENHUMA OPERAÇÃO ENCONTRADA PARA ESTE PERÍODO/PESSOA.</p>`;
-            document.getElementById('reciboTitle').style.display = 'none';
-            btnBaixar.style.display = 'none';
-            if (btnZapRecibo) btnZapRecibo.style.display = 'none';
-            return;
-        }
-
-        let totalValorRecibo = 0;
-        const linhas = filtered.map(op => {
-            const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
-            const contrat = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
-            let valorLinha = 0;
-            if (parsed.type === 'motorista') valorLinha = op.comissao || 0;
-            else if (parsed.type === 'ajudante') {
-                const ajudanteData = (op.ajudantes || []).find(a => String(a.id) === String(parsed.id));
-                valorLinha = ajudanteData ? (Number(ajudanteData.diaria) || 0) : 0;
-            }
-            totalValorRecibo += valorLinha;
-            return `<tr><td>${dataFmt}</td><td>${op.veiculoPlaca}</td><td>${contrat}</td><td style="text-align:right;">${formatCurrency(valorLinha)}</td></tr>`;
-        }).join('');
-
-        const totalExtenso = new ConverterMoeda(totalValorRecibo).getExtenso().toUpperCase();
-        const pessoaNome = person ? (person.nome || person.razaoSocial || 'RECEBEDOR') : 'RECEBEDOR';
-        const inicioFmt = new Date(inicio + 'T00:00:00').toLocaleDateString('pt-BR');
-        const fimFmt = new Date(fim + 'T00:00:00').toLocaleDateString('pt-BR');
-
-        if (btnZapRecibo) {
-            const msgRecibo = `OLÁ, SEGUE COMPROVANTE DE RECIBO DE PAGAMENTO.\nBENEFICIÁRIO: ${pessoaNome}\nPERÍODO: ${inicioFmt} A ${fimFmt}\nVALOR TOTAL: *${formatCurrency(totalValorRecibo)}*`;
-            btnZapRecibo.href = `https://wa.me/?text=${encodeURIComponent(msgRecibo)}`;
-            btnZapRecibo.style.display = 'inline-flex';
-        }
-
-        const html = `
-            <div class="recibo-template">
-                <div class="recibo-header"><h3>RECIBO DE PAGAMENTO</h3><p style="font-size:0.9rem;color:var(--secondary-color)">DOCUMENTO NÃO FISCAL</p></div>
-                <p>RECEBEMOS DE: <strong>${empresa.razaoSocial || 'EMPRESA'}</strong>${empresa.cnpj ? ` (CNPJ: ${formatCPF_CNPJ(empresa.cnpj)})` : ''}</p>
-                <div style="border:1px dashed #ccc;padding:10px;margin:10px 0;">
-                    <p><strong>${pessoaNome}</strong> (${parsed.type.toUpperCase()})</p>
-                    <p>PERÍODO: ${inicioFmt} A ${fimFmt}</p>
-                </div>
-                <table style="width:100%;border-collapse:collapse;">
-                    <thead><tr><th style="text-align:left">DATA</th><th style="text-align:left">VEÍCULO</th><th style="text-align:left">CONTRATANTE</th><th style="text-align:right">VALOR</th></tr></thead>
-                    <tbody>${linhas}</tbody>
-                </table>
-                <p class="recibo-total">TOTAL: ${formatCurrency(totalValorRecibo)} (${totalExtenso})</p>
-                <div style="margin: 20px 0; font-size: 0.85rem; text-align: justify; line-height: 1.4;">
-                    <p>DECLARO TER RECEBIDO A IMPORTÂNCIA SUPRAMENCIONADA, DANDO PLENA, RASA E GERAL QUITAÇÃO PELOS SERVIÇOS PRESTADOS NO PERÍODO INDICADO.</p>
-                    <p style="margin-top:8px;">
-                        <strong>FUNDAMENTAÇÃO LEGAL:</strong> DECLARAMOS QUE A PRESTAÇÃO DESTES SERVIÇOS OCORREU DE FORMA AUTÔNOMA E EVENTUAL, SEM SUBORDINAÇÃO JURÍDICA, NÃO CONFIGURANDO VÍNCULO EMPREGATÍCIO.
-                        ESTA RELAÇÃO REGE-SE PELO <strong>CÓDIGO CIVIL BRASILEIRO (ARTS. 593 A 609)</strong> E, NO CASO DE TRANSPORTE DE CARGAS, PELA <strong>LEI Nº 11.442/2007 (TRANSPORTADOR AUTÔNOMO DE CARGAS)</strong>.
-                    </p>
-                </div>
-                <div class="recibo-assinaturas" style="display:flex;gap:20px;margin-top:20px;">
-                    <div><p>_____________________________________</p><p>${pessoaNome}</p><p>RECEBEDOR</p></div>
-                    <div><p>_____________________________________</p><p>${empresa.razaoSocial || 'EMPRESA'}</p><p>${empresa.cnpj ? formatCPF_CNPJ(empresa.cnpj) : ''}</p><p>PAGADOR</p></div>
-                </div>
-            </div>
-        `;
-        document.getElementById('reciboContent').innerHTML = html;
-        document.getElementById('reciboTitle').style.display = 'block';
-        btnBaixar.style.display = 'inline-flex';
-        btnBaixar.onclick = function() {
-            const element = document.getElementById('reciboContent').querySelector('.recibo-template');
-            const nomeArq = `RECIBO_${pessoaNome.split(' ')[0]}_${inicio}.pdf`;
-            if (typeof html2pdf !== 'undefined') {
-                html2pdf().from(element).set({
-                    margin: 10,
-                    filename: nomeArq,
-                    image: {
-                        type: 'jpeg',
-                        quality: 0.98
-                    },
-                    html2canvas: {
-                        scale: 2,
-                        scrollY: 0
-                    },
-                    jsPDF: {
-                        unit: 'mm',
-                        format: 'a4',
-                        orientation: 'portrait'
-                    }
-                }).save();
-            } else alert('LIB HTML2PDF NÃO ENCONTRADA PARA GERAR PDF. INSTALE A LIB OU BAIXE MANUALMENTE.');
-        };
-    });
-}
-
-// =============================================================================
-// 17. BACKUP, RESTORE E RESET
-// =============================================================================
-
-function exportDataBackup() {
-    const data = {};
-    Object.values(DB_KEYS).forEach(k => data[k] = loadData(k));
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-        type: 'application/json'
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `logimaster_backup_${new Date().toISOString().slice(0,10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    alert('BACKUP SALVO (DOWNLOAD).');
-}
-
-function importDataBackup(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const data = JSON.parse(e.target.result);
-            Object.keys(data).forEach(k => {
-                if (Object.values(DB_KEYS).includes(k)) localStorage.setItem(k, JSON.stringify(data[k]));
-            });
-            alert('BACKUP IMPORTADO. RECARREGANDO A APLICAÇÃO...');
-            location.reload();
-        } catch (err) {
-            alert('ERRO AO IMPORTAR O BACKUP.');
-        }
-    };
-    reader.readAsText(file);
-}
-
-function fullSystemReset() {
-    if (confirm("ATENÇÃO: ISSO APAGARÁ TODOS OS DADOS DO SISTEMA (MOTORISTAS, VEÍCULOS, OPERAÇÕES, ETC). \n\nA TABELA FICARÁ TOTALMENTE EM BRANCO.\n\nTEM CERTEZA ABSOLUTA?")) {
-        if (confirm("ÚLTIMA CHANCE: ESTA AÇÃO É IRREVERSÍVEL. CONFIRMAR RESET TOTAL?")) {
-            localStorage.clear();
-            alert("SISTEMA RESETADO COM SUCESSO. RECARREGANDO PÁGINA EM BRANCO...");
-            location.reload();
-        }
-    }
-}
-window.fullSystemReset = fullSystemReset;
-
-class ConverterMoeda {
-    constructor(valor) {
-        this.valor = Math.abs(Number(valor) || 0);
-    }
-    getExtenso() {
-        return `${this.valor.toFixed(2).replace('.',',')} REAIS`;
-    }
-}
-
-// =============================================================================
-// 18. SISTEMA DE LEMBRETES DE PAGAMENTO
-// =============================================================================
-
-function checkAndShowReminders() {
-    const despesas = loadData(DB_KEYS.DESPESAS_GERAIS);
-    const hoje = new Date().toISOString().split('T')[0];
-    
-    // Filtra despesas vencidas ou vencendo hoje que NÃO estão pagas
-    const pendentes = despesas.filter(d => {
-        const isPago = !!d.pago; 
-        return d.data <= hoje && !isPago;
-    }).sort((a,b) => new Date(a.data) - new Date(b.data));
-
-    if (pendentes.length > 0) {
-        openReminderModal(pendentes);
-    }
-}
-
-function openReminderModal(pendentes) {
-    const modal = document.getElementById('reminderModal');
-    const lista = document.getElementById('reminderList');
-    
-    let html = '';
-    pendentes.forEach(d => {
-        const dataFmt = new Date(d.data + 'T00:00:00').toLocaleDateString('pt-BR');
-        html += `
-            <div class="reminder-item">
-                <div class="reminder-info">
-                    <strong>VENCIMENTO: ${dataFmt}</strong>
-                    <p>${d.descricao} - ${formatCurrency(d.valor)}</p>
-                    ${d.veiculoPlaca ? `<small>VEÍCULO: ${d.veiculoPlaca}</small>` : ''}
-                </div>
-                <div class="reminder-actions">
-                    <button class="btn-success btn-mini" title="MARCAR COMO PAGO" onclick="payExpense(${d.id})"><i class="fas fa-check"></i> PAGO</button>
-                    <button class="btn-warning btn-mini" title="REAGENDAR (+1 DIA)" onclick="postponeExpense(${d.id})"><i class="fas fa-clock"></i> ADIAR</button>
-                    <button class="btn-danger btn-mini" title="EXCLUIR DÍVIDA" onclick="cancelExpense(${d.id})"><i class="fas fa-trash"></i></button>
-                </div>
-            </div>
-        `;
-    });
-    
-    lista.innerHTML = html;
-    modal.style.display = 'block';
-}
-
-function closeReminderModal() {
-    document.getElementById('reminderModal').style.display = 'none';
-}
-window.closeReminderModal = closeReminderModal;
-
-// Ações do Modal de Lembrete
-window.payExpense = function(id) {
-    let arr = loadData(DB_KEYS.DESPESAS_GERAIS);
-    const idx = arr.findIndex(d => d.id === id);
-    if (idx >= 0) {
-        arr[idx].pago = true;
-        saveData(DB_KEYS.DESPESAS_GERAIS, arr);
-        const el = event.target.closest('.reminder-item');
-        if (el) el.remove();
-        if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
-        renderDespesasTable();
-        updateDashboardStats();
-    }
-};
-
-window.postponeExpense = function(id) {
-    let arr = loadData(DB_KEYS.DESPESAS_GERAIS);
-    const idx = arr.findIndex(d => d.id === id);
-    if (idx >= 0) {
-        const atual = new Date(arr[idx].data + 'T00:00:00');
-        atual.setDate(atual.getDate() + 1); // Adia 1 dia
-        const y = atual.getFullYear();
-        const m = String(atual.getMonth() + 1).padStart(2, '0');
-        const dStr = String(atual.getDate()).padStart(2, '0');
-        
-        arr[idx].data = `${y}-${m}-${dStr}`;
-        saveData(DB_KEYS.DESPESAS_GERAIS, arr);
-        alert(`REAGENDADO PARA ${atual.toLocaleDateString('pt-BR')}`);
-        
-        const el = event.target.closest('.reminder-item');
-        if (el) el.remove();
-        if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
-        
-        renderDespesasTable();
-    }
-};
-
-window.cancelExpense = function(id) {
-    if(!confirm("TEM CERTEZA QUE DESEJA EXCLUIR ESTA DÍVIDA?")) return;
-    let arr = loadData(DB_KEYS.DESPESAS_GERAIS);
-    arr = arr.filter(d => d.id !== id);
-    saveData(DB_KEYS.DESPESAS_GERAIS, arr);
-    
-    const el = event.target.closest('.reminder-item');
-    if (el) el.remove();
-    if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
-    
-    renderDespesasTable();
-    updateDashboardStats();
-};
-
-
-// =============================================================================
-// 19. INICIALIZAÇÃO E EVENTOS
-// =============================================================================
-
-function setupInputFormattingListeners() {
-    const inputs = ['minhaEmpresaCNPJ', 'contratanteCNPJ'];
-    inputs.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.addEventListener('blur', e => e.target.value = formatCPF_CNPJ(e.target.value));
-    });
-    const phones = ['minhaEmpresaTelefone', 'contratanteTelefone', 'motoristaTelefone', 'ajudanteTelefone'];
-    phones.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.addEventListener('input', e => e.target.value = formatPhoneBr(e.target.value));
-    });
-
-    const motoristaPix = document.getElementById('motoristaPix');
-    if (motoristaPix) {
-        motoristaPix.addEventListener('input', () => document.getElementById('motoristaPixTipo').textContent = 'TIPO: ' + detectPixType(motoristaPix.value));
-        document.getElementById('btnMotoristaPixCopy').addEventListener('click', () => copyToClipboard(motoristaPix.value));
-    }
-    const ajudantePix = document.getElementById('ajudantePix');
-    if (ajudantePix) {
-        ajudantePix.addEventListener('input', () => document.getElementById('ajudantePixTipo').textContent = 'TIPO: ' + detectPixType(ajudantePix.value));
-        document.getElementById('btnAjudantePixCopy').addEventListener('click', () => copyToClipboard(ajudantePix.value));
-    }
-
-    const selAjud = document.getElementById('selectAjudantesOperacao');
-    if (selAjud) selAjud.addEventListener('change', handleAjudanteSelectionChange);
-    const selCurso = document.getElementById('motoristaTemCurso');
-    if (selCurso) selCurso.addEventListener('change', toggleCursoInput);
-}
-
 document.addEventListener('DOMContentLoaded', () => {
-    // START INIT ASYNC
-    initSystem();
-
+    // Configuração de Tabs e Navegação
     document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.cadastro-tab-btn').forEach(b => b.classList.remove('active'));
@@ -1958,19 +1888,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Inicialização dos módulos
     setupFormHandlers();
     setupInputFormattingListeners();
-    // populateAllSelects(); // Agora chamado no initSystem
-    // renderOperacaoTable(); // Agora chamado no initSystem
-    // renderDespesasTable(); // Agora chamado no initSystem
-    // renderCalendar(currentDate); // Agora chamado no initSystem
-    // updateDashboardStats(); // Agora chamado no initSystem
     setupReciboListeners();
-    // renderCharts(); // Agora chamado no initSystem
     
-    // Check reminders moved to initSystem or triggered after load
+    // Inicia a conexão Realtime com Firebase
+    // Pequeno delay para garantir que o script do Firebase no HTML carregou antes
+    setTimeout(setupRealtimeListeners, 1000);
 });
 
+// Fechar modais ao clicar fora
 window.addEventListener('click', function(event) {
     const viewModal = document.getElementById('viewItemModal');
     const opModal = document.getElementById('operationDetailsModal');
@@ -1980,7 +1908,7 @@ window.addEventListener('click', function(event) {
     if (event.target === addAjModal) addAjModal.style.display = 'none';
 });
 
-// GLOBALS EXPORT
+// GLOBALS EXPORT (Necessário para onclick no HTML funcionar)
 window.viewCadastro = viewCadastro;
 window.editCadastroItem = editCadastroItem;
 window.deleteItem = deleteItem;
