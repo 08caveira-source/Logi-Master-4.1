@@ -682,7 +682,7 @@ function setupFormHandlers() {
         });
     }
 
-    // DESPESA GERAL (Modificado para maior flexibilidade e parcelamento correto)
+    // DESPESA GERAL
     const formDespesa = document.getElementById('formDespesaGeral');
     if (formDespesa) {
         formDespesa.addEventListener('submit', (e) => {
@@ -690,7 +690,6 @@ function setupFormHandlers() {
             let arr = loadData(DB_KEYS.DESPESAS_GERAIS);
             const idHidden = document.getElementById('despesaGeralId').value;
             
-            // Se for edição de item único
             if (idHidden) {
                 const idx = arr.findIndex(d => d.id == idHidden);
                 if (idx >= 0) {
@@ -698,29 +697,24 @@ function setupFormHandlers() {
                      arr[idx].veiculoPlaca = document.getElementById('selectVeiculoDespesaGeral').value || null;
                      arr[idx].descricao = document.getElementById('despesaGeralDescricao').value.toUpperCase();
                      arr[idx].valor = Number(document.getElementById('despesaGeralValor').value) || 0;
-                     // Não alteramos a lógica de pagamento/parcelamento na edição simples para evitar quebra
                 }
             } else {
-                // Nova Despesa
                 const dataBaseStr = document.getElementById('despesaGeralData').value;
                 const veiculoPlaca = document.getElementById('selectVeiculoDespesaGeral').value || null;
                 const descricaoBase = document.getElementById('despesaGeralDescricao').value.toUpperCase();
                 const valorTotal = Number(document.getElementById('despesaGeralValor').value) || 0;
                 
-                const modoPagamento = document.getElementById('despesaModoPagamento').value; // 'avista' ou 'parcelado'
+                const modoPagamento = document.getElementById('despesaModoPagamento').value;
                 const formaPagamento = document.getElementById('despesaFormaPagamento').value; 
                 
                 let numParcelas = 1;
-                let intervaloDias = 30; // Padrão
-                let parcelasJaPagas = 0; // Quantas das parcelas criadas já nascem pagas
+                let intervaloDias = 30;
+                let parcelasJaPagas = 0;
                 
                 if (modoPagamento === 'parcelado') {
-                    // Pega o valor do input numérico, permitindo qualquer quantidade (Ex: 10, 15, 24...)
                     numParcelas = parseInt(document.getElementById('despesaParcelas').value) || 2; 
                     intervaloDias = parseInt(document.getElementById('despesaIntervaloDias').value) || 30;
                     
-                    // Novo: Pega a quantidade de parcelas que já foram pagas (para dívidas antigas)
-                    // Este elemento será adicionado no HTML
                     const inputPagas = document.getElementById('despesaParcelasPagas');
                     if (inputPagas) {
                         parcelasJaPagas = parseInt(inputPagas.value) || 0;
@@ -728,26 +722,18 @@ function setupFormHandlers() {
                 }
 
                 const valorParcela = valorTotal / numParcelas;
-                // Ajuste de fuso horário simples
                 const [y_ini, m_ini, d_ini] = dataBaseStr.split('-').map(Number);
                 const dataBase = new Date(y_ini, m_ini - 1, d_ini);
 
                 for (let i = 0; i < numParcelas; i++) {
                     const id = arr.length ? Math.max(...arr.map(d => d.id)) + 1 : 1;
-                    
-                    // Cálculo da data baseado no intervalo de dias
                     const dataObj = new Date(dataBase);
                     dataObj.setDate(dataBase.getDate() + (i * intervaloDias));
-                    
                     const y = dataObj.getFullYear();
                     const m = String(dataObj.getMonth() + 1).padStart(2, '0');
                     const d = String(dataObj.getDate()).padStart(2, '0');
                     const dataParcela = `${y}-${m}-${d}`;
-
                     const descFinal = numParcelas > 1 ? `${descricaoBase} (${i+1}/${numParcelas})` : descricaoBase;
-                    
-                    // Se i (índice 0-based) for menor que a quantidade já paga, marca como pago
-                    // Ex: 10 parcelas, 3 pagas. i=0 (Paga), i=1 (Paga), i=2 (Paga), i=3 (Pendente)...
                     const estaPaga = i < parcelasJaPagas;
 
                     arr.push({
@@ -765,8 +751,6 @@ function setupFormHandlers() {
 
             saveData(DB_KEYS.DESPESAS_GERAIS, arr);
             formDespesa.reset();
-            
-            // Reset campos defaults
             document.getElementById('despesaGeralId').value = '';
             toggleDespesaParcelas(); 
             renderDespesasTable();
@@ -785,7 +769,7 @@ function setupFormHandlers() {
     const formOperacao = document.getElementById('formOperacao');
     if (formOperacao) {
         formOperacao.addEventListener('submit', (e) => {
-            e.preventDefault(); // Impede o envio padrão
+            e.preventDefault(); 
             
             const motId = document.getElementById('selectMotoristaOperacao').value;
             if (motId) verificarValidadeCNH(motId);
@@ -815,13 +799,11 @@ function setupFormHandlers() {
             else arr.push(obj);
             saveData(DB_KEYS.OPERACOES, arr);
             
-            // Limpeza
             window._operacaoAjudantesTempList = [];
             document.getElementById('listaAjudantesAdicionados').innerHTML = '';
             formOperacao.reset();
             document.getElementById('operacaoId').value = '';
             
-            // Renderização
             renderOperacaoTable();
             updateDashboardStats();
             renderCalendar(currentDate);
@@ -849,7 +831,6 @@ function toggleDespesaParcelas() {
     const divParcelas = document.getElementById('divDespesaParcelas');
     if (divParcelas) {
         divParcelas.style.display = (modo === 'parcelado') ? 'grid' : 'none';
-        // Reset defaults visualmente se voltar pra à vista, mas o submit trata a lógica
         if (modo === 'avista') {
             document.getElementById('despesaParcelas').value = 1;
         }
@@ -895,7 +876,6 @@ function viewOperacaoDetails(id) {
     const atividade = getAtividade(op.atividadeId)?.nome || 'N/A';
     const totalDiarias = (op.ajudantes || []).reduce((s, a) => s + (Number(a.diaria) || 0), 0);
 
-    // Cálculos
     const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca) || 0;
     const custoDieselEstimado = calcularCustoConsumoViagem(op) || 0;
     let litrosEstimados = 0;
@@ -1008,9 +988,6 @@ function editDespesaItem(id) {
     document.getElementById('selectVeiculoDespesaGeral').value = d.veiculoPlaca || '';
     document.getElementById('despesaGeralDescricao').value = d.descricao;
     document.getElementById('despesaGeralValor').value = d.valor;
-    
-    // Na edição simples, não permitimos mudar a estrutura de parcelamento/modo
-    // para evitar complexidade em despesas já parceladas. O usuário edita valor/data.
     
     window.location.hash = '#despesas';
     alert('MODO DE EDIÇÃO: ALTERE DATA, VEÍCULO, DESCRIÇÃO OU VALOR. PARA REPARCELAR, EXCLUA E CRIE NOVAMENTE.');
