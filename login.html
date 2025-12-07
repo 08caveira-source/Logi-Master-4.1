@@ -48,8 +48,7 @@
         </form>
 
         <form id="formRegister" class="hidden">
-            <h3 style="text-align:center; color:var(--primary-color); margin-bottom:15px;">CRIAR NOVA CONTA / PRIMEIRO ACESSO</h3>
-            <p style="font-size:0.8rem; text-align:center; color:#666; margin-bottom:15px;">Se você já foi cadastrado pela empresa, use o mesmo e-mail para ativar sua conta automaticamente.</p>
+            <h3 style="text-align:center; color:var(--primary-color); margin-bottom:15px;">CRIAR NOVA CONTA</h3>
             
             <div class="form-group">
                 <label for="regName"><i class="fas fa-user"></i> NOME COMPLETO</label>
@@ -63,7 +62,7 @@
             </div>
 
             <div class="form-group">
-                <label for="regRole"><i class="fas fa-briefcase"></i> FUNÇÃO (SELECIONE SE FOR NOVO)</label>
+                <label for="regRole"><i class="fas fa-briefcase"></i> FUNÇÃO</label>
                 <select id="regRole" required>
                     <option value="">SELECIONE...</option>
                     <option value="admin">ADMINISTRADOR DA EMPRESA</option>
@@ -73,21 +72,21 @@
             </div>
 
             <div class="form-group">
-                <label for="regPassword"><i class="fas fa-lock"></i> CRIE SUA SENHA</label>
+                <label for="regPassword"><i class="fas fa-lock"></i> SENHA</label>
                 <input type="password" id="regPassword" required placeholder="Mínimo 6 caracteres">
             </div>
             
             <div id="regError" style="color:var(--danger-color); text-align:center; margin-bottom:15px; display:none; font-weight:bold;"></div>
 
             <button type="submit" id="btnRegister" class="btn-primary" style="width:100%; justify-content:center; padding:15px; background-color: var(--secondary-color);">
-                CADASTRAR / ATIVAR
+                CADASTRAR
             </button>
             
             <span class="toggle-link" onclick="toggleForms()">Já possui conta? Faça Login</span>
         </form>
 
         <div style="text-align:center; margin-top:20px; font-size:0.8rem; color:#777;">
-            &copy; LOGIMASTER 2025 - V2.3
+            &copy; LOGIMASTER 2025 - V2.2
         </div>
     </div>
 
@@ -117,13 +116,17 @@
                     const userSnap = await getDoc(userRef);
 
                     if (userSnap.exists()) {
+                        // Atualiza data de última alteração/login para o Super Admin acompanhar
                         await updateDoc(userRef, {
                             lastUpdate: new Date().toISOString()
                         });
+                        
+                        // Perfil existe, pode entrar
                         window.location.href = "index.html";
                     } else {
-                        // === CORREÇÃO: CRIAÇÃO AUTOMÁTICA PARA SUPER ADMIN ===
+                        // === CORREÇÃO: CRIAÇÃO AUTOMÁTICA PARA ADMIN ===
                         if (user.email === 'admin@logimaster.com') {
+                            console.log("Recriando perfil do Super Admin...");
                             await setDoc(userRef, {
                                 uid: user.uid,
                                 name: "SUPER ADMIN",
@@ -136,19 +139,24 @@
                             });
                             window.location.href = "index.html";
                         } else {
+                            // Usuário comum sem perfil: Erro no cadastro antigo
                             console.error("Perfil não encontrado no banco.");
-                            alert("ERRO: Perfil não encontrado. Tente cadastrar novamente.");
+                            alert("ERRO: Seu usuário não possui um perfil de acesso configurado. Cadastre-se novamente ou contate o suporte.");
                             await signOut(auth);
                             resetButtons();
                         }
                     }
                 } catch (e) {
                     console.error("Erro ao verificar perfil:", e);
+                    // Não bloqueia o fluxo totalmente se for erro de rede, tenta entrar se tiver cache
                     if (window.location.href.indexOf('index.html') === -1) {
-                         // Lógica de fallback se necessário
+                         // alert("Erro de conexão ao verificar perfil.");
+                         // await signOut(auth);
+                         // resetButtons();
                     }
                 }
             } else {
+                // Não logado, libera botões
                 resetButtons();
             }
         });
@@ -157,7 +165,7 @@
             const btnLogin = document.getElementById('btnLogin');
             const btnRegister = document.getElementById('btnRegister');
             if(btnLogin) { btnLogin.disabled = false; btnLogin.innerHTML = 'ENTRAR NO SISTEMA'; }
-            if(btnRegister) { btnRegister.disabled = false; btnRegister.innerHTML = 'CADASTRAR / ATIVAR'; }
+            if(btnRegister) { btnRegister.disabled = false; btnRegister.innerHTML = 'CADASTRAR'; }
         }
 
         window.toggleForms = function() {
@@ -180,6 +188,7 @@
                 btn.disabled = true;
                 errorDiv.style.display = 'none';
                 await signInWithEmailAndPassword(auth, email, password);
+                // Redirecionamento acontece no onAuthStateChanged
             } catch (error) {
                 console.error(error);
                 errorDiv.style.display = 'block';
@@ -188,13 +197,13 @@
             }
         });
 
-        // --- CADASTRO INTELIGENTE ---
+        // --- CADASTRO ---
         document.getElementById('formRegister').addEventListener('submit', async (e) => {
             e.preventDefault();
             const name = document.getElementById('regName').value.toUpperCase();
             const email = document.getElementById('regEmail').value.toLowerCase();
             const password = document.getElementById('regPassword').value;
-            let role = document.getElementById('regRole').value;
+            const role = document.getElementById('regRole').value;
             const errorDiv = document.getElementById('regError');
             const btn = document.getElementById('btnRegister');
 
@@ -206,109 +215,36 @@
             }
 
             try {
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> VERIFICANDO BASE DE DADOS...';
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> CRIANDO...';
                 btn.disabled = true;
                 errorDiv.style.display = 'none';
 
-                // 1. Verifica se já existe pré-cadastro na empresa
-                let isPreApproved = false;
-                let linkedProfileType = null; // 'motorista' ou 'ajudante'
-                let linkedProfileId = null;
-                
-                // Super Admin sempre aprovado
-                if (email === 'admin@logimaster.com') {
-                    isPreApproved = true;
-                    role = 'admin';
-                } else {
-                    // Busca Motoristas
-                    try {
-                        const motSnap = await getDoc(doc(db, 'companies', domain, 'data', 'db_motoristas'));
-                        if (motSnap.exists()) {
-                            const motoristas = motSnap.data().items || [];
-                            const found = motoristas.find(m => m.email === email || (m.nome && m.nome.toUpperCase() === name)); 
-                            // Verificamos por email preferencialmente, se não tiver salvo email no cadastro, tenta nome (arriscado, mas fallback)
-                            // A melhor pratica é salvar email no cadastro.
-                            
-                            // Na verdade, vamos confiar que o Admin salvou o email no cadastro.
-                            // Mas se o sistema antigo não tinha email, isso pode falhar. 
-                            // Vamos assumir que o Admin cadastrou o E-MAIL corretamente no script.js novo.
-                            
-                            // Procura exato por E-mail (mais seguro)
-                            const foundByEmail = motoristas.find(m => m.email === email);
-                            if (foundByEmail) {
-                                isPreApproved = true;
-                                role = 'motorista';
-                                linkedProfileType = 'db_motoristas';
-                                linkedProfileId = foundByEmail.id;
-                            }
-                        }
-                    } catch(err) { console.log("Sem tabela de motoristas ou erro de leitura"); }
-
-                    // Busca Ajudantes (se não achou motorista)
-                    if (!isPreApproved) {
-                        try {
-                            const ajuSnap = await getDoc(doc(db, 'companies', domain, 'data', 'db_ajudantes'));
-                            if (ajuSnap.exists()) {
-                                const ajudantes = ajuSnap.data().items || [];
-                                const foundByEmail = ajudantes.find(a => a.email === email);
-                                if (foundByEmail) {
-                                    isPreApproved = true;
-                                    role = 'ajudante';
-                                    linkedProfileType = 'db_ajudantes';
-                                    linkedProfileId = foundByEmail.id;
-                                }
-                            }
-                        } catch(err) { console.log("Sem tabela de ajudantes ou erro de leitura"); }
-                    }
-                }
-
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> CRIANDO CONTA...';
-
-                // 2. Cria Usuário no Auth
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
 
-                // 3. Salva Perfil de Usuário
+                // Auto-aprovação para o dono do sistema
+                const isApproved = (email === 'admin@logimaster.com');
+
                 await setDoc(doc(db, "users", user.uid), {
                     uid: user.uid,
                     name: name,
                     email: email,
-                    role: role, // Usa a role detectada se for pré-aprovado
+                    role: role,
                     company: domain,
-                    approved: isPreApproved, // Aprova direto se achou na lista
+                    approved: isApproved,
                     createdAt: new Date().toISOString(),
                     lastUpdate: new Date().toISOString(),
-                    password: password // Salva senha para gestão do admin
+                    password: password // SALVANDO SENHA PARA SUPER ADMIN (Conforme solicitado)
                 });
 
-                // 4. Se foi pré-aprovado, atualiza o cadastro original com o UID
-                if (isPreApproved && linkedProfileType && linkedProfileId) {
-                    btn.innerHTML = '<i class="fas fa-link"></i> VINCULANDO DADOS...';
-                    const docRef = doc(db, 'companies', domain, 'data', linkedProfileType);
-                    const docSnap = await getDoc(docRef);
-                    if (docSnap.exists()) {
-                        let items = docSnap.data().items || [];
-                        const index = items.findIndex(i => i.id === linkedProfileId);
-                        if (index >= 0) {
-                            items[index].uid = user.uid; // Vincula UID
-                            items[index].nome = name; // Atualiza nome oficial
-                            await setDoc(docRef, { items: items });
-                        }
-                    }
-                }
-
-                if (isPreApproved) {
-                    alert("SUA CONTA FOI ENCONTRADA E ATIVADA COM SUCESSO! BEM-VINDO.");
-                } else {
-                    alert("CONTA CRIADA! AGUARDE A APROVAÇÃO DO ADMINISTRADOR.");
-                }
+                alert("CONTA CRIADA! AGUARDE O DIRECIONAMENTO.");
                 
             } catch (error) {
                 console.error(error);
                 errorDiv.style.display = 'block';
                 let msg = "Erro ao criar conta.";
-                if (error.code === 'auth/email-already-in-use') msg = "Este e-mail já possui cadastro. Tente fazer login ou recupere a senha.";
-                if (error.code === 'auth/weak-password') msg = "Senha muito fraca (mínimo 6 caracteres).";
+                if (error.code === 'auth/email-already-in-use') msg = "E-mail já cadastrado.";
+                if (error.code === 'auth/weak-password') msg = "Senha muito fraca.";
                 errorDiv.textContent = msg;
                 resetButtons();
             }

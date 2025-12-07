@@ -113,19 +113,6 @@
             <div class="card">
                 <form id="formOperacao">
                     <input type="hidden" id="operacaoId" value="">
-                    
-                    <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #90caf9;">
-                        <div style="display:flex; align-items:center; gap:10px;">
-                            <input type="checkbox" id="operacaoIsAgendamento" style="width:20px; height:20px;">
-                            <label for="operacaoIsAgendamento" style="color:var(--primary-color); font-weight:bold; cursor:pointer;">
-                                DISPONIBILIZAR PARA CHECK-IN (AGENDAR)
-                            </label>
-                        </div>
-                        <small style="color:#555; display:block; margin-top:5px;">
-                            SE MARCADO, A OPERAÇÃO APARECERÁ NO CELULAR DO MOTORISTA/AJUDANTE PARA ELES CONFIRMAREM.
-                        </small>
-                    </div>
-
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="operacaoData">DATA DA OPERAÇÃO:</label>
@@ -159,7 +146,7 @@
 
                         <div class="form-group">
                             <label for="operacaoFaturamento">FATURAMENTO (R$):</label>
-                            <input type="number" id="operacaoFaturamento" step="0.01" min="0">
+                            <input type="number" id="operacaoFaturamento" step="0.01" min="0" required>
                         </div>
                         
                         <div class="form-group">
@@ -218,8 +205,9 @@
                                 <tr>
                                     <th>DATA</th>
                                     <th>MOTORISTA</th>
-                                    <th>STATUS</th>
+                                    <th>ATIVIDADE</th>
                                     <th>FATURAMENTO</th>
+                                    <th>LUCRO OP.</th>
                                     <th>AÇÕES</th>
                                 </tr>
                             </thead>
@@ -231,22 +219,22 @@
         </section>
 
         <section id="checkins-pendentes" class="page">
-            <h2>STATUS DOS AGENDAMENTOS</h2>
+            <h2>CHECK-INS RECEBIDOS</h2>
             <div class="card">
-                <p style="color:var(--secondary-color); margin-bottom:15px;">ACOMPANHE AS OPERAÇÕES QUE VOCÊ ENVIOU PARA OS MOTORISTAS.</p>
+                <p style="color:var(--secondary-color); margin-bottom:15px;">APROVE OS CHECK-INS PARA TRANSFORMAR EM OPERAÇÕES CONFIRMADAS.</p>
                 <div class="table-responsive">
                     <table id="tabelaCheckinsPendentes" class="data-table">
                         <thead>
                             <tr>
                                 <th>DATA</th>
-                                <th>MOTORISTA</th>
+                                <th>FUNCIONÁRIO</th>
                                 <th>VEÍCULO</th>
-                                <th>STATUS</th>
+                                <th>DETALHES</th>
                                 <th>AÇÕES</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td colspan="5" style="text-align:center;">NENHUM AGENDAMENTO.</td></tr>
+                            <tr><td colspan="5" style="text-align:center;">NENHUM CHECK-IN PENDENTE.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -566,15 +554,16 @@
                 <p>Por favor, vá em <strong>MEUS DADOS</strong> e complete suas informações (CPF, Telefone, CNH) para poder trabalhar.</p>
             </div>
 
-            <div class="card" style="margin-top:20px;">
-                <h3 style="color:var(--primary-color); margin-bottom:15px;"><i class="fas fa-tasks"></i> SERVIÇOS AGENDADOS (PENDENTES)</h3>
-                <div id="listaServicosAgendados">
-                    <p style="text-align:center; color:#666;">NENHUM SERVIÇO AGENDADO NO MOMENTO.</p>
-                </div>
+            <div class="card" style="text-align:center; padding: 40px; margin-top:20px;">
+                <h3 style="color:var(--primary-color);">INICIAR SERVIÇO</h3>
+                <p style="margin-bottom:20px; color:#666;">CLIQUE ABAIXO PARA REGISTRAR O INÍCIO DE UMA NOVA OPERAÇÃO.</p>
+                <button class="btn-primary" onclick="openCheckinModal()" style="font-size:1.5rem; padding:20px 40px; border-radius:50px; box-shadow: 0 4px 15px rgba(0,121,107,0.4);">
+                    <i class="fas fa-map-marker-alt"></i> FAZER CHECK-IN
+                </button>
             </div>
 
             <div class="card" style="margin-top:20px;">
-                <h3>MEUS ÚLTIMOS SERVIÇOS (HISTÓRICO)</h3>
+                <h3>MEUS ÚLTIMOS SERVIÇOS</h3>
                 <div class="table-responsive">
                     <table class="data-table" id="tabelaMeusServicos">
                         <thead>
@@ -628,33 +617,41 @@
         </div>
     </div>
 
-    <div id="modalCheckinConfirm" class="modal">
+    <div id="modalCheckin" class="modal">
         <div class="modal-content">
-            <h3>REALIZAR CHECK-IN</h3>
-            <form id="formCheckinConfirm">
-                <input type="hidden" id="checkinOpId">
-                
-                <div style="background:#f0f4f8; padding:10px; border-radius:6px; margin-bottom:15px;">
-                    <p><strong>DATA:</strong> <span id="checkinDisplayData"></span></p>
-                    <p><strong>CONTRATANTE:</strong> <span id="checkinDisplayContratante"></span></p>
-                    <p><strong>VEÍCULO:</strong> <span id="checkinDisplayVeiculo"></span></p>
-                    <p><strong>ATIVIDADE:</strong> <span id="checkinDisplayAtividade"></span></p>
-                    <p id="checkinDisplayEquipeInfo" style="margin-top:5px; font-weight:bold; color:var(--primary-color);"></p>
+            <h3>NOVO CHECK-IN</h3>
+            <form id="formCheckin">
+                <div class="form-group">
+                    <label>DATA:</label>
+                    <input type="date" id="checkinData" required>
+                </div>
+                <div class="form-group">
+                    <label>VEÍCULO:</label>
+                    <select id="checkinVeiculo" required><option value="">SELECIONE...</option></select>
+                </div>
+                <div class="form-group">
+                    <label>CONTRATANTE:</label>
+                    <select id="checkinContratante" required><option value="">SELECIONE...</option></select>
+                </div>
+                <div class="form-group">
+                    <label>ATIVIDADE:</label>
+                    <select id="checkinAtividade" required><option value="">SELECIONE...</option></select>
                 </div>
 
-                <div id="checkinDriverFields" style="display:none; border-top:1px dashed #ccc; padding-top:10px;">
-                    <h4 style="font-size:0.9rem; margin-bottom:10px; color:var(--primary-color);">DADOS DA EXECUÇÃO</h4>
-                    <div class="form-group"><label>KM RODADO TOTAL:</label><input type="number" id="checkinKmRodado" step="any"></div>
-                    
+                <div id="driverCheckinFields" style="display:none; border-top:1px dashed #ccc; padding-top:10px; margin-top:10px;">
+                    <h4 style="font-size:0.9rem; margin-bottom:10px; color:var(--primary-color);">DADOS DA VIAGEM (MOTORISTA)</h4>
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                        <div class="form-group"><label>VALOR ABAST. (R$):</label><input type="number" step="0.01" id="checkinValorAbastecido"></div>
-                        <div class="form-group"><label>PREÇO LITRO (R$):</label><input type="number" step="0.001" id="checkinPrecoLitroConfirm"></div>
+                        <div class="form-group"><label>KM INICIAL:</label><input type="number" id="checkinKmInicial"></div>
+                        <div class="form-group"><label>KM FINAL:</label><input type="number" id="checkinKmFinal"></div>
                     </div>
+                    <div class="form-group"><label>VALOR ABASTECIDO (R$):</label><input type="number" step="0.01" id="checkinCombustivel"></div>
+                    <div class="form-group"><label>PREÇO LITRO (R$):</label><input type="number" step="0.001" id="checkinPrecoLitro"></div>
+                    <div class="form-group"><label>PEDÁGIOS (R$):</label><input type="number" step="0.01" id="checkinPedagios"></div>
                 </div>
 
                 <div class="form-actions" style="margin-top:20px;">
-                    <button type="submit" class="btn-primary" style="width:100%; justify-content:center; padding:15px;">CONFIRMAR CHECK-IN</button>
-                    <button type="button" class="btn-secondary" style="width:100%; justify-content:center; margin-top:10px;" onclick="closeCheckinConfirmModal()">VOLTAR</button>
+                    <button type="submit" class="btn-primary">ENVIAR CHECK-IN</button>
+                    <button type="button" class="btn-secondary" onclick="document.getElementById('modalCheckin').style.display='none'">CANCELAR</button>
                 </div>
             </form>
         </div>
