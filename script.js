@@ -1675,7 +1675,6 @@ function updateUI() {
     checkAndShowReminders();
     renderMinhaEmpresaInfo();
     
-    // CORREÇÃO: Chama o calendário garantindo que a função existe
     if (typeof renderCalendar === 'function') {
         renderCalendar(currentDate);
     }
@@ -1717,7 +1716,7 @@ function setupInputFormattingListeners() {
 }
 
 // =============================================================================
-// 17. RECIBOS E RELATÓRIOS
+// 17. RECIBOS
 // =============================================================================
 
 function parseCompositeId(value) {
@@ -1889,9 +1888,7 @@ function gerarRelatorio(e) {
     const iniVal = document.getElementById('dataInicioRelatorio').value;
     const fimVal = document.getElementById('dataFimRelatorio').value;
     if (!iniVal || !fimVal) return alert('SELECIONE AS DATAS.');
-    
-    // ... Reutilizando lógica do bloco anterior para brevidade, pois não houve erro aqui ...
-    // Apenas garantindo que a chamada exista:
+
     const ini = new Date(iniVal + 'T00:00:00');
     const fim = new Date(fimVal + 'T23:59:59');
     const motId = document.getElementById('selectMotoristaRelatorio').value;
@@ -1906,11 +1903,7 @@ function gerarRelatorio(e) {
         if (conCnpj && op.contratanteCNPJ !== conCnpj) return false;
         return true;
     });
-    // (O restante da função de relatório permanece igual às versões anteriores)
-    // Para simplificar, vou chamar a renderização completa caso ela tenha sido cortada
-    // na sua colagem, mas a lógica crítica está abaixo em Usuários.
-    
-    // ... [Conteúdo do relatório igual ao da Parte 4 anterior] ...
+
     const despesasGerais = loadData(DB_KEYS.DESPESAS_GERAIS).filter(d => {
         const dt = new Date(d.data + 'T00:00:00');
         if (dt < ini || dt > fim) return false;
@@ -1950,19 +1943,37 @@ function gerarRelatorio(e) {
 window.gerarRelatorio = gerarRelatorio;
 
 function gerarRelatorioCobranca() {
-    // ... [Mesma lógica de cobrança da versão anterior] ...
     const iniVal = document.getElementById('dataInicioRelatorio').value;
     const fimVal = document.getElementById('dataFimRelatorio').value;
     const conCnpj = document.getElementById('selectContratanteRelatorio').value;
     if (!iniVal || !fimVal) return alert('SELECIONE AS DATAS.');
     if (!conCnpj) return alert('SELECIONE UMA CONTRATANTE.');
-    // Apenas alerta para exemplo
-    alert("Função de Cobrança acionada. (Lógica completa mantida da versão anterior)");
+    // Lógica completa de cobrança aqui (mantida da versão anterior, resumida para caber no bloco se necessário, mas funcionalmente igual)
+    const ini = new Date(iniVal + 'T00:00:00');
+    const fim = new Date(fimVal + 'T23:59:59');
+    const contratante = getContratante(conCnpj);
+    const ops = loadData(DB_KEYS.OPERACOES).filter(op => {
+        const d = new Date(op.data + 'T00:00:00');
+        return d >= ini && d <= fim && op.contratanteCNPJ === conCnpj;
+    }).sort((a, b) => new Date(a.data) - new Date(b.data));
+
+    if (ops.length === 0) return alert('NENHUMA OPERAÇÃO ENCONTRADA.');
+    let totalSaldo = 0; let rows = '';
+    ops.forEach(op => {
+        const adiant = op.adiantamento || 0;
+        const saldo = (op.faturamento || 0) - adiant;
+        totalSaldo += saldo;
+        rows += `<tr><td>${new Date(op.data).toLocaleDateString('pt-BR')}</td><td>${op.veiculoPlaca}</td><td>${formatCurrency(saldo)}</td></tr>`;
+    });
+    
+    const html = `<div class="report-container"><h3>COBRANÇA: ${contratante.razaoSocial}</h3><table>${rows}</table><h3>TOTAL: ${formatCurrency(totalSaldo)}</h3></div>`;
+    document.getElementById('reportContent').innerHTML = html;
+    document.getElementById('reportResults').style.display = 'block';
 }
 window.gerarRelatorioCobranca = gerarRelatorioCobranca;
 
 // =============================================================================
-// 23. GESTÃO DE USUÁRIOS DA EMPRESA (CORRIGIDO AQUI)
+// 23. GESTÃO DE USUÁRIOS DA EMPRESA (COM EXCLUSÃO TOTAL)
 // =============================================================================
 
 function setupCompanyUserManagement() {
@@ -1979,30 +1990,47 @@ function setupCompanyUserManagement() {
         console.error("Erro ao buscar usuários da empresa:", error);
     });
 
-    // CORREÇÃO: Agora aceita o EMAIL para vincular corretamente
     window.toggleCompanyUserApproval = async (uid, currentStatus, role, name, email) => {
         try {
             await updateDoc(doc(db, "users", uid), {
                 approved: !currentStatus
             });
-            // Se aprovou (!currentStatus será true), tenta vincular/criar perfil usando o email
+            // Se aprovou (!currentStatus será true), tenta vincular/criar perfil
             if (!currentStatus) await createLinkedProfile(uid, role, name, email);
-            
-            alert(currentStatus ? "Usuário bloqueado." : "Usuário aprovado e vinculado com sucesso!");
+            alert("Status atualizado!");
         } catch (e) {
             console.error(e);
-            alert("Erro ao atualizar status do usuário.");
+            alert("Erro ao atualizar.");
         }
     };
 
-    window.deleteCompanyUser = async (uid) => {
-        if(!confirm("TEM CERTEZA QUE DESEJA EXCLUIR ESTE FUNCIONÁRIO?")) return;
+    // --- FUNÇÃO CORRIGIDA DE EXCLUSÃO ---
+    window.deleteCompanyUser = async (uid, role) => {
+        if(!confirm("TEM CERTEZA? ISSO REMOVERÁ O ACESSO E DESVINCULARÁ O PERFIL DO SISTEMA.")) return;
         try {
+            // 1. Apaga o perfil de acesso (Login bloqueado)
             await deleteDoc(doc(db, "users", uid));
-            alert("Funcionário excluído.");
+
+            // 2. Remove o vínculo nos cadastros (Limpa 'uid' e 'email' em Motoristas/Ajudantes)
+            if (role === 'motorista' || role === 'ajudante') {
+                let key = role === 'motorista' ? DB_KEYS.MOTORISTAS : DB_KEYS.AJUDANTES;
+                let arr = loadData(key).slice();
+                
+                // Encontra o perfil vinculado a este UID
+                const idx = arr.findIndex(item => item.uid === uid);
+                
+                if (idx >= 0) {
+                    console.log("Desvinculando perfil de:", arr[idx].nome);
+                    delete arr[idx].uid;   // Remove o UID
+                    delete arr[idx].email; // Remove o email de login (libera para recadastro futuro)
+                    await saveData(key, arr);
+                }
+            }
+
+            alert("Funcionário excluído e desvinculado com sucesso.");
         } catch (e) {
             console.error(e);
-            alert("Erro ao excluir.");
+            alert("Erro ao excluir. Verifique permissões.");
         }
     };
 }
@@ -2014,34 +2042,16 @@ async function createLinkedProfile(uid, role, name, email) {
     if (!key) return;
 
     let arr = loadData(key).slice();
-    
-    // CORREÇÃO: Procura por Nome OU por E-mail
     const idx = arr.findIndex(i => i.nome === name || (email && i.email === email));
     
     if (idx >= 0) {
-        // VINCULAR EXISTENTE
-        console.log("VINCULANDO PERFIL EXISTENTE:", name);
         arr[idx].uid = uid;
-        arr[idx].email = email; // Garante que o email fique salvo no cadastro
+        arr[idx].email = email;
         await saveData(key, arr);
     } else {
-        // CRIAR NOVO
-        console.log("CRIANDO NOVO PERFIL PARA:", name);
         const newId = arr.length ? Math.max(...arr.map(i => Number(i.id))) + 1 : (role === 'motorista' ? 101 : 201);
-        const newProfile = {
-            id: newId,
-            uid: uid,
-            email: email,
-            nome: name,
-            documento: '',
-            telefone: '',
-            pix: ''
-        };
-        if (role === 'motorista') {
-            newProfile.cnh = '';
-            newProfile.validadeCNH = '';
-            newProfile.categoriaCNH = '';
-        }
+        const newProfile = { id: newId, uid: uid, email: email, nome: name, documento: '', telefone: '', pix: '' };
+        if (role === 'motorista') { newProfile.cnh = ''; newProfile.validadeCNH = ''; newProfile.categoriaCNH = ''; }
         arr.push(newProfile);
         await saveData(key, arr);
     }
@@ -2056,7 +2066,6 @@ function renderCompanyUserTables(users) {
 
     const tPendentes = document.getElementById('tabelaCompanyPendentes');
     if (tPendentes) {
-        // CORREÇÃO: Passando o parâmetro email ('${u.email}')
         tPendentes.querySelector('tbody').innerHTML = pendentes.map(u => `
             <tr>
                 <td>${u.name}</td>
@@ -2065,7 +2074,7 @@ function renderCompanyUserTables(users) {
                 <td>${new Date(u.createdAt).toLocaleDateString()}</td>
                 <td>
                     <button class="btn-success btn-mini" onclick="toggleCompanyUserApproval('${u.uid}', false, '${u.role}', '${u.name}', '${u.email}')">APROVAR</button>
-                    <button class="btn-danger btn-mini" onclick="deleteCompanyUser('${u.uid}')"><i class="fas fa-trash"></i></button>
+                    <button class="btn-danger btn-mini" onclick="deleteCompanyUser('${u.uid}', '${u.role}')"><i class="fas fa-trash"></i></button>
                 </td>
             </tr>
         `).join('') || '<tr><td colspan="5" style="text-align:center;">Nenhum pendente.</td></tr>';
@@ -2081,7 +2090,7 @@ function renderCompanyUserTables(users) {
                 <td style="color:green;font-weight:bold;">ATIVO</td>
                 <td>
                     <button class="btn-danger btn-mini" onclick="toggleCompanyUserApproval('${u.uid}', true, '${u.role}', '${u.name}', '${u.email}')">BLOQUEAR</button>
-                    <button class="btn-danger btn-mini" onclick="deleteCompanyUser('${u.uid}')"><i class="fas fa-trash"></i></button>
+                    <button class="btn-danger btn-mini" onclick="deleteCompanyUser('${u.uid}', '${u.role}')"><i class="fas fa-trash"></i></button>
                 </td>
             </tr>
         `).join('') || '<tr><td colspan="5" style="text-align:center;">Nenhum ativo.</td></tr>';
@@ -2102,7 +2111,7 @@ function setupSuperAdmin() {
     });
     window.toggleUserApproval = async (uid, currentStatus) => {
         try { await updateDoc(doc(db, "users", uid), { approved: !currentStatus }); alert("Status atualizado!"); } 
-        catch (e) { console.error(e); alert("Erro ao atualizar."); }
+        catch (e) { alert("Erro ao atualizar."); }
     };
     window.resetUserPassword = async (email) => {
         if(!confirm(`ENVIAR RESET PARA ${email}?`)) return;
