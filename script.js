@@ -573,3 +573,187 @@ function renderContratantes() {
         tbl.appendChild(tr);
     });
 }
+// =============================================================================
+// 13. OPERAÇÕES (CRUD)
+// =============================================================================
+
+function gerarNovoIDOperacao() {
+    const arr = loadData(DB_KEYS.OPERACOES);
+    if (!arr.length) return 1;
+    return Math.max(...arr.map(x => Number(x.id) || 0)) + 1;
+}
+
+function cadastrarOperacao() {
+    const data = document.getElementById('opData').value;
+    const contratante = document.getElementById('opContratante').value;
+    const veiculoPlaca = document.getElementById('opVeiculo').value;
+    const motoristaId = document.getElementById('opMotorista').value;
+    const atividadeId = document.getElementById('opAtividade').value;
+    const kmRodado = Number(document.getElementById('opKmRodado').value) || 0;
+    const combustivel = parseCurrencyToNumber(document.getElementById('opCombustivel').value);
+    const precoLitro = parseCurrencyToNumber(document.getElementById('opPrecoLitro').value);
+
+    if (!validarData(data)) return alert('Data inválida');
+    if (!contratante) return alert('Selecione contratante');
+    if (!veiculoPlaca) return alert('Selecione veículo');
+    if (!motoristaId) return alert('Selecione motorista');
+    if (!atividadeId) return alert('Selecione atividade');
+
+    const arr = loadData(DB_KEYS.OPERACOES);
+
+    const nova = {
+        id: gerarNovoIDOperacao(),
+        data,
+        contratante,
+        veiculoPlaca,
+        motoristaId,
+        atividadeId,
+        kmRodado,
+        combustivel,
+        precoLitro,
+        status: 'AGENDADA'
+    };
+
+    arr.push(nova);
+    saveData(DB_KEYS.OPERACOES, arr);
+
+    renderOperacoes();
+    renderCalendar();
+    alert('Operação agendada com sucesso!');
+}
+
+function confirmarOperacao(id) {
+    const arr = loadData(DB_KEYS.OPERACOES);
+    const op = arr.find(o => Number(o.id) === Number(id));
+    if (!op) return;
+
+    op.status = 'CONFIRMADA';
+    saveData(DB_KEYS.OPERACOES, arr);
+
+    renderOperacoes();
+    renderCalendar();
+}
+
+function deletarOperacao(id) {
+    if (!confirm('Excluir operação?')) return;
+
+    let arr = loadData(DB_KEYS.OPERACOES);
+    arr = arr.filter(o => Number(o.id) !== Number(id));
+    saveData(DB_KEYS.OPERACOES, arr);
+
+    renderOperacoes();
+    renderCalendar();
+}
+
+function renderOperacoes() {
+    const tbl = document.getElementById('tblOperacoes');
+    if (!tbl) return;
+
+    const arr = loadData(DB_KEYS.OPERACOES);
+    const contr = loadData(DB_KEYS.CONTRATANTES);
+    const veic = loadData(DB_KEYS.VEICULOS);
+    const mot = loadData(DB_KEYS.MOTORISTAS);
+    const atv = loadData(DB_KEYS.ATIVIDADES);
+
+    tbl.innerHTML = '';
+
+    arr.forEach(op => {
+        const tr = document.createElement('tr');
+
+        const c = contr.find(x => x.cnpj === op.contratante);
+        const v = veic.find(x => x.placa === op.veiculoPlaca);
+        const m = mot.find(x => Number(x.id) === Number(op.motoristaId));
+        const a = atv.find(x => Number(x.id) === Number(op.atividadeId));
+
+        tr.innerHTML = `
+            <td>${op.id}</td>
+            <td>${dataPorExtenso(op.data)}</td>
+            <td>${c ? c.nome : ''}</td>
+            <td>${v ? v.placa : ''}</td>
+            <td>${m ? m.nome : ''}</td>
+            <td>${a ? a.nome : ''}</td>
+            <td>${op.status}</td>
+            <td>
+                ${op.status === 'AGENDADA' ? `<button onclick="confirmarOperacao(${op.id})">Confirmar</button>` : ''}
+                <button onclick="deletarOperacao(${op.id})">Excluir</button>
+            </td>
+        `;
+
+        tbl.appendChild(tr);
+    });
+}
+
+// =============================================================================
+// 14. CALENDÁRIO COM CORREÇÃO
+// =============================================================================
+
+let currentDate = new Date();
+
+function renderCalendar() {
+    const calendarDays = document.getElementById('calendarDays');
+    const calendarTitle = document.getElementById('currentMonthYear');
+    if (!calendarDays || !calendarTitle) return;
+
+    calendarDays.innerHTML = '';
+
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+
+    calendarTitle.textContent = currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+
+    const firstDay = new Date(year, month, 1).getDay();
+    const lastDate = new Date(year, month + 1, 0).getDate();
+
+    for (let i = 0; i < firstDay; i++) {
+        const empty = document.createElement('div');
+        empty.className = 'calendar-day empty';
+        calendarDays.appendChild(empty);
+    }
+
+    const operacoes = loadData(DB_KEYS.OPERACOES);
+
+    for (let d = 1; d <= lastDate; d++) {
+        const cell = document.createElement('div');
+        cell.className = 'calendar-day';
+        cell.textContent = d;
+
+        const diaStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+        const opsDia = operacoes.filter(op => op.data === diaStr);
+
+        if (opsDia.length > 0) {
+            const dot = document.createElement('div');
+            dot.className = 'calendar-dot';
+            dot.title = `${opsDia.length} operação(ões)`;
+            cell.appendChild(dot);
+        }
+
+        calendarDays.appendChild(cell);
+    }
+}
+
+function nextMonth() {
+    currentDate.setMonth(currentDate.getMonth() + 1);
+    renderCalendar();
+}
+
+function prevMonth() {
+    currentDate.setMonth(currentDate.getMonth() - 1);
+    renderCalendar();
+}
+
+// =============================================================================
+// 15. INICIALIZAÇÃO DO SISTEMA
+// =============================================================================
+
+function initApp() {
+    renderMotoristas();
+    renderVeiculos();
+    renderContratantes();
+    renderAjudantes();
+    renderAtividades();
+    renderOperacoes();
+    renderCalendar();
+}
+
+document.addEventListener('DOMContentLoaded', initApp);
