@@ -563,7 +563,6 @@ function deleteItem(key, id) {
     saveData(key, arr);
     alert('ITEM EXCLUÍDO (PROCESSANDO...).');
 }
-
 // =============================================================================
 // 10. FORM HANDLERS (SUBMISSÃO DE FORMULÁRIOS)
 // =============================================================================
@@ -1127,7 +1126,7 @@ function editDespesaItem(id) {
 }
 
 // =============================================================================
-// 12. SISTEMA DE CHECK-INS E AGENDAMENTOS
+// 12. SISTEMA DE CHECK-INS E AGENDAMENTOS (CORRIGIDO)
 // =============================================================================
 
 function renderCheckinsTable() {
@@ -1166,19 +1165,23 @@ function renderCheckinsTable() {
         }
     }
 
-    // B. LÓGICA DO FUNCIONÁRIO (Agendamentos Pessoais)
+    // B. LÓGICA DO FUNCIONÁRIO (Agendamentos Pessoais) - CORREÇÃO DE VÍNCULO AQUI
     const listaFunc = document.getElementById('listaServicosAgendados');
     if (listaFunc && window.CURRENT_USER && (window.CURRENT_USER.role === 'motorista' || window.CURRENT_USER.role === 'ajudante')) {
         const myUid = window.CURRENT_USER.uid;
-        
+        const myEmail = window.CURRENT_USER.email; // NOVO: Pega o email para conferência
+
         // Descobre o ID interno do perfil do usuário logado
         let myProfileId = null;
         let myKey = window.CURRENT_USER.role === 'motorista' ? DB_KEYS.MOTORISTAS : DB_KEYS.AJUDANTES;
-        const myProfile = loadData(myKey).find(p => p.uid === myUid);
+        
+        // PROCURA POR UID OU EMAIL (Correção de Vínculo)
+        const myProfile = loadData(myKey).find(p => p.uid === myUid || (p.email && p.email === myEmail));
+        
         if (myProfile) myProfileId = myProfile.id;
 
         if (!myProfileId) {
-            listaFunc.innerHTML = '<p style="text-align:center;">PERFIL NÃO VINCULADO CORRETAMENTE.</p>';
+            listaFunc.innerHTML = '<p style="text-align:center; color:red;">PERFIL NÃO VINCULADO. CONTATE O ADMIN.</p>';
             return;
         }
 
@@ -1369,7 +1372,6 @@ function changeMonth(direction) {
 }
 window.changeMonth = changeMonth; 
 window.renderCalendar = renderCalendar;
-
 // =============================================================================
 // 14. GRÁFICOS
 // =============================================================================
