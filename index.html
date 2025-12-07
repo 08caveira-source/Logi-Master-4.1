@@ -28,6 +28,9 @@
                 <li class="nav-item" data-page="graficos"><i class="fas fa-chart-pie"></i> GRÁFICOS</li>
                 <li class="nav-item" data-page="operacoes"><i class="fas fa-route"></i> LANÇAR OPERAÇÃO</li> 
                 <li class="nav-item" data-page="checkins-pendentes"><i class="fas fa-bell"></i> CHECK-INS <span id="badgeCheckins" style="background:red; color:white; padding:2px 6px; border-radius:10px; font-size:0.7rem; display:none;">0</span></li>
+                
+                <li class="nav-item" data-page="access-management"><i class="fas fa-users-cog"></i> GESTÃO DE ACESSO <span id="badgeAccess" style="background:orange; color:white; padding:2px 6px; border-radius:10px; font-size:0.7rem; display:none;">!</span></li>
+                
                 <li class="nav-item" data-page="despesas"><i class="fas fa-money-check-alt"></i> DESPESAS GERAIS</li> 
                 <li class="nav-item" data-page="cadastros"><i class="fas fa-truck"></i> CADASTROS</li>
                 <li class="nav-item" data-page="relatorios"><i class="fas fa-chart-bar"></i> RELATÓRIOS</li>
@@ -216,7 +219,7 @@
         </section>
 
         <section id="checkins-pendentes" class="page">
-            <h2>CHECK-INS RECEBIDOS (MOTORISTAS/AJUDANTES)</h2>
+            <h2>CHECK-INS RECEBIDOS</h2>
             <div class="card">
                 <p style="color:var(--secondary-color); margin-bottom:15px;">APROVE OS CHECK-INS PARA TRANSFORMAR EM OPERAÇÕES CONFIRMADAS.</p>
                 <div class="table-responsive">
@@ -226,13 +229,37 @@
                                 <th>DATA</th>
                                 <th>FUNCIONÁRIO</th>
                                 <th>VEÍCULO</th>
-                                <th>DETALHES (KM, COMBUSTÍVEL)</th>
+                                <th>DETALHES</th>
                                 <th>AÇÕES</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr><td colspan="5" style="text-align:center;">NENHUM CHECK-IN PENDENTE.</td></tr>
                         </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="access-management" class="page">
+            <h2>GESTÃO DE FUNCIONÁRIOS</h2>
+            <div class="card">
+                <h3 style="color:var(--warning-color);"><i class="fas fa-user-clock"></i> PENDENTES DE APROVAÇÃO</h3>
+                <p style="font-size:0.9rem; color:#666; margin-bottom:15px;">AO APROVAR, O SISTEMA CRIARÁ AUTOMATICAMENTE O CADASTRO NA ABA CORRESPONDENTE.</p>
+                <div class="table-responsive">
+                    <table class="data-table" id="tabelaCompanyPendentes">
+                        <thead><tr><th>NOME</th><th>EMAIL</th><th>FUNÇÃO</th><th>DATA CADASTRO</th><th>AÇÃO</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="card" style="margin-top:20px;">
+                <h3><i class="fas fa-users"></i> FUNCIONÁRIOS ATIVOS</h3>
+                <div class="table-responsive">
+                    <table class="data-table" id="tabelaCompanyAtivos">
+                        <thead><tr><th>NOME</th><th>EMAIL</th><th>FUNÇÃO</th><th>STATUS</th><th>AÇÃO</th></tr></thead>
+                        <tbody></tbody>
                     </table>
                 </div>
             </div>
@@ -338,6 +365,7 @@
 
             <div id="motoristas" class="cadastro-form card active">
                 <h3>CADASTRO DE MOTORISTAS</h3>
+                <p style="color:var(--primary-color); font-size:0.9rem; margin-bottom:10px;">OS MOTORISTAS SÃO VINCULADOS AUTOMATICAMENTE AO APROVAR O ACESSO.</p>
                 <form id="formMotorista">
                     <input type="hidden" id="motoristaId">
                     <div class="form-grid">
@@ -388,6 +416,7 @@
 
             <div id="ajudantes" class="cadastro-form card">
                 <h3>CADASTRO DE AJUDANTES</h3>
+                <p style="color:var(--primary-color); font-size:0.9rem; margin-bottom:10px;">OS AJUDANTES SÃO VINCULADOS AUTOMATICAMENTE AO APROVAR O ACESSO.</p>
                 <form id="formAjudante">
                     <input type="hidden" id="ajudanteId">
                     <div class="form-grid">
@@ -520,7 +549,12 @@
         <section id="employee-home" class="page">
             <h2>PAINEL DO FUNCIONÁRIO</h2>
             
-            <div class="card" style="text-align:center; padding: 40px;">
+            <div id="profileIncompleteAlert" class="card" style="background:#fff3e0; border-left:5px solid orange; display:none;">
+                <h3 style="color:orange;"><i class="fas fa-exclamation-triangle"></i> CADASTRO INCOMPLETO</h3>
+                <p>Por favor, vá em <strong>MEUS DADOS</strong> e complete suas informações (CPF, Telefone, CNH) para poder trabalhar.</p>
+            </div>
+
+            <div class="card" style="text-align:center; padding: 40px; margin-top:20px;">
                 <h3 style="color:var(--primary-color);">INICIAR SERVIÇO</h3>
                 <p style="margin-bottom:20px; color:#666;">CLIQUE ABAIXO PARA REGISTRAR O INÍCIO DE UMA NOVA OPERAÇÃO.</p>
                 <button class="btn-primary" onclick="openCheckinModal()" style="font-size:1.5rem; padding:20px 40px; border-radius:50px; box-shadow: 0 4px 15px rgba(0,121,107,0.4);">
@@ -559,8 +593,7 @@
                         <div class="form-group only-driver"><label>VALIDADE CNH:</label><input type="date" id="empValidadeCNH"></div>
                     </div>
                     <div class="form-actions">
-                        <button type="submit" class="btn-primary">SOLICITAR ATUALIZAÇÃO</button>
-                        <small style="display:block; margin-top:5px; color:orange;">* As alterações dependem de aprovação do administrador.</small>
+                        <button type="submit" class="btn-primary">SALVAR DADOS</button>
                     </div>
                 </form>
             </div>
@@ -649,7 +682,7 @@
 
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-      import { getFirestore, collection, setDoc, doc, onSnapshot, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+      import { getFirestore, collection, setDoc, doc, onSnapshot, getDoc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
       import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
       const firebaseConfig = {
@@ -666,7 +699,7 @@
       const auth = getAuth(app);
 
       // Disponibiliza globalmente
-      window.dbRef = { db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, updateDoc };
+      window.dbRef = { db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, updateDoc, query, where };
       
       // Controle de Sessão e Roteamento Básico
       onAuthStateChanged(auth, async (user) => {
