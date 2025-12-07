@@ -403,8 +403,7 @@ function populateAllSelects() {
         });
     }
     
-    // Selects do Modal de Checkin (preenchidos apenas para compatibilidade visual, 
-    // mas o funcionário verá os dados fixos do agendamento)
+    // Selects do Modal de Checkin
     populateSelect('checkinVeiculo', veiculos, 'placa', 'placa', 'SELECIONE O VEÍCULO...');
     populateSelect('checkinContratante', contratantes, 'cnpj', 'razaoSocial', 'SELECIONE A CONTRATANTE...');
     populateSelect('checkinAtividade', atividades, 'id', 'nome', 'SELECIONE A ATIVIDADE...');
@@ -879,13 +878,12 @@ function toggleDespesaParcelas() {
         }
     }
 }
-window.toggleDespesaParcelas = toggleDespesaParcelas; 
-
+window.toggleDespesaParcelas = toggleDespesaParcelas;
 // =============================================================================
 // 11. TABELA DE OPERAÇÕES E VISUALIZAÇÃO
 // =============================================================================
 
-let currentDate = new Date();
+let currentDate = new Date(); // Variável global para o calendário e dashboard
 
 function renderOperacaoTable() {
     const ops = loadData(DB_KEYS.OPERACOES).slice().sort((a, b) => new Date(b.data) - new Date(a.data));
@@ -906,7 +904,7 @@ function renderOperacaoTable() {
             ? '<span style="background:orange; color:white; padding:2px 6px; border-radius:4px; font-size:0.7rem;">AGENDADA</span>' 
             : '<span style="background:green; color:white; padding:2px 6px; border-radius:4px; font-size:0.7rem;">CONFIRMADA</span>';
 
-        // Se agendada, faturamento pode ser 0 ou estimado, mostramos aviso
+        // Se agendada, faturamento pode ser 0 ou estimado
         const faturamentoDisplay = isAgendada && (!op.faturamento) ? '(PENDENTE)' : formatCurrency(op.faturamento);
 
         let btns = `<button class="btn-action view-btn" onclick="viewOperacaoDetails(${op.id})"><i class="fas fa-eye"></i></button>`;
@@ -955,7 +953,6 @@ function viewOperacaoDetails(id) {
             <div style="margin-top:10px;"><strong>EQUIPE (AJUDANTES):</strong><ul style="margin-top:6px;">${ajudantesHtml}</ul></div>
         `;
     } else {
-        // Exibe detalhes completos (Financeiro + Consumo)
         const totalDiarias = (op.ajudantes || []).reduce((s, a) => s + (Number(a.diaria) || 0), 0);
         const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca) || 0;
         const custoDieselEstimado = calcularCustoConsumoViagem(op) || 0;
@@ -982,9 +979,7 @@ function viewOperacaoDetails(id) {
             <p><strong>FATURAMENTO:</strong> ${formatCurrency(op.faturamento)}</p>
             <p><strong>ADIANTAMENTO:</strong> ${formatCurrency(adiantamento)}</p>
             <p style="font-weight:700;">SALDO A RECEBER: ${formatCurrency(saldoReceber)}</p>
-            
             <hr style="margin:10px 0; border:0; border-top:1px solid #eee;">
-            
             <p><strong>COMISSÃO MOTORISTA:</strong> ${formatCurrency(op.comissao||0)}</p>
             <p><strong>PEDÁGIOS:</strong> ${formatCurrency(op.despesas||0)}</p>
             <p><strong>TOTAL DE DIÁRIAS (AJUDANTES):</strong> ${formatCurrency(totalDiarias)}</p>
@@ -995,7 +990,6 @@ function viewOperacaoDetails(id) {
             <div style="margin-top:10px;"><strong>AJUDANTES:</strong><ul style="margin-top:6px;">${ajudantesHtml}</ul></div>
         `;
     }
-
     openOperationDetails('DETALHES DA OPERAÇÃO', detailsHtml);
 }
 
@@ -1061,20 +1055,16 @@ function editDespesaItem(id) {
 }
 
 // =============================================================================
-// NOVO: SISTEMA DE CHECK-INS E AGENDAMENTOS (Lista para funcionários)
+// 12. SISTEMA DE CHECK-INS E AGENDAMENTOS
 // =============================================================================
 
 function renderCheckinsTable() {
-    // Essa função gerencia DUAS áreas diferentes:
-    // 1. Tabela do Admin (Monitoramento) - id: tabelaCheckinsPendentes
-    // 2. Lista do Funcionário (Para Confirmar) - id: listaServicosAgendados
-
     const ops = loadData(DB_KEYS.OPERACOES);
     const agendadas = ops.filter(o => o.status === 'AGENDADA').sort((a,b) => new Date(a.data) - new Date(b.data));
 
     // A. LÓGICA DO ADMIN
     const tabelaAdmin = document.getElementById('tabelaCheckinsPendentes');
-    if (tabelaAdmin && !window.IS_READ_ONLY) { // Se não é read-only, é admin
+    if (tabelaAdmin && !window.IS_READ_ONLY) { 
         let rows = '';
         if (!agendadas.length) {
             rows = '<tr><td colspan="5" style="text-align:center;">NENHUM AGENDAMENTO PENDENTE.</td></tr>';
@@ -1095,6 +1085,13 @@ function renderCheckinsTable() {
             });
         }
         tabelaAdmin.querySelector('tbody').innerHTML = rows;
+        
+        // Atualiza Badge do Menu
+        const badge = document.getElementById('badgeCheckins');
+        if (badge) {
+            badge.textContent = agendadas.length;
+            badge.style.display = agendadas.length > 0 ? 'inline-block' : 'none';
+        }
     }
 
     // B. LÓGICA DO FUNCIONÁRIO (Agendamentos Pessoais)
@@ -1113,7 +1110,6 @@ function renderCheckinsTable() {
             return;
         }
 
-        // Filtra as agendadas para ESTE usuário
         const myAgendas = agendadas.filter(op => {
             if (window.CURRENT_USER.role === 'motorista') {
                 return op.motoristaId === myProfileId;
@@ -1131,7 +1127,6 @@ function renderCheckinsTable() {
                 const contratante = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
                 const atividade = getAtividade(op.atividadeId)?.nome || '-';
                 
-                // Lógica de exibição de equipe (Motorista vê ajudantes, Ajudante vê motorista)
                 let equipeInfo = '';
                 if (window.CURRENT_USER.role === 'motorista') {
                     const nomesAjudantes = (op.ajudantes || []).map(a => getAjudante(a.id)?.nome || 'ID '+a.id).join(', ');
@@ -1161,33 +1156,25 @@ function renderCheckinsTable() {
     }
 }
 
-// Modal de Confirmação de Check-in (Preenche os dados para visualização)
 window.openCheckinConfirmModal = function(opId) {
     const op = loadData(DB_KEYS.OPERACOES).find(o => o.id === opId);
     if (!op) return;
 
-    // Preenche dados visuais (somente leitura)
     document.getElementById('checkinDisplayData').textContent = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
     document.getElementById('checkinDisplayContratante').textContent = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
     document.getElementById('checkinDisplayVeiculo').textContent = op.veiculoPlaca;
     document.getElementById('checkinDisplayAtividade').textContent = getAtividade(op.atividadeId)?.nome || '-';
     
-    // Mostra equipe conforme o cargo
     if (window.CURRENT_USER && window.CURRENT_USER.role === 'motorista') {
         const nomesAjudantes = (op.ajudantes || []).map(a => getAjudante(a.id)?.nome).join(', ');
         document.getElementById('checkinDisplayEquipeInfo').textContent = `AJUDANTES: ${nomesAjudantes || 'NENHUM'}`;
-        // Mostra campos de input para motorista
         document.getElementById('checkinDriverFields').style.display = 'block';
     } else {
         const nomeMotorista = getMotorista(op.motoristaId)?.nome;
         document.getElementById('checkinDisplayEquipeInfo').textContent = `MOTORISTA: ${nomeMotorista}`;
         document.getElementById('checkinDriverFields').style.display = 'none';
     }
-
-    // Configura ID no form
     document.getElementById('checkinOpId').value = op.id;
-    
-    // Abre modal
     document.getElementById('modalCheckinConfirm').style.display = 'block';
 };
 
@@ -1196,7 +1183,127 @@ window.closeCheckinConfirmModal = function() {
 };
 
 // =============================================================================
-// 13. GRÁFICOS
+// 13. DASHBOARD E CALENDÁRIO (CORRIGIDO)
+// =============================================================================
+
+function updateDashboardStats() {
+    // Calcula totais do mês atual
+    const now = currentDate; // Usa data do calendário
+    const mes = now.getMonth();
+    const ano = now.getFullYear();
+
+    const ops = loadData(DB_KEYS.OPERACOES).filter(o => {
+        const d = new Date(o.data + 'T00:00:00');
+        return d.getMonth() === mes && d.getFullYear() === ano;
+    });
+
+    const despesasGerais = loadData(DB_KEYS.DESPESAS_GERAIS).filter(d => {
+        const dt = new Date(d.data + 'T00:00:00');
+        return dt.getMonth() === mes && dt.getFullYear() === ano;
+    });
+
+    let totalFaturamento = 0;
+    let totalCustos = 0;
+
+    ops.forEach(op => {
+        totalFaturamento += (op.faturamento || 0);
+        
+        // Custos operacionais
+        const diarias = (op.ajudantes || []).reduce((acc, a) => acc + (Number(a.diaria) || 0), 0);
+        const custoDiesel = calcularCustoConsumoViagem(op) || 0;
+        
+        totalCustos += (op.comissao || 0) + diarias + (op.despesas || 0) + custoDiesel;
+    });
+
+    // Soma despesas gerais
+    totalCustos += despesasGerais.reduce((acc, d) => acc + (d.valor || 0), 0);
+
+    const receitaLiquida = totalFaturamento - totalCustos;
+
+    // Atualiza DOM
+    const elFaturamento = document.getElementById('faturamentoMes');
+    const elDespesas = document.getElementById('despesasMes');
+    const elReceita = document.getElementById('receitaMes');
+
+    if (elFaturamento) elFaturamento.textContent = formatCurrency(totalFaturamento);
+    if (elDespesas) elDespesas.textContent = formatCurrency(totalCustos);
+    if (elReceita) {
+        elReceita.textContent = formatCurrency(receitaLiquida);
+        elReceita.style.color = receitaLiquida >= 0 ? 'var(--success-color)' : 'var(--danger-color)';
+    }
+}
+
+// --- FUNÇÕES DE CALENDÁRIO QUE ESTAVAM FALTANDO ---
+
+function renderCalendar(date) {
+    const grid = document.getElementById('calendarGrid');
+    const label = document.getElementById('currentMonthYear');
+    if (!grid || !label) return;
+
+    grid.innerHTML = '';
+    const year = date.getFullYear();
+    const month = date.getMonth();
+
+    const monthNames = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
+    label.textContent = `${monthNames[month]} ${year}`;
+
+    // Cabeçalho Dias da Semana
+    const daysOfWeek = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
+    daysOfWeek.forEach(day => {
+        const div = document.createElement('div');
+        div.className = 'day-label';
+        div.textContent = day;
+        grid.appendChild(div);
+    });
+
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    // Células vazias antes do dia 1
+    for (let i = 0; i < firstDay; i++) {
+        const div = document.createElement('div');
+        div.className = 'day-cell empty';
+        grid.appendChild(div);
+    }
+
+    // Busca operações deste mês para marcar no calendário
+    const ops = loadData(DB_KEYS.OPERACOES);
+    
+    // Dias do mês
+    for (let day = 1; day <= daysInMonth; day++) {
+        const div = document.createElement('div');
+        div.className = 'day-cell';
+        div.textContent = day;
+
+        // Verifica se tem operação neste dia
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const hasOp = ops.some(o => o.data === dateStr);
+
+        if (hasOp) {
+            div.classList.add('has-operation');
+            div.innerHTML += '<div class="event-dot"></div>';
+            div.title = "Clique para ver operações deste dia";
+            div.onclick = () => {
+                alert(`OPERAÇÕES DO DIA ${day}/${month + 1}:\n\nConsulte a tabela abaixo para detalhes.`);
+                // Opcional: Filtrar a tabela visualmente (implementação futura)
+            };
+        }
+
+        grid.appendChild(div);
+    }
+}
+
+function changeMonth(direction) {
+    currentDate.setMonth(currentDate.getMonth() + direction);
+    renderCalendar(currentDate);
+    updateDashboardStats(); // Atualiza os cards de faturamento quando muda o mês
+}
+// Expõe para o HTML
+window.changeMonth = changeMonth; 
+window.renderCalendar = renderCalendar;
+
+// =============================================================================
+// 14. GRÁFICOS
 // =============================================================================
 
 let chartInstance = null;
@@ -1341,7 +1448,7 @@ function renderCharts() {
 }
 
 // =============================================================================
-// 14. SISTEMA DE LEMBRETES & RESET
+// 15. SISTEMA DE LEMBRETES & RESET
 // =============================================================================
 
 function checkAndShowReminders() {
@@ -1459,9 +1566,8 @@ function fullSystemReset() {
     }
 }
 window.fullSystemReset = fullSystemReset;
-
 // =============================================================================
-// 15. INICIALIZAÇÃO E SINCRONIZAÇÃO (REALTIME)
+// 16. INICIALIZAÇÃO E SINCRONIZAÇÃO (REALTIME)
 // =============================================================================
 
 function setupRealtimeListeners() {
@@ -1500,11 +1606,16 @@ function updateUI() {
     renderCharts();
     checkAndShowReminders();
     renderMinhaEmpresaInfo();
-    renderCalendar(currentDate);
+    
+    // CORREÇÃO: Chama o calendário garantindo que a função existe
+    if (typeof renderCalendar === 'function') {
+        renderCalendar(currentDate);
+    }
+    
     renderCheckinsTable(); 
     
     if (window.CURRENT_USER && (window.CURRENT_USER.role === 'motorista' || window.CURRENT_USER.role === 'ajudante')) {
-        renderMyServices();
+        // renderMyServices(); // Função não estava definida no original, removido para evitar erro
     }
 
     if (window.IS_READ_ONLY && window.enableReadOnlyMode) {
@@ -1542,7 +1653,7 @@ function setupInputFormattingListeners() {
 }
 
 // =============================================================================
-// 16. RECIBOS
+// 17. RECIBOS
 // =============================================================================
 
 function parseCompositeId(value) {
@@ -1686,7 +1797,7 @@ function setupReciboListeners() {
 }
 
 // =============================================================================
-// 17. BACKUP, RESTORE E RESET
+// 18. BACKUP, RESTORE E RESET
 // =============================================================================
 
 function exportDataBackup() {
@@ -1756,11 +1867,11 @@ class ConverterMoeda {
 }
 
 // =============================================================================
-// 18. GESTÃO DE RELATÓRIOS (PDF) E OUTROS
+// 19. GESTÃO DE RELATÓRIOS (PDF) E OUTROS
 // =============================================================================
 
 function gerarRelatorio(e) {
-    e.preventDefault();
+    if (e) e.preventDefault(); // Correção: verificar se evento existe
     const iniVal = document.getElementById('dataInicioRelatorio').value;
     const fimVal = document.getElementById('dataFimRelatorio').value;
     if (!iniVal || !fimVal) return alert('SELECIONE AS DATAS.');
@@ -1845,6 +1956,7 @@ function gerarRelatorio(e) {
     document.getElementById('reportContent').innerHTML = html;
     document.getElementById('reportResults').style.display = 'block';
 }
+window.gerarRelatorio = gerarRelatorio; // Expor globalmente
 
 function exportReportToPDF() {
     const element = document.getElementById('reportResults');
@@ -1958,8 +2070,17 @@ function gerarRelatorioCobranca() {
     document.getElementById('reportContent').innerHTML = html;
     document.getElementById('reportResults').style.display = 'block';
 }
+window.gerarRelatorioCobranca = gerarRelatorioCobranca;
+
+// =============================================================================
+// 20. LISTENERS E ATRIBUIÇÕES GLOBAIS
+// =============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Listeners do form de relatório
+    const formRel = document.getElementById('formRelatorio');
+    if(formRel) formRel.addEventListener('submit', gerarRelatorio);
+
     document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.cadastro-tab-btn').forEach(b => b.classList.remove('active'));
@@ -2059,7 +2180,7 @@ window.editOperacaoItem = function(id) {
 };
 
 // =============================================================================
-// 19. AUTH & LOGOUT
+// 21. AUTH & LOGOUT
 // =============================================================================
 
 window.logoutSystem = function() {
@@ -2078,7 +2199,7 @@ window.logoutSystem = function() {
 };
 
 // =============================================================================
-// 20. INICIALIZAÇÃO DO SISTEMA POR CARGO
+// 22. INICIALIZAÇÃO DO SISTEMA POR CARGO
 // =============================================================================
 
 window.initSystemByRole = function(user) {
@@ -2128,10 +2249,11 @@ window.initSystemByRole = function(user) {
         window.IS_READ_ONLY = true; 
         setupRealtimeListeners(); 
         
-        setupEmployeeProfile();
+        // setupEmployeeProfile(); // Função não definida no original, removido.
         
         if (user.role === 'motorista') {
-            document.getElementById('driverCheckinFields').style.display = 'grid';
+            const driverFields = document.getElementById('driverCheckinFields');
+            if(driverFields) driverFields.style.display = 'grid';
         }
     }
     
@@ -2156,7 +2278,6 @@ window.initSystemByRole = function(user) {
             if (form) {
                 const elements = form.querySelectorAll('input, select, textarea, button');
                 elements.forEach(el => {
-                    // Importante: NÃO desabilitar o formulário de confirmação de check-in
                     const isInCheckinModal = el.closest('#formCheckinConfirm');
                     if (!isInCheckinModal) {
                          if (!el.classList.contains('close-btn') && !el.classList.contains('btn-secondary')) {
@@ -2179,7 +2300,6 @@ window.initSystemByRole = function(user) {
 
         selectorsToHide.forEach(sel => {
             document.querySelectorAll(sel).forEach(el => {
-                // Exceção: Botão de confirmar check-in deve aparecer
                 const isInCheckinModal = el.closest('#formCheckinConfirm');
                 if (!isInCheckinModal) {
                     if (!el.textContent.includes('SAIR') && !el.textContent.includes('FECHAR')) {
@@ -2194,7 +2314,7 @@ window.initSystemByRole = function(user) {
 };
 
 // =============================================================================
-// 21. GESTÃO DE USUÁRIOS DA EMPRESA (COM EXCLUSÃO)
+// 23. GESTÃO DE USUÁRIOS DA EMPRESA (COM EXCLUSÃO)
 // =============================================================================
 
 function setupCompanyUserManagement() {
@@ -2224,7 +2344,6 @@ function setupCompanyUserManagement() {
         }
     };
 
-    // NOVA FUNÇÃO: Excluir funcionário
     window.deleteCompanyUser = async (uid) => {
         if(!confirm("TEM CERTEZA QUE DESEJA EXCLUIR ESTE FUNCIONÁRIO? ELE PERDERÁ O ACESSO IMEDIATAMENTE.")) return;
         try {
@@ -2307,7 +2426,7 @@ function renderCompanyUserTables(users) {
 }
 
 // =============================================================================
-// 22. SUPER ADMIN LOGIC (ATUALIZADO)
+// 24. SUPER ADMIN LOGIC
 // =============================================================================
 
 function setupSuperAdmin() {
@@ -2330,7 +2449,6 @@ function setupSuperAdmin() {
         }
     };
 
-    // NOVA FUNÇÃO: Resetar senha
     window.resetUserPassword = async (email) => {
         if(!confirm(`ENVIAR E-MAIL DE REDEFINIÇÃO DE SENHA PARA ${email}?`)) return;
         try {
@@ -2344,11 +2462,9 @@ function setupSuperAdmin() {
 }
 
 function renderSuperAdminDashboard(users) {
-    // Filtra empresas (Admins)
     const empresasPendentes = users.filter(u => !u.approved && u.role === 'admin');
     const empresasAtivas = users.filter(u => u.approved && u.role === 'admin');
 
-    // Tabela Pendentes
     const tPendentes = document.getElementById('tabelaEmpresasPendentes');
     if (tPendentes) {
         tPendentes.querySelector('tbody').innerHTML = empresasPendentes.map(u => `
@@ -2360,10 +2476,8 @@ function renderSuperAdminDashboard(users) {
         `).join('') || '<tr><td colspan="3">Nenhuma empresa pendente.</td></tr>';
     }
 
-    // Tabela Ativas (Com senha, data e sub-menu)
     const tAtivos = document.getElementById('tabelaEmpresasAtivas');
     if (tAtivos) {
-        // Atualiza cabeçalho para novas colunas
         tAtivos.querySelector('thead').innerHTML = `
             <tr>
                 <th>EMPRESA / EMAIL</th>
@@ -2375,7 +2489,6 @@ function renderSuperAdminDashboard(users) {
         `;
 
         tAtivos.querySelector('tbody').innerHTML = empresasAtivas.map(u => {
-            // Busca funcionários desta empresa
             const funcionarios = users.filter(sub => sub.company === u.company && sub.role !== 'admin');
             
             const subLista = funcionarios.length > 0 
