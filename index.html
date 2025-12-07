@@ -682,8 +682,8 @@
 
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-      import { getFirestore, collection, setDoc, doc, onSnapshot, getDoc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-      import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+      import { getFirestore, collection, setDoc, doc, onSnapshot, getDoc, updateDoc, query, where, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+      import { getAuth, onAuthStateChanged, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
       const firebaseConfig = {
         apiKey: "AIzaSyBZjVdcyjbEoR_-X6_lZuTRDMeN2wIntZI",
@@ -699,7 +699,7 @@
       const auth = getAuth(app);
 
       // Disponibiliza globalmente
-      window.dbRef = { db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, updateDoc, query, where };
+      window.dbRef = { db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, updateDoc, query, where, deleteDoc, sendPasswordResetEmail };
       
       // Controle de Sessão e Roteamento Básico
       onAuthStateChanged(auth, async (user) => {

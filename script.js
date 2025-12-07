@@ -11,11 +11,10 @@ const DB_KEYS = {
     DESPESAS_GERAIS: 'db_despesas_gerais',
     AJUDANTES: 'db_ajudantes',
     ATIVIDADES: 'db_atividades',
-    CHECKINS: 'db_checkins' // --- NOVO: Tabela para guardar os checkins ---
+    CHECKINS: 'db_checkins'
 };
 
-// CACHE GLOBAL DA APLICAÇÃO (Substitui o localStorage direto)
-// Os dados do Firebase serão espelhados aqui para acesso imediato pela interface.
+// CACHE GLOBAL DA APLICAÇÃO
 const APP_CACHE = {
     [DB_KEYS.MOTORISTAS]: [],
     [DB_KEYS.VEICULOS]: [],
@@ -25,7 +24,7 @@ const APP_CACHE = {
     [DB_KEYS.DESPESAS_GERAIS]: [],
     [DB_KEYS.AJUDANTES]: [],
     [DB_KEYS.ATIVIDADES]: [],
-    [DB_KEYS.CHECKINS]: [] // --- NOVO ---
+    [DB_KEYS.CHECKINS]: []
 };
 
 // --- VARIÁVEIS GLOBAIS DE CONTROLE DE ACESSO ---
@@ -38,24 +37,21 @@ function loadData(key) {
 }
 
 // Salva dados no Firebase (Nuvem)
-// --- MODIFICADO: Agora salva dentro da pasta da empresa específica ---
 async function saveData(key, value) {
     // Bloqueio de segurança para perfil de leitura
     if (window.IS_READ_ONLY && key !== DB_KEYS.CHECKINS) {
         // Exceção: Checkins podem ser salvos pelo funcionário
-        // A atualização de perfil próprio trataremos via formulário específico
     }
 
-    // 1. Atualiza cache local imediatamente (Optimistic UI - Sensação de rapidez)
+    // 1. Atualiza cache local imediatamente
     APP_CACHE[key] = value;
     
     // 2. Envia para o Firebase se estiver disponível
     if (window.dbRef && window.CURRENT_USER) {
         const { db, doc, setDoc } = window.dbRef;
-        const companyDomain = window.CURRENT_USER.company; // Pega o domínio da empresa do usuário logado
+        const companyDomain = window.CURRENT_USER.company; 
 
         try {
-            // Usamos um documento único chamado 'full_list' DENTRO da pasta da empresa
             await setDoc(doc(db, 'companies', companyDomain, 'data', key), { items: value });
             console.log(`Dados de ${key} salvos na nuvem da empresa ${companyDomain}.`);
         } catch (e) {
@@ -63,7 +59,6 @@ async function saveData(key, value) {
             alert("Erro ao salvar online. Verifique sua conexão ou permissões no Firebase.");
         }
     } else {
-        // Fallback para localStorage se desconectado
         localStorage.setItem(key, JSON.stringify(value));
         return Promise.resolve();
     }
@@ -116,14 +111,12 @@ function getMinhaEmpresa() {
 function obterUltimoPrecoCombustivel(placa) {
     if (!placa) return 0;
     const todasOps = loadData(DB_KEYS.OPERACOES) || [];
-    // Filtra operações que tem preço preenchido
     const opsComPreco = todasOps.filter(op => 
         op && op.veiculoPlaca === placa && op.precoLitro && Number(op.precoLitro) > 0
     );
     
     if (opsComPreco.length === 0) return 0;
     
-    // Ordena da mais recente para a mais antiga
     opsComPreco.sort((a, b) => new Date(b.data || '1970-01-01') - new Date(a.data || '1970-01-01'));
     
     return Number(opsComPreco[0].precoLitro) || 0;
@@ -383,7 +376,6 @@ function populateAllSelects() {
     populateSelect('selectAjudantesOperacao', ajudantes, 'id', 'nome', 'SELECIONE PARA ADICIONAR AJUDANTE...');
     populateSelect('selectVeiculoDespesaGeral', veiculos, 'placa', 'placa', 'SELECIONE O VEÍCULO...');
 
-    // Selects de Relatório e Recibo
     populateSelect('selectMotoristaRelatorio', motoristas, 'id', 'nome', 'TODOS');
     populateSelect('selectVeiculoRelatorio', veiculos, 'placa', 'placa', 'TODOS');
     populateSelect('selectContratanteRelatorio', contratantes, 'cnpj', 'razaoSocial', 'TODAS');
@@ -407,7 +399,6 @@ function populateAllSelects() {
         });
     }
     
-    // --- NOVO: Popula os selects do modal de Check-in do funcionário ---
     populateSelect('checkinVeiculo', veiculos, 'placa', 'placa', 'SELECIONE O VEÍCULO...');
     populateSelect('checkinContratante', contratantes, 'cnpj', 'razaoSocial', 'SELECIONE A CONTRATANTE...');
     populateSelect('checkinAtividade', atividades, 'id', 'nome', 'SELECIONE A ATIVIDADE...');
@@ -418,7 +409,7 @@ function populateAllSelects() {
     renderCadastroTable(DB_KEYS.CONTRATANTES);
     renderCadastroTable(DB_KEYS.ATIVIDADES);
     renderMinhaEmpresaInfo();
-    renderCheckinsTable(); // NOVO: Renderiza tabela de checkins
+    renderCheckinsTable();
 }
 
 function renderMinhaEmpresaInfo() {
@@ -464,7 +455,6 @@ function renderCadastroTable(key) {
              btns += `<button class="btn-action view-btn" title="VISUALIZAR" onclick="viewCadastro('${key}', '${item[idKey]}')"><i class="fas fa-eye"></i></button>`;
         }
         
-        // Só mostra editar/excluir se NÃO for Read Only
         if (!window.IS_READ_ONLY) {
             btns += `<button class="btn-action edit-btn" title="EDITAR" onclick="editCadastroItem('${key}', '${item[idKey]}')"><i class="fas fa-edit"></i></button><button class="btn-action delete-btn" title="EXCLUIR" onclick="deleteItem('${key}', '${item[idKey]}')"><i class="fas fa-trash"></i></button>`;
         }
@@ -560,7 +550,6 @@ function deleteItem(key, id) {
     let idKey = key === DB_KEYS.VEICULOS ? 'placa' : (key === DB_KEYS.CONTRATANTES ? 'cnpj' : 'id');
     arr = arr.filter(it => String(it[idKey]) !== String(id));
     saveData(key, arr);
-    // As renderizações serão automáticas pelo listener do Firebase (setupRealtimeListeners)
     alert('ITEM EXCLUÍDO (PROCESSANDO...).');
 }
 
@@ -573,7 +562,7 @@ function setupFormHandlers() {
     if (formMotorista) {
         formMotorista.addEventListener('submit', (e) => {
             e.preventDefault();
-            let arr = loadData(DB_KEYS.MOTORISTAS).slice(); // Copia array para evitar mutação direta
+            let arr = loadData(DB_KEYS.MOTORISTAS).slice();
             const idHidden = document.getElementById('motoristaId').value;
             const obj = {
                 id: idHidden ? Number(idHidden) : (arr.length ? Math.max(...arr.map(a => a.id)) + 1 : 101),
@@ -701,7 +690,7 @@ function setupFormHandlers() {
         });
     }
 
-    // DESPESA GERAL (Lógica de Parcelamento Atualizada)
+    // DESPESA GERAL
     const formDespesa = document.getElementById('formDespesaGeral');
     if (formDespesa) {
         formDespesa.addEventListener('submit', (e) => {
@@ -709,7 +698,6 @@ function setupFormHandlers() {
             let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
             const idHidden = document.getElementById('despesaGeralId').value;
             
-            // Edição simples
             if (idHidden) {
                 const idx = arr.findIndex(d => d.id == idHidden);
                 if (idx >= 0) {
@@ -719,7 +707,6 @@ function setupFormHandlers() {
                      arr[idx].valor = Number(document.getElementById('despesaGeralValor').value) || 0;
                 }
             } else {
-                // Nova Despesa (Com Parcelamento Inteligente)
                 const dataBaseStr = document.getElementById('despesaGeralData').value;
                 const veiculoPlaca = document.getElementById('selectVeiculoDespesaGeral').value || null;
                 const descricaoBase = document.getElementById('despesaGeralDescricao').value.toUpperCase();
@@ -733,14 +720,10 @@ function setupFormHandlers() {
                 let parcelasJaPagas = 0;
                 
                 if (modoPagamento === 'parcelado') {
-                    // Pega os valores dos inputs livres que adicionamos no HTML
                     numParcelas = parseInt(document.getElementById('despesaParcelas').value) || 2; 
                     intervaloDias = parseInt(document.getElementById('despesaIntervaloDias').value) || 30;
-                    
                     const inputPagas = document.getElementById('despesaParcelasPagas');
-                    if (inputPagas) {
-                        parcelasJaPagas = parseInt(inputPagas.value) || 0;
-                    }
+                    if (inputPagas) parcelasJaPagas = parseInt(inputPagas.value) || 0;
                 }
 
                 const valorParcela = valorTotal / numParcelas;
@@ -750,7 +733,6 @@ function setupFormHandlers() {
                 for (let i = 0; i < numParcelas; i++) {
                     const id = arr.length ? Math.max(...arr.map(d => d.id)) + 1 : 1;
                     const dataObj = new Date(dataBase);
-                    // Calcula a data da parcela baseado no intervalo escolhido
                     dataObj.setDate(dataBase.getDate() + (i * intervaloDias));
                     
                     const y = dataObj.getFullYear();
@@ -759,8 +741,6 @@ function setupFormHandlers() {
                     const dataParcela = `${y}-${m}-${d}`;
                     
                     const descFinal = numParcelas > 1 ? `${descricaoBase} (${i+1}/${numParcelas})` : descricaoBase;
-                    
-                    // Lógica para marcar como paga automaticamente se estiver dentro da qtd "Já Pagas"
                     const estaPaga = i < parcelasJaPagas;
 
                     arr.push({
@@ -839,9 +819,6 @@ function setupFormHandlers() {
             if (sel) sel.value = "";
         });
     }
-
-    const formRel = document.getElementById('formRelatorio');
-    if (formRel) formRel.addEventListener('submit', gerarRelatorio);
 }
 
 function toggleDespesaParcelas() {
@@ -973,7 +950,7 @@ function renderDespesasTable() {
         if (!window.IS_READ_ONLY) {
             const btnPagoIcon = d.pago ? 'fa-times-circle' : 'fa-check-circle';
             const btnPagoTitle = d.pago ? 'MARCAR COMO PENDENTE' : 'MARCAR COMO PAGO';
-            const btnPagoClass = d.pago ? 'btn-warning' : 'btn-success'; // Laranja para desfazer, Verde para pagar
+            const btnPagoClass = d.pago ? 'btn-warning' : 'btn-success';
             btns += `<button class="btn-action ${btnPagoClass}" title="${btnPagoTitle}" onclick="toggleStatusDespesa(${d.id})"><i class="fas ${btnPagoIcon}"></i></button>`;
             btns += `<button class="btn-action edit-btn" onclick="editDespesaItem(${d.id})"><i class="fas fa-edit"></i></button>`;
             btns += `<button class="btn-action delete-btn" onclick="deleteItem('${DB_KEYS.DESPESAS_GERAIS}', ${d.id})"><i class="fas fa-trash"></i></button>`;
@@ -993,14 +970,12 @@ function renderDespesasTable() {
     tabela.querySelector('tbody').innerHTML = rows;
 }
 
-// NOVA FUNÇÃO GLOBAL: Alternar status de pagamento na tabela
 window.toggleStatusDespesa = function(id) {
     if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA.");
     let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
     const idx = arr.findIndex(d => d.id === id);
     if (idx >= 0) {
-        arr[idx].pago = !arr[idx].pago; // Inverte o status (true <-> false)
-        // Salva e atualiza no Firebase
+        arr[idx].pago = !arr[idx].pago;
         saveData(DB_KEYS.DESPESAS_GERAIS, arr);
     }
 };
@@ -1085,7 +1060,7 @@ function showOperationDetails(date) {
         const ajudantesHtml = (op.ajudantes || []).map(a => `<li>${(getAjudante(a.id)?.nome)||'ID:'+a.id} — ${formatCurrency(Number(a.diaria)||0)}</li>`).join('') || '<li>NENHUM</li>';
         const totalDiarias = (op.ajudantes || []).reduce((s, a) => s + (Number(a.diaria) || 0), 0);
 
-        const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca) || 0; // MÉDIA
+        const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca) || 0; 
         const custoDieselEstimado = calcularCustoConsumoViagem(op) || 0;
         const custosViagem = (op.comissao || 0) + totalDiarias + (op.despesas || 0) + custoDieselEstimado;
         const liquido = (op.faturamento || 0) - custosViagem;
@@ -1147,7 +1122,7 @@ function updateDashboardStats() {
 }
 
 // =============================================================================
-// 13. GRÁFICOS (COM PORCENTAGEM CORRIGIDA)
+// 13. GRÁFICOS
 // =============================================================================
 
 let chartInstance = null;
@@ -1162,7 +1137,7 @@ function renderCharts() {
     const dataOutrasDespesas = [];
     const dataLucro = [];
     const dataKm = [];
-    const dataRevenue = []; // Para cálculo de porcentagem
+    const dataRevenue = [];
 
     let totalReceitaHistorica = 0;
     ops.forEach(o => totalReceitaHistorica += (o.faturamento || 0));
@@ -1206,12 +1181,11 @@ function renderCharts() {
         dataOutrasDespesas.push(sumOutros);
         dataLucro.push(lucro);
         dataKm.push(sumKm);
-        dataRevenue.push(sumFaturamento); // Armazena faturamento total do mês para referência na tooltip
+        dataRevenue.push(sumFaturamento);
     }
 
     if (chartInstance) chartInstance.destroy();
 
-    // Verificação de segurança para o array de Revenue no callback
     const revenueDataSafe = dataRevenue;
 
     chartInstance = new Chart(ctx, {
@@ -1255,29 +1229,19 @@ function renderCharts() {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                x: {
-                    stacked: true
-                },
+                x: { stacked: true },
                 y: {
                     stacked: true,
                     beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: 'VALORES (R$)'
-                    }
+                    title: { display: true, text: 'VALORES (R$)' }
                 },
                 y1: {
                     type: 'linear',
                     display: true,
                     position: 'right',
                     beginAtZero: true,
-                    grid: {
-                        drawOnChartArea: false
-                    },
-                    title: {
-                        display: true,
-                        text: 'KM'
-                    }
+                    grid: { drawOnChartArea: false },
+                    title: { display: true, text: 'KM' }
                 }
             },
             plugins: {
@@ -1286,20 +1250,13 @@ function renderCharts() {
                         label: function(context) {
                             let label = context.dataset.label || '';
                             if (label) label += ': ';
-
-                            // Se for linha de KM
                             if (context.dataset.type === 'line' || context.dataset.label === 'KM RODADO') {
                                 return label + context.parsed.y + ' KM';
                             }
-
-                            // Cálculo de Porcentagem para Barras Financeiras
                             const val = context.parsed.y;
                             const totalRevenue = revenueDataSafe[context.dataIndex];
                             let percent = 0;
-                            if (totalRevenue > 0) {
-                                percent = (val / totalRevenue) * 100;
-                            }
-
+                            if (totalRevenue > 0) percent = (val / totalRevenue) * 100;
                             return `${label}${formatCurrency(val)} (${percent.toFixed(1)}%)`;
                         }
                     }
@@ -1317,7 +1274,6 @@ function checkAndShowReminders() {
     const despesas = loadData(DB_KEYS.DESPESAS_GERAIS);
     const hoje = new Date().toISOString().split('T')[0];
     
-    // Filtra despesas vencidas ou vencendo hoje que NÃO estão pagas
     const pendentes = despesas.filter(d => {
         const isPago = !!d.pago; 
         return d.data <= hoje && !isPago;
@@ -1368,7 +1324,6 @@ function closeReminderModal() {
 }
 window.closeReminderModal = closeReminderModal;
 
-// Ações do Modal de Lembrete
 window.payExpense = function(id) {
     if (window.IS_READ_ONLY) return;
     let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
@@ -1379,7 +1334,6 @@ window.payExpense = function(id) {
         const el = event.target.closest('.reminder-item');
         if (el) el.remove();
         if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
-        // Atualiza a tabela para refletir o pagamento
         renderDespesasTable();
     }
 };
@@ -1390,7 +1344,7 @@ window.postponeExpense = function(id) {
     const idx = arr.findIndex(d => d.id === id);
     if (idx >= 0) {
         const atual = new Date(arr[idx].data + 'T00:00:00');
-        atual.setDate(atual.getDate() + 1); // Adia 1 dia
+        atual.setDate(atual.getDate() + 1);
         const y = atual.getFullYear();
         const m = String(atual.getMonth() + 1).padStart(2, '0');
         const dStr = String(atual.getDate()).padStart(2, '0');
@@ -1424,8 +1378,6 @@ window.cancelExpense = function(id) {
 function fullSystemReset() {
     if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA: AÇÃO BLOQUEADA.");
     if (confirm("ATENÇÃO: ISSO APAGARÁ TODOS OS DADOS DA NUVEM PARA SEMPRE (DE TODOS OS DISPOSITIVOS).\n\nTEM CERTEZA ABSOLUTA?")) {
-        // Para um reset real, teríamos que deletar documentos do Firebase.
-        // Como simplificação, salvaremos arrays vazios em cima dos dados existentes.
         Object.values(DB_KEYS).forEach(k => {
             saveData(k, k === DB_KEYS.MINHA_EMPRESA ? {} : []);
         });
@@ -1438,20 +1390,14 @@ window.fullSystemReset = fullSystemReset;
 // 15. INICIALIZAÇÃO E SINCRONIZAÇÃO (REALTIME)
 // =============================================================================
 
-// Esta função conecta o site ao Firebase e fica "escutando" mudanças.
 function setupRealtimeListeners() {
     if (!window.dbRef) {
-        console.error("Firebase ainda não carregou. Tentando novamente em 500ms...");
         setTimeout(setupRealtimeListeners, 500);
         return;
     }
-
     const { db, doc, onSnapshot } = window.dbRef;
     const keys = Object.values(DB_KEYS);
 
-    console.log("Iniciando ouvintes do Firebase...");
-
-    // MODIFICADO: Escuta apenas os dados da EMPRESA ATUAL
     if (window.CURRENT_USER && window.CURRENT_USER.company) {
         const companyDomain = window.CURRENT_USER.company;
         keys.forEach(key => {
@@ -1470,9 +1416,7 @@ function setupRealtimeListeners() {
     }
 }
 
-// Função central para atualizar toda a interface quando dados mudam (local ou remotamente)
 function updateUI() {
-    // Se for Super Admin, não renderiza dashboards normais
     if (window.CURRENT_USER && window.CURRENT_USER.email === 'admin@logimaster.com') return;
 
     populateAllSelects();
@@ -1483,14 +1427,12 @@ function updateUI() {
     checkAndShowReminders();
     renderMinhaEmpresaInfo();
     renderCalendar(currentDate);
-    renderCheckinsTable(); // Atualiza tabela de pendencias
+    renderCheckinsTable(); 
     
-    // Atualiza tabela de serviços do funcionário, se aplicável
     if (window.CURRENT_USER && (window.CURRENT_USER.role === 'motorista' || window.CURRENT_USER.role === 'ajudante')) {
         renderMyServices();
     }
 
-    // Re-aplica bloqueio se estiver em read-only
     if (window.IS_READ_ONLY && window.enableReadOnlyMode) {
         window.enableReadOnlyMode();
     }
@@ -1650,19 +1592,9 @@ function setupReciboListeners() {
                 html2pdf().from(element).set({
                     margin: 10,
                     filename: nomeArq,
-                    image: {
-                        type: 'jpeg',
-                        quality: 0.98
-                    },
-                    html2canvas: {
-                        scale: 2,
-                        scrollY: 0
-                    },
-                    jsPDF: {
-                        unit: 'mm',
-                        format: 'a4',
-                        orientation: 'portrait'
-                    }
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2, scrollY: 0 },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
                 }).save();
             } else alert('LIB HTML2PDF NÃO ENCONTRADA PARA GERAR PDF. INSTALE A LIB OU BAIXE MANUALMENTE.');
         };
@@ -1697,7 +1629,7 @@ function importDataBackup(event) {
     if (!file) return;
 
     if(!confirm("ATENÇÃO: IMPORTAR UM BACKUP IRÁ SUBSTITUIR TODOS OS DADOS ATUAIS PELOS DO ARQUIVO.\n\nDESEJA CONTINUAR?")) {
-        event.target.value = ''; // Limpa o input
+        event.target.value = ''; 
         return;
     }
 
@@ -1707,20 +1639,17 @@ function importDataBackup(event) {
             const data = JSON.parse(e.target.result);
             const promises = [];
             
-            // Cria uma lista de tarefas de salvamento
             Object.keys(data).forEach(k => {
                 if (Object.values(DB_KEYS).includes(k)) {
-                    // Adiciona a promessa de salvamento na lista
                     promises.push(saveData(k, data[k]));
                 }
             });
 
-            // Espera TODAS as gravações no banco terminarem
             if (promises.length > 0) {
                 alert('PROCESSANDO ARQUIVO E ENVIANDO PARA O BANCO DE DADOS... AGUARDE.');
                 await Promise.all(promises);
                 alert('BACKUP IMPORTADO E SINCRONIZADO COM O BANCO DE DADOS COM SUCESSO!');
-                window.location.reload(); // Recarrega para garantir visualização limpa
+                window.location.reload(); 
             } else {
                 alert('O ARQUIVO NÃO PARECE CONTER DADOS VÁLIDOS DO LOGIMASTER.');
             }
@@ -1856,7 +1785,7 @@ function exportReportToPDF() {
 }
 window.exportReportToPDF = exportReportToPDF;
 
-// --- RELATÓRIO DE COBRANÇA (Com Adiantamento) ---
+// --- RELATÓRIO DE COBRANÇA ---
 function gerarRelatorioCobranca() {
     const iniVal = document.getElementById('dataInicioRelatorio').value;
     const fimVal = document.getElementById('dataFimRelatorio').value;
@@ -1875,7 +1804,7 @@ function gerarRelatorioCobranca() {
 
     if (ops.length === 0) return alert('NENHUMA OPERAÇÃO ENCONTRADA PARA ESTE CLIENTE NO PERÍODO.');
 
-    let totalSaldo = 0; // Total a Pagar (Saldo)
+    let totalSaldo = 0; 
     let rows = '';
     ops.forEach(op => {
         const d = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
@@ -1947,7 +1876,6 @@ function gerarRelatorioCobranca() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Configuração de Tabs e Navegação
     document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.cadastro-tab-btn').forEach(b => b.classList.remove('active'));
@@ -1986,13 +1914,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Inicialização dos módulos
     setupFormHandlers();
     setupInputFormattingListeners();
     setupReciboListeners();
 });
 
-// Fechar modais ao clicar fora
 window.addEventListener('click', function(event) {
     const viewModal = document.getElementById('viewItemModal');
     const opModal = document.getElementById('operationDetailsModal');
@@ -2004,7 +1930,6 @@ window.addEventListener('click', function(event) {
     if (event.target === checkinModal) checkinModal.style.display = 'none';
 });
 
-// GLOBALS EXPORT (Necessário para onclick no HTML funcionar)
 window.viewCadastro = viewCadastro;
 window.editCadastroItem = editCadastroItem;
 window.deleteItem = deleteItem;
@@ -2015,7 +1940,6 @@ window.importDataBackup = importDataBackup;
 window.viewOperacaoDetails = viewOperacaoDetails;
 window.renderCharts = renderCharts;
 
-// --- FUNÇÃO DE EDIÇÃO ATUALIZADA (Carrega Adiantamento) ---
 window.editOperacaoItem = function(id) {
     if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA.");
     
@@ -2057,36 +1981,32 @@ window.logoutSystem = function() {
             });
         }
     } else {
-        // Fallback se firebase não carregou
         window.location.href = "login.html";
     }
 };
 
 // =============================================================================
-// 20. INICIALIZAÇÃO DO SISTEMA POR CARGO (NOVO)
+// 20. INICIALIZAÇÃO DO SISTEMA POR CARGO
 // =============================================================================
 
 window.initSystemByRole = function(user) {
     window.CURRENT_USER = user;
-    console.log("INICIALIZANDO SISTEMA PARA:", user.email, "FUNÇÃO:", user.role, "EMPRESA:", user.company);
+    console.log("INICIALIZANDO SISTEMA PARA:", user.email, "FUNÇÃO:", user.role);
 
-    // Esconde todos os menus primeiro
     document.getElementById('menu-admin').style.display = 'none';
     document.getElementById('menu-super-admin').style.display = 'none';
     document.getElementById('menu-employee').style.display = 'none';
-    
-    // Esconde todas as paginas
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
 
     // 1. SUPER ADMIN (Gestor do Logimaster)
     if (user.email === 'admin@logimaster.com') {
         document.getElementById('menu-super-admin').style.display = 'block';
         document.getElementById('super-admin').classList.add('active');
-        setupSuperAdmin(); // Inicia lógica do Super Admin
+        setupSuperAdmin(); 
         return;
     }
 
-    // 2. VERIFICAÇÃO DE APROVAÇÃO (Para Admins de Empresa e Funcionários)
+    // 2. VERIFICAÇÃO DE APROVAÇÃO
     if (!user.approved) {
         document.querySelector('.content').innerHTML = `
             <div class="card" style="text-align:center; padding:50px; margin-top:50px;">
@@ -2096,15 +2016,15 @@ window.initSystemByRole = function(user) {
                 <button onclick="logoutSystem()" class="btn-danger" style="margin-top:20px;">SAIR</button>
             </div>
         `;
-        return; // Para a execução aqui
+        return;
     }
 
     // 3. ADMIN DA EMPRESA
     if (user.role === 'admin') {
         document.getElementById('menu-admin').style.display = 'block';
         document.getElementById('home').classList.add('active');
-        setupRealtimeListeners(); // Carrega dados da empresa
-        setupCompanyUserManagement(); // Carrega gestão de usuários da empresa
+        setupRealtimeListeners();
+        setupCompanyUserManagement();
         setTimeout(renderCheckinsTable, 1500); 
     }
 
@@ -2113,25 +2033,20 @@ window.initSystemByRole = function(user) {
         document.getElementById('menu-employee').style.display = 'block';
         document.getElementById('employee-home').classList.add('active');
         
-        // Funcionário também precisa ler os dados para preencher selects do check-in
-        window.IS_READ_ONLY = true; // Funcionário não edita os cadastros principais
+        window.IS_READ_ONLY = true; 
         setupRealtimeListeners(); 
         
-        // Configura perfil
         setupEmployeeProfile();
         
-        // Ajusta modal de check-in se for motorista
         if (user.role === 'motorista') {
             document.getElementById('driverCheckinFields').style.display = 'grid';
         }
     }
     
-    // Função chamada pelo index.html se o usuário for visitante
     window.enableReadOnlyMode = function() {
         window.IS_READ_ONLY = true;
-        console.log("MODO APENAS LEITURA ATIVADO - VISITANTE");
+        console.log("MODO APENAS LEITURA ATIVADO");
 
-        // 1. Desabilitar inputs dos formulários de CADASTRO e LANÇAMENTO
         const formIdsToDisable = [
             'formOperacao', 
             'formDespesaGeral', 
@@ -2149,7 +2064,6 @@ window.initSystemByRole = function(user) {
             if (form) {
                 const elements = form.querySelectorAll('input, select, textarea, button');
                 elements.forEach(el => {
-                    // Não desabilita botões de fechar modal ou abas de navegação
                     if (!el.classList.contains('close-btn') && !el.classList.contains('btn-secondary')) {
                        el.disabled = true;
                     }
@@ -2157,42 +2071,36 @@ window.initSystemByRole = function(user) {
             }
         });
 
-        // 2. Esconder botões de Salvar/Excluir/Ação específicos da tela
         const selectorsToHide = [
-            'button[type="submit"]', // Botões de Salvar
-            '.btn-danger',           // Botões de Perigo (Reset, Excluir)
-            '.btn-warning',          // Botões de Edição/Pagamento
-            '#inputImportBackup',    // Importar Backup
-            'label[for="inputImportBackup"]', // Label do Importar
-            'button[onclick="exportDataBackup()"]', // <--- NOVO: SALVAR BACKUP
+            'button[type="submit"]', 
+            '.btn-danger',           
+            '.btn-warning',          
+            '#inputImportBackup',    
+            'label[for="inputImportBackup"]',
+            'button[onclick="exportDataBackup()"]',
             '#modalAjudanteAddBtn'
         ];
 
         selectorsToHide.forEach(sel => {
             document.querySelectorAll(sel).forEach(el => {
-                // Exceção: Não esconder o botão de SAIR (Logout) nem botões de fechar
                 if (!el.textContent.includes('SAIR') && !el.textContent.includes('FECHAR')) {
                     el.style.display = 'none';
                 }
             });
         });
         
-        // Atualiza a UI para garantir que tabelas redesenhem sem os botões de ação
         updateUI();
     };
 };
 
 // =============================================================================
-// 21. GESTÃO DE USUÁRIOS DA EMPRESA (NOVO)
+// 21. GESTÃO DE USUÁRIOS DA EMPRESA (COM EXCLUSÃO)
 // =============================================================================
 
 function setupCompanyUserManagement() {
     if (!window.dbRef || !window.CURRENT_USER) return;
-    const { db, collection, query, where, onSnapshot, updateDoc, doc } = window.dbRef;
+    const { db, collection, query, where, onSnapshot, updateDoc, doc, deleteDoc } = window.dbRef;
 
-    console.log("Buscando usuários da empresa:", window.CURRENT_USER.company);
-
-    // Busca usuários onde 'company' é igual à empresa do admin logado
     const q = query(collection(db, "users"), where("company", "==", window.CURRENT_USER.company));
 
     onSnapshot(q, (snapshot) => {
@@ -2203,70 +2111,62 @@ function setupCompanyUserManagement() {
         console.error("Erro ao buscar usuários da empresa:", error);
     });
 
-    // Função global para aprovar/bloquear usuário da empresa
     window.toggleCompanyUserApproval = async (uid, currentStatus, role, name) => {
         try {
-            // 1. Atualiza status no Auth/Users
             await updateDoc(doc(db, "users", uid), {
                 approved: !currentStatus
             });
-
-            // 2. SE ESTIVER APROVANDO (currentStatus é false -> vai virar true)
-            // CRIA O VÍNCULO AUTOMÁTICO NA TABELA CORRESPONDENTE
-            if (!currentStatus) {
-                await createLinkedProfile(uid, role, name);
-            }
-
-            alert("Status do usuário atualizado com sucesso!");
+            if (!currentStatus) await createLinkedProfile(uid, role, name);
+            alert("Status do usuário atualizado!");
         } catch (e) {
             console.error(e);
             alert("Erro ao atualizar usuário.");
         }
     };
+
+    // NOVA FUNÇÃO: Excluir funcionário
+    window.deleteCompanyUser = async (uid) => {
+        if(!confirm("TEM CERTEZA QUE DESEJA EXCLUIR ESTE FUNCIONÁRIO? ELE PERDERÁ O ACESSO IMEDIATAMENTE.")) return;
+        try {
+            await deleteDoc(doc(db, "users", uid));
+            alert("Funcionário excluído com sucesso.");
+        } catch (e) {
+            console.error(e);
+            alert("Erro ao excluir funcionário. Verifique permissões.");
+        }
+    };
 }
 
-// Cria o perfil na aba Motoristas ou Ajudantes automaticamente
 async function createLinkedProfile(uid, role, name) {
     let key = null;
     if (role === 'motorista') key = DB_KEYS.MOTORISTAS;
     else if (role === 'ajudante') key = DB_KEYS.AJUDANTES;
-    
-    if (!key) return; // Se for outro admin, não cria cadastro operacional
+    if (!key) return;
 
     let arr = loadData(key).slice();
-    // Verifica se já existe pelo UID (usaremos o UID como ID ou um campo auxiliar)
-    // Para simplificar e manter compatibilidade com IDs numéricos antigos,
-    // vamos gerar um ID numérico novo, mas salvar o UID num campo oculto se possível,
-    // ou apenas checar pelo nome/email. Aqui usaremos o Nome como chave de verificação inicial.
-    
     const exists = arr.find(i => i.nome === name);
     
     if (!exists) {
         const newId = arr.length ? Math.max(...arr.map(i => Number(i.id))) + 1 : (role === 'motorista' ? 101 : 201);
-        
         const newProfile = {
             id: newId,
-            uid: uid, // VÍNCULO IMPORTANTE
+            uid: uid,
             nome: name,
-            documento: '', // Pendente de preenchimento
+            documento: '',
             telefone: '',
             pix: ''
         };
-
         if (role === 'motorista') {
             newProfile.cnh = '';
             newProfile.validadeCNH = '';
             newProfile.categoriaCNH = '';
         }
-
         arr.push(newProfile);
         await saveData(key, arr);
-        console.log(`Perfil de ${role} criado automaticamente para ${name}`);
     }
 }
 
 function renderCompanyUserTables(users) {
-    // Filtra removendo o próprio admin logado para ele não se bloquear
     const myUid = window.CURRENT_USER.uid;
     const others = users.filter(u => u.uid !== myUid);
 
@@ -2281,7 +2181,10 @@ function renderCompanyUserTables(users) {
                 <td>${u.email}</td>
                 <td>${u.role.toUpperCase()}</td>
                 <td>${new Date(u.createdAt).toLocaleDateString()}</td>
-                <td><button class="btn-success btn-mini" onclick="toggleCompanyUserApproval('${u.uid}', false, '${u.role}', '${u.name}')">APROVAR ACESSO</button></td>
+                <td>
+                    <button class="btn-success btn-mini" onclick="toggleCompanyUserApproval('${u.uid}', false, '${u.role}', '${u.name}')">APROVAR</button>
+                    <button class="btn-danger btn-mini" onclick="deleteCompanyUser('${u.uid}')"><i class="fas fa-trash"></i></button>
+                </td>
             </tr>
         `).join('') || '<tr><td colspan="5" style="text-align:center;">Nenhum pendente.</td></tr>';
     }
@@ -2294,54 +2197,23 @@ function renderCompanyUserTables(users) {
                 <td>${u.email}</td>
                 <td>${u.role.toUpperCase()}</td>
                 <td style="color:green;font-weight:bold;">ATIVO</td>
-                <td><button class="btn-danger btn-mini" onclick="toggleCompanyUserApproval('${u.uid}', true, '${u.role}', '${u.name}')">BLOQUEAR</button></td>
+                <td>
+                    <button class="btn-danger btn-mini" onclick="toggleCompanyUserApproval('${u.uid}', true, '${u.role}', '${u.name}')">BLOQUEAR</button>
+                    <button class="btn-danger btn-mini" onclick="deleteCompanyUser('${u.uid}')"><i class="fas fa-trash"></i></button>
+                </td>
             </tr>
         `).join('') || '<tr><td colspan="5" style="text-align:center;">Nenhum ativo.</td></tr>';
     }
 }
 
-// Verifica se o funcionário completou o cadastro
-function checkProfileCompleteness() {
-    const user = window.CURRENT_USER;
-    let key = user.role === 'motorista' ? DB_KEYS.MOTORISTAS : DB_KEYS.AJUDANTES;
-    
-    // Busca perfil vinculado pelo UID (se salvamos) ou Nome
-    const profile = loadData(key).find(p => p.uid === user.uid || p.nome === user.name);
-    
-    const alertBox = document.getElementById('profileIncompleteAlert');
-    if (!alertBox) return;
-
-    if (!profile) {
-        // Perfil ainda não criado (erro de sincronia) ou nome diferente
-        alertBox.style.display = 'block';
-        return;
-    }
-
-    // Preenche o formulário de "Meus Dados" com o que tiver
-    document.getElementById('empTelefone').value = profile.telefone || '';
-    document.getElementById('empPix').value = profile.pix || '';
-    if(user.role === 'motorista') {
-        document.getElementById('empCNH').value = profile.cnh || '';
-        document.getElementById('empValidadeCNH').value = profile.validadeCNH || '';
-    }
-
-    // Valida campos obrigatórios
-    let missing = false;
-    if (!profile.documento || profile.documento.length < 5) missing = true;
-    if (user.role === 'motorista' && (!profile.cnh || !profile.validadeCNH)) missing = true;
-
-    alertBox.style.display = missing ? 'block' : 'none';
-}
-
 // =============================================================================
-// 22. SUPER ADMIN LOGIC
+// 22. SUPER ADMIN LOGIC (ATUALIZADO)
 // =============================================================================
 
 function setupSuperAdmin() {
     if (!window.dbRef) return;
-    const { db, collection, onSnapshot, updateDoc, doc } = window.dbRef;
+    const { db, collection, onSnapshot, updateDoc, doc, auth, sendPasswordResetEmail } = window.dbRef;
 
-    // Ouve todos os usuários do sistema
     onSnapshot(collection(db, "users"), (snapshot) => {
         const users = [];
         snapshot.forEach(doc => users.push(doc.data()));
@@ -2350,25 +2222,36 @@ function setupSuperAdmin() {
 
     window.toggleUserApproval = async (uid, currentStatus) => {
         try {
-            await updateDoc(doc(db, "users", uid), {
-                approved: !currentStatus
-            });
+            await updateDoc(doc(db, "users", uid), { approved: !currentStatus });
             alert("Status atualizado!");
         } catch (e) {
             console.error(e);
             alert("Erro ao atualizar status.");
         }
     };
+
+    // NOVA FUNÇÃO: Resetar senha
+    window.resetUserPassword = async (email) => {
+        if(!confirm(`ENVIAR E-MAIL DE REDEFINIÇÃO DE SENHA PARA ${email}?`)) return;
+        try {
+            await sendPasswordResetEmail(auth, email);
+            alert("E-MAIL DE REDEFINIÇÃO ENVIADO COM SUCESSO!");
+        } catch (e) {
+            console.error(e);
+            alert("ERRO AO ENVIAR E-MAIL. VERIFIQUE SE O E-MAIL É VÁLIDO.");
+        }
+    };
 }
 
 function renderSuperAdminDashboard(users) {
-    const pendentes = users.filter(u => !u.approved && u.role === 'admin'); // Apenas Admins de empresa precisam de aprovação do Super
-    const ativos = users.filter(u => u.approved && u.role === 'admin');
+    // Filtra empresas (Admins)
+    const empresasPendentes = users.filter(u => !u.approved && u.role === 'admin');
+    const empresasAtivas = users.filter(u => u.approved && u.role === 'admin');
 
     // Tabela Pendentes
     const tPendentes = document.getElementById('tabelaEmpresasPendentes');
     if (tPendentes) {
-        tPendentes.querySelector('tbody').innerHTML = pendentes.map(u => `
+        tPendentes.querySelector('tbody').innerHTML = empresasPendentes.map(u => `
             <tr>
                 <td>${u.email}</td>
                 <td>${new Date(u.createdAt).toLocaleDateString()}</td>
@@ -2377,15 +2260,56 @@ function renderSuperAdminDashboard(users) {
         `).join('') || '<tr><td colspan="3">Nenhuma empresa pendente.</td></tr>';
     }
 
-    // Tabela Ativos
+    // Tabela Ativas (Com senha, data e sub-menu)
     const tAtivos = document.getElementById('tabelaEmpresasAtivas');
     if (tAtivos) {
-        tAtivos.querySelector('tbody').innerHTML = ativos.map(u => `
+        // Atualiza cabeçalho para novas colunas
+        tAtivos.querySelector('thead').innerHTML = `
             <tr>
-                <td>${u.email} <small>(${u.company})</small></td>
-                <td>${new Date(u.createdAt).toLocaleDateString()}</td>
-                <td><button class="btn-danger btn-mini" onclick="toggleUserApproval('${u.uid}', true)">BLOQUEAR</button></td>
+                <th>EMPRESA / EMAIL</th>
+                <th>SENHA (REF)</th>
+                <th>DATA CAD.</th>
+                <th>ULT. ALT.</th>
+                <th>AÇÕES</th>
             </tr>
-        `).join('') || '<tr><td colspan="3">Nenhuma empresa ativa.</td></tr>';
+        `;
+
+        tAtivos.querySelector('tbody').innerHTML = empresasAtivas.map(u => {
+            // Busca funcionários desta empresa
+            const funcionarios = users.filter(sub => sub.company === u.company && sub.role !== 'admin');
+            
+            const subLista = funcionarios.length > 0 
+                ? `<div style="margin-top:5px; padding:5px; background:#f0f0f0; border-radius:4px; font-size:0.8rem;">
+                     <strong>FUNCIONÁRIOS:</strong>
+                     <ul style="padding-left:15px; margin-top:3px;">
+                        ${funcionarios.map(f => `
+                            <li style="margin-bottom:2px;">
+                                ${f.name} (${f.role}) - ${f.email} 
+                                <button class="btn-mini" title="RESETAR SENHA" onclick="resetUserPassword('${f.email}')"><i class="fas fa-key"></i></button>
+                            </li>
+                        `).join('')}
+                     </ul>
+                   </div>`
+                : `<div style="font-size:0.8rem; color:#888;">SEM FUNCIONÁRIOS</div>`;
+
+            const lastUpdate = u.lastUpdate ? new Date(u.lastUpdate).toLocaleString() : '-';
+            
+            return `
+            <tr style="vertical-align:top;">
+                <td>
+                    <strong>${u.email}</strong><br>
+                    <small>DOMÍNIO: ${u.company}</small>
+                    ${subLista}
+                </td>
+                <td>${u.password || '***'}</td>
+                <td>${new Date(u.createdAt).toLocaleDateString()}</td>
+                <td>${lastUpdate}</td>
+                <td>
+                    <button class="btn-danger btn-mini" onclick="toggleUserApproval('${u.uid}', true)" title="BLOQUEAR"><i class="fas fa-ban"></i></button>
+                    <button class="btn-warning btn-mini" onclick="resetUserPassword('${u.email}')" title="RESETAR SENHA"><i class="fas fa-key"></i></button>
+                </td>
+            </tr>
+            `;
+        }).join('') || '<tr><td colspan="5">Nenhuma empresa ativa.</td></tr>';
     }
 }
