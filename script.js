@@ -30,7 +30,6 @@ const APP_CACHE = {
 // --- VARIÁVEIS GLOBAIS DE CONTROLE DE ACESSO ---
 window.IS_READ_ONLY = false;
 window.CURRENT_USER = null;
-let currentDate = new Date(); // Variável global para o calendário
 
 // Carrega dados do Cache Local (Síncrono para a UI não travar)
 function loadData(key) {
@@ -1635,37 +1634,6 @@ function fullSystemReset() {
     }
 }
 window.fullSystemReset = fullSystemReset;
-
-window.editOperacaoItem = function(id) {
-    if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA.");
-    
-    const op = loadData(DB_KEYS.OPERACOES).find(o => o.id === id);
-    if (!op) return;
-    document.getElementById('operacaoData').value = op.data || '';
-    document.getElementById('selectMotoristaOperacao').value = op.motoristaId || '';
-    document.getElementById('selectVeiculoOperacao').value = op.veiculoPlaca || '';
-    document.getElementById('selectContratanteOperacao').value = op.contratanteCNPJ || '';
-    document.getElementById('selectAtividadeOperacao').value = op.atividadeId || '';
-    document.getElementById('operacaoFaturamento').value = op.faturamento || '';
-    document.getElementById('operacaoAdiantamento').value = op.adiantamento || '';
-    document.getElementById('operacaoComissao').value = op.comissao || '';
-    document.getElementById('operacaoCombustivel').value = op.combustivel || '';
-    document.getElementById('operacaoPrecoLitro').value = op.precoLitro || '';
-    document.getElementById('operacaoDespesas').value = op.despesas || '';
-    document.getElementById('operacaoKmRodado').value = op.kmRodado || '';
-    
-    // Status
-    const isAgendada = op.status === 'AGENDADA';
-    document.getElementById('operacaoIsAgendamento').checked = isAgendada;
-
-    window._operacaoAjudantesTempList = (op.ajudantes || []).map(a => ({
-        id: a.id,
-        diaria: Number(a.diaria) || 0
-    }));
-    renderAjudantesAdicionadosList();
-    document.getElementById('operacaoId').value = op.id;
-    alert('DADOS DA OPERAÇÃO CARREGADOS NO FORMULÁRIO. ALTERE E SALVE PARA ATUALIZAR.');
-};
 // =============================================================================
 // 16. INICIALIZAÇÃO E SINCRONIZAÇÃO (REALTIME)
 // =============================================================================
@@ -1680,22 +1648,6 @@ function setupRealtimeListeners() {
 
     if (window.CURRENT_USER && window.CURRENT_USER.company) {
         const companyDomain = window.CURRENT_USER.company;
-        
-        // BLINDAGEM: Se for funcionário, carrega APENAS o essencial para evitar erro de memória/processamento
-        if (window.CURRENT_USER.role !== 'admin') {
-             const essentialKeys = [DB_KEYS.OPERACOES, DB_KEYS.MINHA_EMPRESA, DB_KEYS.MOTORISTAS, DB_KEYS.AJUDANTES, DB_KEYS.VEICULOS, DB_KEYS.CONTRATANTES, DB_KEYS.ATIVIDADES];
-             essentialKeys.forEach(key => {
-                onSnapshot(doc(db, 'companies', companyDomain, 'data', key), (docSnap) => {
-                    if (docSnap.exists()) {
-                        APP_CACHE[key] = docSnap.data().items || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
-                    }
-                    updateUI(); // Atualiza a tela do funcionário
-                });
-             });
-             return;
-        }
-
-        // Se for Admin, carrega tudo
         keys.forEach(key => {
             onSnapshot(doc(db, 'companies', companyDomain, 'data', key), (docSnap) => {
                 if (docSnap.exists()) {
@@ -1713,28 +1665,26 @@ function setupRealtimeListeners() {
 }
 
 function updateUI() {
-    if (!window.CURRENT_USER || window.CURRENT_USER.email === 'admin@logimaster.com') return;
+    if (window.CURRENT_USER && window.CURRENT_USER.email === 'admin@logimaster.com') return;
 
-    // 1. Carrega dados básicos (Dropdowns) para todos
     populateAllSelects();
+    renderOperacaoTable();
+    renderDespesasTable();
+    updateDashboardStats();
+    renderCharts();
+    checkAndShowReminders();
+    renderMinhaEmpresaInfo();
     
-    // 2. Lógica Exclusiva de ADMIN (Pesada)
-    if (window.CURRENT_USER.role === 'admin') {
-        renderOperacaoTable();
-        renderDespesasTable();
-        updateDashboardStats();
-        if (typeof renderCharts === 'function') renderCharts();
-        checkAndShowReminders();
-        
-        if (typeof renderCalendar === 'function') {
-            renderCalendar(currentDate);
-        }
-        
-        renderCheckinsTable(); // Admin vê tabela de gestão
-    } 
-    // 3. Lógica Exclusiva de FUNCIONÁRIO (Leve)
-    else {
-        renderCheckinsTable(); // Funcionário vê apenas a lista de cards
+    // CORREÇÃO: Chama o calendário garantindo que a função existe
+    if (typeof renderCalendar === 'function') {
+        renderCalendar(currentDate);
+    }
+    
+    renderCheckinsTable(); 
+    
+    // Atualiza apenas se for funcionário
+    if (window.CURRENT_USER && (window.CURRENT_USER.role === 'motorista' || window.CURRENT_USER.role === 'ajudante')) {
+         // Se houver lógica específica de UI para funcionário, entra aqui
     }
 
     if (window.IS_READ_ONLY && window.enableReadOnlyMode) {
@@ -1772,14 +1722,17 @@ function setupInputFormattingListeners() {
 }
 
 // =============================================================================
-// 17. RECIBOS E RELATÓRIOS
+// 17. RECIBOS
 // =============================================================================
 
 function parseCompositeId(value) {
     if (!value) return null;
     const parts = value.split(':');
     if (parts.length !== 2) return null;
-    return { type: parts[0], id: parts[1] };
+    return {
+        type: parts[0],
+        id: parts[1]
+    };
 }
 
 function getPersonByComposite(value) {
@@ -1872,10 +1825,14 @@ function setupReciboListeners() {
                 <p class="recibo-total">TOTAL: ${formatCurrency(totalValorRecibo)} (${totalExtenso})</p>
                 <div style="margin: 20px 0; font-size: 0.85rem; text-align: justify; line-height: 1.4;">
                     <p>DECLARO TER RECEBIDO A IMPORTÂNCIA SUPRAMENCIONADA, DANDO PLENA, RASA E GERAL QUITAÇÃO PELOS SERVIÇOS PRESTADOS NO PERÍODO INDICADO.</p>
+                    <p style="margin-top:8px;">
+                        <strong>FUNDAMENTAÇÃO LEGAL:</strong> DECLARAMOS QUE A PRESTAÇÃO DESTES SERVIÇOS OCORREU DE FORMA AUTÔNOMA E EVENTUAL, SEM SUBORDINAÇÃO JURÍDICA, NÃO CONFIGURANDO VÍNCULO EMPREGATÍCIO.
+                        ESTA RELAÇÃO REGE-SE PELO <strong>CÓDIGO CIVIL BRASILEIRO (ARTS. 593 A 609)</strong> E, NO CASO DE TRANSPORTE DE CARGAS, PELA <strong>LEI Nº 11.442/2007 (TRANSPORTADOR AUTÔNOMO DE CARGAS)</strong>.
+                    </p>
                 </div>
                 <div class="recibo-assinaturas" style="display:flex;gap:20px;margin-top:20px;">
                     <div><p>_____________________________________</p><p>${pessoaNome}</p><p>RECEBEDOR</p></div>
-                    <div><p>_____________________________________</p><p>${empresa.razaoSocial || 'EMPRESA'}</p><p>PAGADOR</p></div>
+                    <div><p>_____________________________________</p><p>${empresa.razaoSocial || 'EMPRESA'}</p><p>${empresa.cnpj ? formatCPF_CNPJ(empresa.cnpj) : ''}</p><p>PAGADOR</p></div>
                 </div>
             </div>
         `;
@@ -1886,8 +1843,24 @@ function setupReciboListeners() {
             const element = document.getElementById('reciboContent').querySelector('.recibo-template');
             const nomeArq = `RECIBO_${pessoaNome.split(' ')[0]}_${inicio}.pdf`;
             if (typeof html2pdf !== 'undefined') {
-                html2pdf().from(element).set({ margin: 10, filename: nomeArq }).save();
-            } else alert('LIB HTML2PDF NÃO ENCONTRADA.');
+                html2pdf().from(element).set({
+                    margin: 10,
+                    filename: nomeArq,
+                    image: {
+                        type: 'jpeg',
+                        quality: 0.98
+                    },
+                    html2canvas: {
+                        scale: 2,
+                        scrollY: 0
+                    },
+                    jsPDF: {
+                        unit: 'mm',
+                        format: 'a4',
+                        orientation: 'portrait'
+                    }
+                }).from(element).save();
+            } else alert('LIB HTML2PDF NÃO ENCONTRADA PARA GERAR PDF. INSTALE A LIB OU BAIXE MANUALMENTE.');
         };
     });
 }
@@ -1899,7 +1872,9 @@ function setupReciboListeners() {
 function exportDataBackup() {
     const data = {};
     Object.values(DB_KEYS).forEach(k => data[k] = loadData(k));
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json'
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -1908,36 +1883,61 @@ function exportDataBackup() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    alert('BACKUP GERADO.');
+    alert('BACKUP GERADO COM SUCESSO. O DOWNLOAD INICIARÁ EM BREVE.');
 }
 
 function importDataBackup(event) {
     if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA.");
+    
     const file = event.target.files[0];
     if (!file) return;
-    if(!confirm("ATENÇÃO: IMPORTAR SUBSTITUIRÁ DADOS ATUAIS. CONTINUAR?")) { event.target.value = ''; return; }
+
+    if(!confirm("ATENÇÃO: IMPORTAR UM BACKUP IRÁ SUBSTITUIR TODOS OS DADOS ATUAIS PELOS DO ARQUIVO.\n\nDESEJA CONTINUAR?")) {
+        event.target.value = ''; 
+        return;
+    }
+
     const reader = new FileReader();
     reader.onload = async function(e) {
         try {
             const data = JSON.parse(e.target.result);
             const promises = [];
+            
             Object.keys(data).forEach(k => {
-                if (Object.values(DB_KEYS).includes(k)) promises.push(saveData(k, data[k]));
+                if (Object.values(DB_KEYS).includes(k)) {
+                    promises.push(saveData(k, data[k]));
+                }
             });
+
             if (promises.length > 0) {
+                alert('PROCESSANDO ARQUIVO E ENVIANDO PARA O BANCO DE DADOS... AGUARDE.');
                 await Promise.all(promises);
-                alert('BACKUP IMPORTADO! RECARREGANDO...');
-                window.location.reload();
-            } else alert('ARQUIVO INVÁLIDO.');
-        } catch (err) { console.error(err); alert('ERRO AO IMPORTAR.'); }
+                alert('BACKUP IMPORTADO E SINCRONIZADO COM O BANCO DE DADOS COM SUCESSO!');
+                window.location.reload(); 
+            } else {
+                alert('O ARQUIVO NÃO PARECE CONTER DADOS VÁLIDOS DO LOGIMASTER.');
+            }
+
+        } catch (err) {
+            console.error(err);
+            alert('ERRO AO IMPORTAR O BACKUP. VERIFIQUE SE O ARQUIVO ESTÁ CORRETO.');
+        }
     };
     reader.readAsText(file);
 }
 
 class ConverterMoeda {
-    constructor(valor) { this.valor = Math.abs(Number(valor) || 0); }
-    getExtenso() { return `${this.valor.toFixed(2).replace('.',',')} REAIS`; }
+    constructor(valor) {
+        this.valor = Math.abs(Number(valor) || 0);
+    }
+    getExtenso() {
+        return `${this.valor.toFixed(2).replace('.',',')} REAIS`;
+    }
 }
+
+// =============================================================================
+// 19. GESTÃO DE RELATÓRIOS (PDF) E OUTROS
+// =============================================================================
 
 function gerarRelatorio(e) {
     if (e) e.preventDefault();
@@ -1967,9 +1967,12 @@ function gerarRelatorio(e) {
         return true;
     });
 
-    let receitaTotal = 0; let custoMotoristas = 0; let custoAjudantes = 0;
-    let custoPedagios = 0; let custoDieselEstimadoTotal = 0; let kmTotalNoPeriodo = 0;
-    
+    let receitaTotal = 0;
+    let custoMotoristas = 0;
+    let custoAjudantes = 0;
+    let custoPedagios = 0;
+    let custoDieselEstimadoTotal = 0;
+    let kmTotalNoPeriodo = 0;
     ops.forEach(op => {
         receitaTotal += (op.faturamento || 0);
         custoMotoristas += (op.comissao || 0);
@@ -1982,29 +1985,80 @@ function gerarRelatorio(e) {
     const gastosTotais = custoMotoristas + custoAjudantes + custoDieselEstimadoTotal + custoPedagios + custoGeral;
     const lucroLiquido = receitaTotal - gastosTotais;
 
+    const textoWhatsapp = `*RELATÓRIO LOGIMASTER*\nPERÍODO: ${ini.toLocaleDateString('pt-BR')} A ${fim.toLocaleDateString('pt-BR')}\n\n*FINANCEIRO:*\nRECEITA: ${formatCurrency(receitaTotal)}\nGASTOS: ${formatCurrency(gastosTotais)}\n*LUCRO LÍQUIDO: ${formatCurrency(lucroLiquido)}*\n\n*DETALHES:*\nCOMBUSTÍVEL (ESTIMADO): ${formatCurrency(custoDieselEstimadoTotal)}\nMOTORISTAS/AJUDANTES: ${formatCurrency(custoMotoristas + custoAjudantes)}\nOUTROS: ${formatCurrency(custoPedagios + custoGeral)}\n\nKM TOTAL: ${kmTotalNoPeriodo.toFixed(1)} KM`;
+    const btnZap = document.getElementById('btnWhatsappReport');
+    if (btnZap) {
+        btnZap.href = `https://wa.me/?text=${encodeURIComponent(textoWhatsapp)}`;
+        btnZap.style.display = 'inline-flex';
+    }
+
     const html = `
         <div class="report-container">
-            <h3 style="text-align:center;border-bottom:1px solid #ccc;padding-bottom:10px;">RELATÓRIO GERENCIAL</h3>
-            <p style="text-align:center;">${ini.toLocaleDateString('pt-BR')} A ${fim.toLocaleDateString('pt-BR')}</p>
-            <div style="margin-top:20px;">
-                <p>RECEITA: <strong>${formatCurrency(receitaTotal)}</strong></p>
-                <p style="color:var(--danger-color)">GASTOS TOTAIS: <strong>${formatCurrency(gastosTotais)}</strong></p>
-                <hr>
-                <h3 style="color:${lucroLiquido>=0?'green':'red'}">LUCRO: ${formatCurrency(lucroLiquido)}</h3>
+            <div style="text-align:center; margin-bottom:20px; border-bottom:2px solid #eee; padding-bottom:10px;">
+                <h3>RELATÓRIO GERENCIAL LOGIMASTER</h3>
+                <p>PERÍODO: ${ini.toLocaleDateString('pt-BR')} A ${fim.toLocaleDateString('pt-BR')}</p>
             </div>
-        </div>`;
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:20px;">
+                <div style="background:#e8f5e9; padding:15px; border-radius:8px; border:1px solid #c8e6c9;">
+                    <h4>RECEITA TOTAL</h4>
+                    <h2 style="color:var(--success-color);">${formatCurrency(receitaTotal)}</h2>
+                </div>
+                <div style="background:#ffebee; padding:15px; border-radius:8px; border:1px solid #ffcdd2;">
+                    <h4>GASTOS TOTAIS (OPERACIONAIS)</h4>
+                    <h2 style="color:var(--danger-color);">${formatCurrency(gastosTotais)}</h2>
+                </div>
+            </div>
+            <h4 style="border-left:4px solid var(--primary-color); padding-left:10px; margin-bottom:10px; background:#f0f0f0; padding:5px;">DETALHAMENTO DE GASTOS</h4>
+            <table class="report-table" style="width:100%; border-collapse:collapse; font-size:0.9rem; margin-bottom:20px;">
+                <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">COMBUSTÍVEL (CUSTO OPERACIONAL ESTIMADO)</td><td style="text-align:right; color:var(--danger-color); font-weight:bold;">${formatCurrency(custoDieselEstimadoTotal)}</td></tr>
+                <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">PAGAMENTO MOTORISTAS (COMISSÕES)</td><td style="text-align:right; color:var(--danger-color);">${formatCurrency(custoMotoristas)}</td></tr>
+                <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">PAGAMENTO AJUDANTES (DIÁRIAS)</td><td style="text-align:right; color:var(--danger-color);">${formatCurrency(custoAjudantes)}</td></tr>
+                <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">PEDÁGIOS</td><td style="text-align:right; color:var(--danger-color);">${formatCurrency(custoPedagios)}</td></tr>
+                <tr style="border-bottom:1px solid #ddd;"><td style="padding:8px;">DESPESAS GERAIS/ADMINISTRATIVAS</td><td style="text-align:right; color:var(--danger-color);">${formatCurrency(custoGeral)}</td></tr>
+            </table>
+            <div style="margin-top:20px; padding:15px; background:#e0f7fa; border-radius:8px; text-align:center; border:1px solid #b2ebf2;">
+                <h3>RESULTADO LÍQUIDO: <span style="color:${lucroLiquido>=0?'green':'red'}">${formatCurrency(lucroLiquido)}</span></h3>
+            </div>
+            <div style="margin-top:30px; font-size:0.7rem; text-align:center; color:#aaa;">GERADO POR LOGIMASTER EM ${new Date().toLocaleString()}</div>
+        </div>
+    `;
     document.getElementById('reportContent').innerHTML = html;
     document.getElementById('reportResults').style.display = 'block';
 }
-window.gerarRelatorio = gerarRelatorio;
+window.gerarRelatorio = gerarRelatorio; // Expor globalmente
 
+function exportReportToPDF() {
+    const element = document.getElementById('reportResults');
+    if (!element || element.style.display === 'none') return alert('GERE UM RELATÓRIO PRIMEIRO.');
+    html2pdf().set({
+        margin: 10,
+        filename: 'RELATORIO_LOGIMASTER.pdf',
+        image: {
+            type: 'jpeg',
+            quality: 0.98
+        },
+        html2canvas: {
+            scale: 2,
+            scrollY: 0
+        },
+        jsPDF: {
+            unit: 'mm',
+            format: 'a4',
+            orientation: 'portrait'
+        }
+    }).from(element).save();
+}
+window.exportReportToPDF = exportReportToPDF;
+
+// --- RELATÓRIO DE COBRANÇA ---
 function gerarRelatorioCobranca() {
     const iniVal = document.getElementById('dataInicioRelatorio').value;
     const fimVal = document.getElementById('dataFimRelatorio').value;
     const conCnpj = document.getElementById('selectContratanteRelatorio').value;
+
     if (!iniVal || !fimVal) return alert('SELECIONE AS DATAS.');
-    if (!conCnpj) return alert('SELECIONE UMA CONTRATANTE.');
-    
+    if (!conCnpj) return alert('SELECIONE UMA CONTRATANTE PARA GERAR O RELATÓRIO DE COBRANÇA.');
+
     const ini = new Date(iniVal + 'T00:00:00');
     const fim = new Date(fimVal + 'T23:59:59');
     const contratante = getContratante(conCnpj);
@@ -2013,20 +2067,186 @@ function gerarRelatorioCobranca() {
         return d >= ini && d <= fim && op.contratanteCNPJ === conCnpj;
     }).sort((a, b) => new Date(a.data) - new Date(b.data));
 
-    if (ops.length === 0) return alert('NENHUMA OPERAÇÃO ENCONTRADA.');
-    let totalSaldo = 0; let rows = '';
+    if (ops.length === 0) return alert('NENHUMA OPERAÇÃO ENCONTRADA PARA ESTE CLIENTE NO PERÍODO.');
+
+    let totalSaldo = 0; 
+    let rows = '';
     ops.forEach(op => {
+        const d = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
+        const vec = op.veiculoPlaca;
+        const ativ = getAtividade(op.atividadeId)?.nome || '-';
         const adiant = op.adiantamento || 0;
         const saldo = (op.faturamento || 0) - adiant;
+
         totalSaldo += saldo;
-        rows += `<tr><td>${new Date(op.data).toLocaleDateString('pt-BR')}</td><td>${op.veiculoPlaca}</td><td>${formatCurrency(saldo)}</td></tr>`;
+
+        rows += `
+            <tr style="border-bottom:1px solid #ddd;">
+                <td style="padding:8px;">${d}</td>
+                <td style="padding:8px;">${vec}</td>
+                <td style="padding:8px;">${ativ}</td>
+                <td style="padding:8px; text-align:right;">${formatCurrency(op.faturamento)}</td>
+                <td style="padding:8px; text-align:right; color: var(--danger-color);">${formatCurrency(adiant)}</td>
+                <td style="padding:8px; text-align:right; font-weight:bold;">${formatCurrency(saldo)}</td>
+            </tr>
+        `;
     });
-    
-    const html = `<div class="report-container"><h3>COBRANÇA: ${contratante.razaoSocial}</h3><table>${rows}</table><h3>TOTAL: ${formatCurrency(totalSaldo)}</h3></div>`;
+    const empresa = getMinhaEmpresa();
+    const nomeEmpresa = empresa.razaoSocial || 'MINHA EMPRESA';
+    const cnpjEmpresa = empresa.cnpj ? formatCPF_CNPJ(empresa.cnpj) : '';
+
+    const textoZap = `*RELATÓRIO DE COBRANÇA - ${nomeEmpresa}*\nCLIENTE: ${contratante.razaoSocial}\nPERÍODO: ${ini.toLocaleDateString('pt-BR')} A ${fim.toLocaleDateString('pt-BR')}\n\nTOTAL LÍQUIDO A PAGAR: *${formatCurrency(totalSaldo)}*`;
+    const btnZap = document.getElementById('btnWhatsappReport');
+    if (btnZap) {
+        btnZap.href = `https://wa.me/?text=${encodeURIComponent(textoZap)}`;
+        btnZap.style.display = 'inline-flex';
+    }
+
+    const html = `
+        <div class="report-container" style="max-width:800px; padding:40px;">
+            <div style="text-align:center; margin-bottom:30px; border-bottom:2px solid var(--primary-color); padding-bottom:20px;">
+                <h2 style="color:var(--primary-color); margin-bottom:5px;">RELATÓRIO DE COBRANÇA</h2>
+                <p style="font-size:1.1rem; font-weight:bold;">${nomeEmpresa}</p>
+                <p style="font-size:0.9rem;">${cnpjEmpresa}</p>
+            </div>
+            <div style="margin-bottom:30px; background:#f9f9f9; padding:15px; border-radius:8px;">
+                <p><strong>CLIENTE:</strong> ${contratante.razaoSocial}</p>
+                <p><strong>CNPJ:</strong> ${formatCPF_CNPJ(contratante.cnpj)}</p>
+                <p><strong>PERÍODO:</strong> ${ini.toLocaleDateString('pt-BR')} A ${fim.toLocaleDateString('pt-BR')}</p>
+            </div>
+            <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+                <thead style="background:#eee;">
+                    <tr>
+                        <th style="padding:10px; text-align:left;">DATA</th>
+                        <th style="padding:10px; text-align:left;">VEÍCULO</th>
+                        <th style="padding:10px; text-align:left;">ATIVIDADE</th>
+                        <th style="padding:10px; text-align:right;">TOTAL</th>
+                        <th style="padding:10px; text-align:right;">ADIANT.</th>
+                        <th style="padding:10px; text-align:right;">SALDO</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+                <tfoot>
+                    <tr style="background:#e0f2f1; font-weight:bold;">
+                        <td colspan="5" style="padding:10px; text-align:right;">TOTAL A PAGAR:</td>
+                        <td style="padding:10px; text-align:right; font-size:1.2rem; color:var(--primary-color);">${formatCurrency(totalSaldo)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+            <div style="margin-top:40px; text-align:center; font-size:0.9rem; color:#777;"><p>DOCUMENTO PARA FINS DE CONFERÊNCIA E COBRANÇA.</p><p>DATA DE EMISSÃO: ${new Date().toLocaleDateString('pt-BR')}</p></div>
+        </div>
+    `;
     document.getElementById('reportContent').innerHTML = html;
     document.getElementById('reportResults').style.display = 'block';
 }
 window.gerarRelatorioCobranca = gerarRelatorioCobranca;
+
+// =============================================================================
+// 20. LISTENERS E ATRIBUIÇÕES GLOBAIS
+// =============================================================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Listeners do form de relatório
+    const formRel = document.getElementById('formRelatorio');
+    if(formRel) formRel.addEventListener('submit', gerarRelatorio);
+
+    document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.cadastro-tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const tab = btn.getAttribute('data-tab');
+            document.querySelectorAll('.cadastro-form').forEach(f => f.classList.remove('active'));
+            const el = document.getElementById(tab);
+            if (el) el.classList.add('active');
+        });
+    });
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', () => {
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            item.classList.add('active');
+            const page = item.getAttribute('data-page');
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            const el = document.getElementById(page);
+            if (el) el.classList.add('active');
+            if (page === 'graficos') renderCharts();
+        });
+    });
+
+    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    if (mobileMenuBtn) {
+        mobileMenuBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+        });
+    }
+    if (overlay) {
+        overlay.addEventListener('click', () => {
+            sidebar.classList.remove('active');
+            overlay.classList.remove('active');
+        });
+    }
+
+    setupFormHandlers();
+    setupInputFormattingListeners();
+    setupReciboListeners();
+});
+
+window.addEventListener('click', function(event) {
+    const viewModal = document.getElementById('viewItemModal');
+    const opModal = document.getElementById('operationDetailsModal');
+    const addAjModal = document.getElementById('modalAdicionarAjudante');
+    const checkinModal = document.getElementById('modalCheckin');
+    const checkinConfirmModal = document.getElementById('modalCheckinConfirm');
+    
+    if (event.target === viewModal) viewModal.style.display = 'none';
+    if (event.target === opModal) opModal.style.display = 'none';
+    if (event.target === addAjModal) addAjModal.style.display = 'none';
+    if (event.target === checkinModal) checkinModal.style.display = 'none';
+    if (event.target === checkinConfirmModal) checkinConfirmModal.style.display = 'none';
+});
+
+window.viewCadastro = viewCadastro;
+window.editCadastroItem = editCadastroItem;
+window.deleteItem = deleteItem;
+window.renderOperacaoTable = renderOperacaoTable;
+window.renderDespesasTable = renderDespesasTable;
+window.exportDataBackup = exportDataBackup;
+window.importDataBackup = importDataBackup;
+window.viewOperacaoDetails = viewOperacaoDetails;
+window.renderCharts = renderCharts;
+
+window.editOperacaoItem = function(id) {
+    if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA.");
+    
+    const op = loadData(DB_KEYS.OPERACOES).find(o => o.id === id);
+    if (!op) return;
+    document.getElementById('operacaoData').value = op.data || '';
+    document.getElementById('selectMotoristaOperacao').value = op.motoristaId || '';
+    document.getElementById('selectVeiculoOperacao').value = op.veiculoPlaca || '';
+    document.getElementById('selectContratanteOperacao').value = op.contratanteCNPJ || '';
+    document.getElementById('selectAtividadeOperacao').value = op.atividadeId || '';
+    document.getElementById('operacaoFaturamento').value = op.faturamento || '';
+    document.getElementById('operacaoAdiantamento').value = op.adiantamento || '';
+    document.getElementById('operacaoComissao').value = op.comissao || '';
+    document.getElementById('operacaoCombustivel').value = op.combustivel || '';
+    document.getElementById('operacaoPrecoLitro').value = op.precoLitro || '';
+    document.getElementById('operacaoDespesas').value = op.despesas || '';
+    document.getElementById('operacaoKmRodado').value = op.kmRodado || '';
+    
+    // Status
+    const isAgendada = op.status === 'AGENDADA';
+    document.getElementById('operacaoIsAgendamento').checked = isAgendada;
+
+    window._operacaoAjudantesTempList = (op.ajudantes || []).map(a => ({
+        id: a.id,
+        diaria: Number(a.diaria) || 0
+    }));
+    renderAjudantesAdicionadosList();
+    document.getElementById('operacaoId').value = op.id;
+    alert('DADOS DA OPERAÇÃO CARREGADOS NO FORMULÁRIO. ALTERE E SALVE PARA ATUALIZAR.');
+};
 
 // =============================================================================
 // 21. AUTH & LOGOUT
@@ -2048,7 +2268,7 @@ window.logoutSystem = function() {
 };
 
 // =============================================================================
-// 22. INICIALIZAÇÃO DO SISTEMA POR CARGO (CORRIGIDO E BLINDADO)
+// 22. INICIALIZAÇÃO DO SISTEMA POR CARGO
 // =============================================================================
 
 window.initSystemByRole = function(user) {
@@ -2058,13 +2278,12 @@ window.initSystemByRole = function(user) {
     document.getElementById('menu-admin').style.display = 'none';
     document.getElementById('menu-super-admin').style.display = 'none';
     document.getElementById('menu-employee').style.display = 'none';
-    document.querySelectorAll('.page').forEach(p => { p.classList.remove('active'); p.style.display = 'none'; });
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
 
     // 1. SUPER ADMIN (Gestor do Logimaster)
     if (user.email === 'admin@logimaster.com') {
         document.getElementById('menu-super-admin').style.display = 'block';
         document.getElementById('super-admin').classList.add('active');
-        document.getElementById('super-admin').style.display = 'block';
         setupSuperAdmin(); 
         return;
     }
@@ -2085,20 +2304,21 @@ window.initSystemByRole = function(user) {
     // 3. ADMIN DA EMPRESA
     if (user.role === 'admin') {
         document.getElementById('menu-admin').style.display = 'block';
-        document.getElementById('home').style.display = 'block'; // Mostra Dashboard
         document.getElementById('home').classList.add('active');
         setupRealtimeListeners();
         setupCompanyUserManagement();
+        setTimeout(renderCheckinsTable, 1500); 
     }
 
     // 4. FUNCIONÁRIO (Motorista ou Ajudante)
     if (user.role === 'motorista' || user.role === 'ajudante') {
         document.getElementById('menu-employee').style.display = 'block';
-        document.getElementById('employee-home').style.display = 'block'; // Mostra Tela Func
         document.getElementById('employee-home').classList.add('active');
         
         window.IS_READ_ONLY = true; 
         setupRealtimeListeners(); 
+        
+        // setupEmployeeProfile(); // Função não definida no original, removido.
         
         if (user.role === 'motorista') {
             const driverFields = document.getElementById('driverCheckinFields');
@@ -2108,11 +2328,18 @@ window.initSystemByRole = function(user) {
     
     window.enableReadOnlyMode = function() {
         window.IS_READ_ONLY = true;
-        
+        console.log("MODO APENAS LEITURA ATIVADO");
+
         const formIdsToDisable = [
-            'formOperacao', 'formDespesaGeral', 'formMotorista', 'formVeiculo', 
-            'formContratante', 'formAjudante', 'formAtividade', 'formMinhaEmpresa', 
-            'modalAdicionarAjudante'
+            'formOperacao', 
+            'formDespesaGeral', 
+            'formMotorista', 
+            'formVeiculo', 
+            'formContratante', 
+            'formAjudante', 
+            'formAtividade', 
+            'formMinhaEmpresa',
+            'modalAdicionarAjudante' 
         ];
 
         formIdsToDisable.forEach(id => {
@@ -2121,23 +2348,32 @@ window.initSystemByRole = function(user) {
                 const elements = form.querySelectorAll('input, select, textarea, button');
                 elements.forEach(el => {
                     const isInCheckinModal = el.closest('#formCheckinConfirm');
-                    if (!isInCheckinModal && !el.classList.contains('close-btn') && !el.classList.contains('btn-secondary')) {
-                       el.disabled = true;
+                    if (!isInCheckinModal) {
+                         if (!el.classList.contains('close-btn') && !el.classList.contains('btn-secondary')) {
+                           el.disabled = true;
+                        }
                     }
                 });
             }
         });
 
         const selectorsToHide = [
-            'button[type="submit"]', '.btn-danger', '.btn-warning', '#inputImportBackup',    
-            'label[for="inputImportBackup"]', 'button[onclick="exportDataBackup()"]', '#modalAjudanteAddBtn'
+            'button[type="submit"]', 
+            '.btn-danger',           
+            '.btn-warning',          
+            '#inputImportBackup',    
+            'label[for="inputImportBackup"]',
+            'button[onclick="exportDataBackup()"]',
+            '#modalAjudanteAddBtn'
         ];
 
         selectorsToHide.forEach(sel => {
             document.querySelectorAll(sel).forEach(el => {
                 const isInCheckinModal = el.closest('#formCheckinConfirm');
-                if (!isInCheckinModal && !el.textContent.includes('SAIR') && !el.textContent.includes('FECHAR')) {
-                    el.style.display = 'none';
+                if (!isInCheckinModal) {
+                    if (!el.textContent.includes('SAIR') && !el.textContent.includes('FECHAR')) {
+                        el.style.display = 'none';
+                    }
                 }
             });
         });
@@ -2147,7 +2383,7 @@ window.initSystemByRole = function(user) {
 };
 
 // =============================================================================
-// 23. GESTÃO DE USUÁRIOS DA EMPRESA (COM EXCLUSÃO TOTAL)
+// 23. GESTÃO DE USUÁRIOS DA EMPRESA (COM EXCLUSÃO)
 // =============================================================================
 
 function setupCompanyUserManagement() {
@@ -2164,69 +2400,29 @@ function setupCompanyUserManagement() {
         console.error("Erro ao buscar usuários da empresa:", error);
     });
 
-    window.toggleCompanyUserApproval = async (uid, currentStatus, role, name, email) => {
+    window.toggleCompanyUserApproval = async (uid, currentStatus, role, name) => {
         try {
             await updateDoc(doc(db, "users", uid), {
                 approved: !currentStatus
             });
-            // Se aprovou (!currentStatus será true), tenta vincular/criar perfil
-            if (!currentStatus) await createLinkedProfile(uid, role, name, email);
-            alert("Status atualizado!");
+            // Não precisa recriar perfil aqui pois o cadastro inteligente já cuidou disso
+            alert("Status do usuário atualizado!");
         } catch (e) {
             console.error(e);
-            alert("Erro ao atualizar.");
+            alert("Erro ao atualizar usuário.");
         }
     };
 
-    window.deleteCompanyUser = async (uid, role) => {
-        if(!confirm("TEM CERTEZA? ISSO REMOVERÁ O ACESSO E DESVINCULARÁ O PERFIL DO SISTEMA.")) return;
+    window.deleteCompanyUser = async (uid) => {
+        if(!confirm("TEM CERTEZA QUE DESEJA EXCLUIR ESTE FUNCIONÁRIO? ELE PERDERÁ O ACESSO IMEDIATAMENTE.")) return;
         try {
-            // 1. Apaga o perfil de acesso (Login bloqueado)
             await deleteDoc(doc(db, "users", uid));
-
-            // 2. Remove o vínculo nos cadastros (Limpa 'uid' e 'email' em Motoristas/Ajudantes)
-            if (role === 'motorista' || role === 'ajudante') {
-                let key = role === 'motorista' ? DB_KEYS.MOTORISTAS : DB_KEYS.AJUDANTES;
-                let arr = loadData(key).slice();
-                
-                // Encontra o perfil vinculado a este UID
-                const idx = arr.findIndex(item => item.uid === uid);
-                
-                if (idx >= 0) {
-                    delete arr[idx].uid;   // Remove o UID
-                    delete arr[idx].email; // Remove o email de login (libera para recadastro futuro)
-                    await saveData(key, arr);
-                }
-            }
-
-            alert("Funcionário excluído e desvinculado com sucesso.");
+            alert("Funcionário excluído com sucesso.");
         } catch (e) {
             console.error(e);
-            alert("Erro ao excluir. Verifique permissões.");
+            alert("Erro ao excluir funcionário. Verifique permissões.");
         }
     };
-}
-
-async function createLinkedProfile(uid, role, name, email) {
-    let key = null;
-    if (role === 'motorista') key = DB_KEYS.MOTORISTAS;
-    else if (role === 'ajudante') key = DB_KEYS.AJUDANTES;
-    if (!key) return;
-
-    let arr = loadData(key).slice();
-    const idx = arr.findIndex(i => i.nome === name || (email && i.email === email));
-    
-    if (idx >= 0) {
-        arr[idx].uid = uid;
-        arr[idx].email = email;
-        await saveData(key, arr);
-    } else {
-        const newId = arr.length ? Math.max(...arr.map(i => Number(i.id))) + 1 : (role === 'motorista' ? 101 : 201);
-        const newProfile = { id: newId, uid: uid, email: email, nome: name, documento: '', telefone: '', pix: '' };
-        if (role === 'motorista') { newProfile.cnh = ''; newProfile.validadeCNH = ''; newProfile.categoriaCNH = ''; }
-        arr.push(newProfile);
-        await saveData(key, arr);
-    }
 }
 
 function renderCompanyUserTables(users) {
@@ -2245,8 +2441,8 @@ function renderCompanyUserTables(users) {
                 <td>${u.role.toUpperCase()}</td>
                 <td>${new Date(u.createdAt).toLocaleDateString()}</td>
                 <td>
-                    <button class="btn-success btn-mini" onclick="toggleCompanyUserApproval('${u.uid}', false, '${u.role}', '${u.name}', '${u.email}')">APROVAR</button>
-                    <button class="btn-danger btn-mini" onclick="deleteCompanyUser('${u.uid}', '${u.role}')"><i class="fas fa-trash"></i></button>
+                    <button class="btn-success btn-mini" onclick="toggleCompanyUserApproval('${u.uid}', false, '${u.role}', '${u.name}')">APROVAR</button>
+                    <button class="btn-danger btn-mini" onclick="deleteCompanyUser('${u.uid}')"><i class="fas fa-trash"></i></button>
                 </td>
             </tr>
         `).join('') || '<tr><td colspan="5" style="text-align:center;">Nenhum pendente.</td></tr>';
@@ -2261,8 +2457,8 @@ function renderCompanyUserTables(users) {
                 <td>${u.role.toUpperCase()}</td>
                 <td style="color:green;font-weight:bold;">ATIVO</td>
                 <td>
-                    <button class="btn-danger btn-mini" onclick="toggleCompanyUserApproval('${u.uid}', true, '${u.role}', '${u.name}', '${u.email}')">BLOQUEAR</button>
-                    <button class="btn-danger btn-mini" onclick="deleteCompanyUser('${u.uid}', '${u.role}')"><i class="fas fa-trash"></i></button>
+                    <button class="btn-danger btn-mini" onclick="toggleCompanyUserApproval('${u.uid}', true, '${u.role}', '${u.name}')">BLOQUEAR</button>
+                    <button class="btn-danger btn-mini" onclick="deleteCompanyUser('${u.uid}')"><i class="fas fa-trash"></i></button>
                 </td>
             </tr>
         `).join('') || '<tr><td colspan="5" style="text-align:center;">Nenhum ativo.</td></tr>';
@@ -2270,50 +2466,103 @@ function renderCompanyUserTables(users) {
 }
 
 // =============================================================================
-// 24. SUPER ADMIN E LISTENERS FINAIS
+// 24. SUPER ADMIN LOGIC
 // =============================================================================
 
 function setupSuperAdmin() {
     if (!window.dbRef) return;
     const { db, collection, onSnapshot, updateDoc, doc, auth, sendPasswordResetEmail } = window.dbRef;
+
     onSnapshot(collection(db, "users"), (snapshot) => {
         const users = [];
         snapshot.forEach(doc => users.push(doc.data()));
         renderSuperAdminDashboard(users);
     });
+
     window.toggleUserApproval = async (uid, currentStatus) => {
-        try { await updateDoc(doc(db, "users", uid), { approved: !currentStatus }); alert("Status atualizado!"); } 
-        catch (e) { alert("Erro ao atualizar."); }
+        try {
+            await updateDoc(doc(db, "users", uid), { approved: !currentStatus });
+            alert("Status atualizado!");
+        } catch (e) {
+            console.error(e);
+            alert("Erro ao atualizar status.");
+        }
     };
+
     window.resetUserPassword = async (email) => {
-        if(!confirm(`ENVIAR RESET PARA ${email}?`)) return;
-        try { await sendPasswordResetEmail(auth, email); alert("EMAIL ENVIADO!"); } 
-        catch (e) { alert("ERRO AO ENVIAR."); }
+        if(!confirm(`ENVIAR E-MAIL DE REDEFINIÇÃO DE SENHA PARA ${email}?`)) return;
+        try {
+            await sendPasswordResetEmail(auth, email);
+            alert("E-MAIL DE REDEFINIÇÃO ENVIADO COM SUCESSO!");
+        } catch (e) {
+            console.error(e);
+            alert("ERRO AO ENVIAR E-MAIL. VERIFIQUE SE O E-MAIL É VÁLIDO.");
+        }
     };
 }
+
 function renderSuperAdminDashboard(users) {
-     const empresasPendentes = users.filter(u => !u.approved && u.role === 'admin');
-     const tPendentes = document.getElementById('tabelaEmpresasPendentes');
-     if(tPendentes) tPendentes.querySelector('tbody').innerHTML = empresasPendentes.map(u => `<tr><td>${u.email}</td><td>${new Date(u.createdAt).toLocaleDateString()}</td><td><button class="btn-success btn-mini" onclick="toggleUserApproval('${u.uid}', false)">APROVAR</button></td></tr>`).join('');
-     
-     const empresasAtivas = users.filter(u => u.approved && u.role === 'admin');
-     const tAtivos = document.getElementById('tabelaEmpresasAtivas');
-     if(tAtivos) {
-        tAtivos.querySelector('tbody').innerHTML = empresasAtivas.map(u => `<tr><td>${u.email}</td><td>${u.password||'***'}</td><td>${new Date(u.createdAt).toLocaleDateString()}</td><td><button class="btn-danger btn-mini" onclick="toggleUserApproval('${u.uid}', true)"><i class="fas fa-ban"></i></button><button class="btn-warning btn-mini" onclick="resetUserPassword('${u.email}')"><i class="fas fa-key"></i></button></td></tr>`).join('');
-     }
+    const empresasPendentes = users.filter(u => !u.approved && u.role === 'admin');
+    const empresasAtivas = users.filter(u => u.approved && u.role === 'admin');
+
+    const tPendentes = document.getElementById('tabelaEmpresasPendentes');
+    if (tPendentes) {
+        tPendentes.querySelector('tbody').innerHTML = empresasPendentes.map(u => `
+            <tr>
+                <td>${u.email}</td>
+                <td>${new Date(u.createdAt).toLocaleDateString()}</td>
+                <td><button class="btn-success btn-mini" onclick="toggleUserApproval('${u.uid}', false)">APROVAR</button></td>
+            </tr>
+        `).join('') || '<tr><td colspan="3">Nenhuma empresa pendente.</td></tr>';
+    }
+
+    const tAtivos = document.getElementById('tabelaEmpresasAtivas');
+    if (tAtivos) {
+        tAtivos.querySelector('thead').innerHTML = `
+            <tr>
+                <th>EMPRESA / EMAIL</th>
+                <th>SENHA (REF)</th>
+                <th>DATA CAD.</th>
+                <th>ULT. ALT.</th>
+                <th>AÇÕES</th>
+            </tr>
+        `;
+
+        tAtivos.querySelector('tbody').innerHTML = empresasAtivas.map(u => {
+            const funcionarios = users.filter(sub => sub.company === u.company && sub.role !== 'admin');
+            
+            const subLista = funcionarios.length > 0 
+                ? `<div style="margin-top:5px; padding:5px; background:#f0f0f0; border-radius:4px; font-size:0.8rem;">
+                     <strong>FUNCIONÁRIOS:</strong>
+                     <ul style="padding-left:15px; margin-top:3px;">
+                        ${funcionarios.map(f => `
+                            <li style="margin-bottom:2px;">
+                                ${f.name} (${f.role}) - ${f.email} 
+                                <button class="btn-mini" title="RESETAR SENHA" onclick="resetUserPassword('${f.email}')"><i class="fas fa-key"></i></button>
+                            </li>
+                        `).join('')}
+                     </ul>
+                   </div>`
+                : `<div style="font-size:0.8rem; color:#888;">SEM FUNCIONÁRIOS</div>`;
+
+            const lastUpdate = u.lastUpdate ? new Date(u.lastUpdate).toLocaleString() : '-';
+            
+            return `
+            <tr style="vertical-align:top;">
+                <td>
+                    <strong>${u.email}</strong><br>
+                    <small>DOMÍNIO: ${u.company}</small>
+                    ${subLista}
+                </td>
+                <td>${u.password || '***'}</td>
+                <td>${new Date(u.createdAt).toLocaleDateString()}</td>
+                <td>${lastUpdate}</td>
+                <td>
+                    <button class="btn-danger btn-mini" onclick="toggleUserApproval('${u.uid}', true)" title="BLOQUEAR"><i class="fas fa-ban"></i></button>
+                    <button class="btn-warning btn-mini" onclick="resetUserPassword('${u.email}')" title="RESETAR SENHA"><i class="fas fa-key"></i></button>
+                </td>
+            </tr>
+            `;
+        }).join('') || '<tr><td colspan="5">Nenhuma empresa ativa.</td></tr>';
+    }
 }
-
-// Inicialização Global
-document.addEventListener('DOMContentLoaded', () => {
-    const formRel = document.getElementById('formRelatorio');
-    if(formRel) formRel.addEventListener('submit', gerarRelatorio);
-    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('sidebarOverlay');
-    if (mobileMenuBtn) mobileMenuBtn.addEventListener('click', () => { sidebar.classList.toggle('active'); overlay.classList.toggle('active'); });
-    if (overlay) overlay.addEventListener('click', () => { sidebar.classList.remove('active'); overlay.classList.remove('active'); });
-
-    setupFormHandlers();
-    setupInputFormattingListeners();
-    setupReciboListeners();
-});
