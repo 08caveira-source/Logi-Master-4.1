@@ -467,12 +467,16 @@
                   if (userSnap.exists()) {
                       const userData = userSnap.data();
                       
+                      // Correção: Garante que a variável global tenha o mesmo nome esperado pelo script.js
+                      window.CURRENT_USER = userData; 
+                      
                       // Atualiza interface do usuário
                       document.body.style.display = 'flex';
                       document.getElementById('userEmailDisplay').textContent = userData.email.toUpperCase();
                       document.getElementById('userRoleDisplay').textContent = userData.role.toUpperCase();
 
                       // Inicializa o sistema de forma segura (Aguarda script.js carregar)
+                      // Verifica a cada 100ms se a função initSystemByRole já existe
                       const initInterval = setInterval(() => {
                           if (window.initSystemByRole) {
                               clearInterval(initInterval);
