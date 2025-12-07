@@ -1648,6 +1648,23 @@ function setupRealtimeListeners() {
 
     if (window.CURRENT_USER && window.CURRENT_USER.company) {
         const companyDomain = window.CURRENT_USER.company;
+        
+        // Se for funcionário, carrega apenas o necessário para evitar peso e erro
+        if (window.CURRENT_USER.role !== 'admin') {
+             // Funcionários precisam ver Operações (para check-in) e Minha Empresa
+             const essentialKeys = [DB_KEYS.OPERACOES, DB_KEYS.MINHA_EMPRESA, DB_KEYS.MOTORISTAS, DB_KEYS.AJUDANTES, DB_KEYS.VEICULOS, DB_KEYS.CONTRATANTES, DB_KEYS.ATIVIDADES];
+             essentialKeys.forEach(key => {
+                onSnapshot(doc(db, 'companies', companyDomain, 'data', key), (docSnap) => {
+                    if (docSnap.exists()) {
+                        APP_CACHE[key] = docSnap.data().items || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
+                    }
+                    updateUI();
+                });
+             });
+             return;
+        }
+
+        // Se for Admin, carrega tudo
         keys.forEach(key => {
             onSnapshot(doc(db, 'companies', companyDomain, 'data', key), (docSnap) => {
                 if (docSnap.exists()) {
@@ -1665,22 +1682,34 @@ function setupRealtimeListeners() {
 }
 
 function updateUI() {
-    if (window.CURRENT_USER && window.CURRENT_USER.email === 'admin@logimaster.com') return;
+    // Proteção contra erro de carregamento
+    if (!window.CURRENT_USER) return;
+    if (window.CURRENT_USER.email === 'admin@logimaster.com') return;
 
+    // 1. Carrega dados básicos (Dropdowns) para todos
     populateAllSelects();
-    renderOperacaoTable();
-    renderDespesasTable();
-    updateDashboardStats();
-    renderCharts();
-    checkAndShowReminders();
     renderMinhaEmpresaInfo();
-    
-    if (typeof renderCalendar === 'function') {
-        renderCalendar(currentDate);
+
+    // 2. Lógica Exclusiva de ADMIN
+    if (window.CURRENT_USER.role === 'admin') {
+        renderOperacaoTable();
+        renderDespesasTable();
+        updateDashboardStats();
+        renderCharts();
+        checkAndShowReminders();
+        
+        if (typeof renderCalendar === 'function') {
+            renderCalendar(currentDate);
+        }
+        
+        renderCheckinsTable(); // Admin vê tabela de gestão
+    } 
+    // 3. Lógica Exclusiva de FUNCIONÁRIO (Motorista/Ajudante)
+    else {
+        // Garante que o funcionário veja seus check-ins pendentes
+        renderCheckinsTable(); 
     }
-    
-    renderCheckinsTable(); 
-    
+
     if (window.IS_READ_ONLY && window.enableReadOnlyMode) {
         window.enableReadOnlyMode();
     }
@@ -1716,7 +1745,7 @@ function setupInputFormattingListeners() {
 }
 
 // =============================================================================
-// 17. RECIBOS
+// 17. RECIBOS E RELATÓRIOS
 // =============================================================================
 
 function parseCompositeId(value) {
@@ -1948,7 +1977,7 @@ function gerarRelatorioCobranca() {
     const conCnpj = document.getElementById('selectContratanteRelatorio').value;
     if (!iniVal || !fimVal) return alert('SELECIONE AS DATAS.');
     if (!conCnpj) return alert('SELECIONE UMA CONTRATANTE.');
-    // Lógica completa de cobrança aqui (mantida da versão anterior, resumida para caber no bloco se necessário, mas funcionalmente igual)
+    
     const ini = new Date(iniVal + 'T00:00:00');
     const fim = new Date(fimVal + 'T23:59:59');
     const contratante = getContratante(conCnpj);
@@ -1995,7 +2024,6 @@ function setupCompanyUserManagement() {
             await updateDoc(doc(db, "users", uid), {
                 approved: !currentStatus
             });
-            // Se aprovou (!currentStatus será true), tenta vincular/criar perfil
             if (!currentStatus) await createLinkedProfile(uid, role, name, email);
             alert("Status atualizado!");
         } catch (e) {
@@ -2004,29 +2032,20 @@ function setupCompanyUserManagement() {
         }
     };
 
-    // --- FUNÇÃO CORRIGIDA DE EXCLUSÃO ---
     window.deleteCompanyUser = async (uid, role) => {
         if(!confirm("TEM CERTEZA? ISSO REMOVERÁ O ACESSO E DESVINCULARÁ O PERFIL DO SISTEMA.")) return;
         try {
-            // 1. Apaga o perfil de acesso (Login bloqueado)
             await deleteDoc(doc(db, "users", uid));
-
-            // 2. Remove o vínculo nos cadastros (Limpa 'uid' e 'email' em Motoristas/Ajudantes)
             if (role === 'motorista' || role === 'ajudante') {
                 let key = role === 'motorista' ? DB_KEYS.MOTORISTAS : DB_KEYS.AJUDANTES;
                 let arr = loadData(key).slice();
-                
-                // Encontra o perfil vinculado a este UID
                 const idx = arr.findIndex(item => item.uid === uid);
-                
                 if (idx >= 0) {
-                    console.log("Desvinculando perfil de:", arr[idx].nome);
-                    delete arr[idx].uid;   // Remove o UID
-                    delete arr[idx].email; // Remove o email de login (libera para recadastro futuro)
+                    delete arr[idx].uid;
+                    delete arr[idx].email; 
                     await saveData(key, arr);
                 }
             }
-
             alert("Funcionário excluído e desvinculado com sucesso.");
         } catch (e) {
             console.error(e);
@@ -2145,3 +2164,110 @@ document.addEventListener('DOMContentLoaded', () => {
     setupInputFormattingListeners();
     setupReciboListeners();
 });
+
+// =============================================================================
+// 21. AUTH & LOGOUT (MOVIDO PARA O FIM PARA GARANTIR ESCOPO)
+// =============================================================================
+
+window.logoutSystem = function() {
+    if (window.dbRef && window.dbRef.auth && window.dbRef.signOut) {
+        if(confirm("Deseja realmente sair do sistema?")) {
+            window.dbRef.signOut(window.dbRef.auth).then(() => {
+                window.location.href = "login.html";
+            }).catch((error) => {
+                console.error("Erro ao sair:", error);
+                alert("Erro ao tentar sair.");
+            });
+        }
+    } else {
+        window.location.href = "login.html";
+    }
+};
+
+// =============================================================================
+// 22. INICIALIZAÇÃO DO SISTEMA POR CARGO (CRÍTICO)
+// =============================================================================
+
+window.initSystemByRole = function(user) {
+    window.CURRENT_USER = user;
+    console.log("INICIALIZANDO SISTEMA PARA:", user.email, "FUNÇÃO:", user.role);
+
+    // 1. Reseta UI
+    const menuAdmin = document.getElementById('menu-admin');
+    const menuSuper = document.getElementById('menu-super-admin');
+    const menuEmp = document.getElementById('menu-employee');
+    if(menuAdmin) menuAdmin.style.display = 'none';
+    if(menuSuper) menuSuper.style.display = 'none';
+    if(menuEmp) menuEmp.style.display = 'none';
+    
+    document.querySelectorAll('.page').forEach(p => {
+        p.classList.remove('active');
+        p.style.display = 'none'; // Garante que tudo suma
+    });
+
+    // 2. SUPER ADMIN
+    if (user.email === 'admin@logimaster.com') {
+        if(menuSuper) menuSuper.style.display = 'block';
+        const pSuper = document.getElementById('super-admin');
+        if(pSuper) { pSuper.classList.add('active'); pSuper.style.display = 'block'; }
+        setupSuperAdmin(); 
+        return;
+    }
+
+    // 3. APROVAÇÃO
+    if (!user.approved) {
+        document.querySelector('.content').innerHTML = `
+            <div class="card" style="text-align:center; padding:50px; margin-top:50px;">
+                <h2 style="color:var(--warning-color);"><i class="fas fa-clock"></i> CONTA EM ANÁLISE</h2>
+                <p>Sua conta (${user.email}) foi criada com sucesso, mas aguarda aprovação do gestor.</p>
+                <p style="margin-top:10px;">Entre em contato com o administrador.</p>
+                <button onclick="logoutSystem()" class="btn-danger" style="margin-top:20px;">SAIR</button>
+            </div>
+        `;
+        return;
+    }
+
+    // 4. ADMIN DA EMPRESA
+    if (user.role === 'admin') {
+        if(menuAdmin) menuAdmin.style.display = 'block';
+        const pHome = document.getElementById('home');
+        if(pHome) { pHome.classList.add('active'); pHome.style.display = 'block'; } // Admin vê Calendar
+        setupRealtimeListeners();
+        setupCompanyUserManagement();
+    }
+
+    // 5. FUNCIONÁRIO (Motorista ou Ajudante)
+    if (user.role === 'motorista' || user.role === 'ajudante') {
+        if(menuEmp) menuEmp.style.display = 'block';
+        const pEmpHome = document.getElementById('employee-home');
+        if(pEmpHome) { pEmpHome.classList.add('active'); pEmpHome.style.display = 'block'; } // Func vê Checkin
+        
+        window.IS_READ_ONLY = true; 
+        setupRealtimeListeners(); 
+        
+        if (user.role === 'motorista') {
+            const driverFields = document.getElementById('driverCheckinFields');
+            if(driverFields) driverFields.style.display = 'grid';
+        }
+    }
+    
+    // Função de Read-Only
+    window.enableReadOnlyMode = function() {
+        window.IS_READ_ONLY = true;
+        const formIdsToDisable = ['formOperacao', 'formDespesaGeral', 'formMotorista', 'formVeiculo', 'formContratante', 'formAjudante', 'formAtividade', 'formMinhaEmpresa', 'modalAdicionarAjudante'];
+        formIdsToDisable.forEach(id => {
+            const form = document.getElementById(id);
+            if (form) {
+                form.querySelectorAll('input, select, textarea, button').forEach(el => {
+                    if (!el.closest('#formCheckinConfirm') && !el.classList.contains('close-btn') && !el.classList.contains('btn-secondary')) el.disabled = true;
+                });
+            }
+        });
+        const selectorsToHide = ['button[type="submit"]', '.btn-danger', '.btn-warning', '#inputImportBackup', 'label[for="inputImportBackup"]', 'button[onclick="exportDataBackup()"]', '#modalAjudanteAddBtn'];
+        selectorsToHide.forEach(sel => {
+            document.querySelectorAll(sel).forEach(el => {
+                if (!el.closest('#formCheckinConfirm') && !el.textContent.includes('SAIR') && !el.textContent.includes('FECHAR')) el.style.display = 'none';
+            });
+        });
+    };
+};
