@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        /* Estilos específicos para a alternância de formulários */
         .toggle-link {
             display: block;
             text-align: center;
@@ -17,12 +16,8 @@
             text-decoration: underline;
             font-size: 0.9rem;
         }
-        .toggle-link:hover {
-            color: var(--secondary-color);
-        }
-        .hidden {
-            display: none;
-        }
+        .toggle-link:hover { color: var(--secondary-color); }
+        .hidden { display: none; }
     </style>
 </head>
 <body class="login-body">
@@ -43,11 +38,9 @@
                 <input type="password" id="password" required placeholder="********">
             </div>
             
-            <div id="loginError" style="color:var(--danger-color); text-align:center; margin-bottom:15px; display:none; font-weight:bold;">
-                E-MAIL OU SENHA INCORRETOS.
-            </div>
+            <div id="loginError" style="color:var(--danger-color); text-align:center; margin-bottom:15px; display:none; font-weight:bold;"></div>
 
-            <button type="submit" class="btn-primary" style="width:100%; justify-content:center; padding:15px;">
+            <button type="submit" id="btnLogin" class="btn-primary" style="width:100%; justify-content:center; padding:15px;">
                 ENTRAR NO SISTEMA
             </button>
             
@@ -83,11 +76,9 @@
                 <input type="password" id="regPassword" required placeholder="Mínimo 6 caracteres">
             </div>
             
-            <div id="regError" style="color:var(--danger-color); text-align:center; margin-bottom:15px; display:none; font-weight:bold;">
-                ERRO AO CRIAR CONTA.
-            </div>
+            <div id="regError" style="color:var(--danger-color); text-align:center; margin-bottom:15px; display:none; font-weight:bold;"></div>
 
-            <button type="submit" class="btn-primary" style="width:100%; justify-content:center; padding:15px; background-color: var(--secondary-color);">
+            <button type="submit" id="btnRegister" class="btn-primary" style="width:100%; justify-content:center; padding:15px; background-color: var(--secondary-color);">
                 CADASTRAR
             </button>
             
@@ -95,7 +86,7 @@
         </form>
 
         <div style="text-align:center; margin-top:20px; font-size:0.8rem; color:#777;">
-            &copy; LOGIMASTER 2025 - V2.0
+            &copy; LOGIMASTER 2025 - V2.1
         </div>
     </div>
 
@@ -117,22 +108,57 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // Verifica estado de autenticação
+        // --- VERIFICAÇÃO DE ESTADO ---
         onAuthStateChanged(auth, async (user) => {
             if (user) {
-                // Se já estiver logado, verifica se tem perfil no banco
-                // Se não tiver (pode acontecer em erros de cadastro), desloga
-                const userDoc = await getDoc(doc(db, "users", user.uid));
-                if (userDoc.exists()) {
-                    window.location.href = "index.html";
-                } else {
-                    console.log("Usuário sem perfil no banco. Deslogando.");
+                try {
+                    const userRef = doc(db, "users", user.uid);
+                    const userSnap = await getDoc(userRef);
+
+                    if (userSnap.exists()) {
+                        // Perfil existe, pode entrar
+                        window.location.href = "index.html";
+                    } else {
+                        // === CORREÇÃO: CRIAÇÃO AUTOMÁTICA PARA ADMIN ===
+                        if (user.email === 'admin@logimaster.com') {
+                            console.log("Recriando perfil do Super Admin...");
+                            await setDoc(userRef, {
+                                uid: user.uid,
+                                name: "SUPER ADMIN",
+                                email: user.email,
+                                role: "admin",
+                                company: "logimaster.com",
+                                approved: true,
+                                createdAt: new Date().toISOString()
+                            });
+                            window.location.href = "index.html";
+                        } else {
+                            // Usuário comum sem perfil: Erro no cadastro antigo
+                            console.error("Perfil não encontrado no banco.");
+                            alert("ERRO: Seu usuário não possui um perfil de acesso configurado. Cadastre-se novamente ou contate o suporte.");
+                            await signOut(auth);
+                            resetButtons();
+                        }
+                    }
+                } catch (e) {
+                    console.error("Erro ao verificar perfil:", e);
+                    alert("Erro de conexão ao verificar perfil.");
                     await signOut(auth);
+                    resetButtons();
                 }
+            } else {
+                // Não logado, libera botões
+                resetButtons();
             }
         });
 
-        // Alternar entre Login e Cadastro
+        function resetButtons() {
+            const btnLogin = document.getElementById('btnLogin');
+            const btnRegister = document.getElementById('btnRegister');
+            if(btnLogin) { btnLogin.disabled = false; btnLogin.innerHTML = 'ENTRAR NO SISTEMA'; }
+            if(btnRegister) { btnRegister.disabled = false; btnRegister.innerHTML = 'CADASTRAR'; }
+        }
+
         window.toggleForms = function() {
             document.getElementById('formLogin').classList.toggle('hidden');
             document.getElementById('formRegister').classList.toggle('hidden');
@@ -140,31 +166,29 @@
             document.getElementById('regError').style.display = 'none';
         }
 
-        // Lógica de LOGIN
+        // --- LOGIN ---
         document.getElementById('formLogin').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const errorDiv = document.getElementById('loginError');
-            const btn = e.target.querySelector('button');
+            const btn = document.getElementById('btnLogin');
 
             try {
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ENTRANDO...';
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> VERIFICANDO...';
                 btn.disabled = true;
                 errorDiv.style.display = 'none';
-
                 await signInWithEmailAndPassword(auth, email, password);
-                // Redirecionamento automático pelo onAuthStateChanged
+                // Redirecionamento acontece no onAuthStateChanged
             } catch (error) {
-                console.error("Erro login:", error);
+                console.error(error);
                 errorDiv.style.display = 'block';
                 errorDiv.textContent = "LOGIN FALHOU: Verifique e-mail e senha.";
-                btn.innerHTML = 'ENTRAR NO SISTEMA';
-                btn.disabled = false;
+                resetButtons();
             }
         });
 
-        // Lógica de CADASTRO (Novo)
+        // --- CADASTRO ---
         document.getElementById('formRegister').addEventListener('submit', async (e) => {
             e.preventDefault();
             const name = document.getElementById('regName').value.toUpperCase();
@@ -172,9 +196,8 @@
             const password = document.getElementById('regPassword').value;
             const role = document.getElementById('regRole').value;
             const errorDiv = document.getElementById('regError');
-            const btn = e.target.querySelector('button');
+            const btn = document.getElementById('btnRegister');
 
-            // Extrair domínio (empresa)
             const domain = email.split('@')[1];
             if (!domain) {
                 errorDiv.style.display = 'block';
@@ -183,45 +206,36 @@
             }
 
             try {
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> CRIANDO CONTA...';
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> CRIANDO...';
                 btn.disabled = true;
                 errorDiv.style.display = 'none';
 
-                // 1. Criar usuário no Auth
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
 
-                // 2. Definir se é aprovado automaticamente
-                // O admin@logimaster.com é sempre aprovado e é Super Admin
-                let isApproved = false;
-                if (email === 'admin@logimaster.com') {
-                    isApproved = true;
-                }
+                // Auto-aprovação para o dono do sistema
+                const isApproved = (email === 'admin@logimaster.com');
 
-                // 3. Salvar perfil detalhado no Firestore
-                // A estrutura de pastas será baseada no domínio para separar empresas depois
                 await setDoc(doc(db, "users", user.uid), {
                     uid: user.uid,
                     name: name,
                     email: email,
-                    role: role, // admin, motorista, ajudante
-                    company: domain, // Ex: logimaster.com, regional.com
-                    approved: isApproved, // Precisa de aprovação do gestor (exceto o super admin)
+                    role: role,
+                    company: domain,
+                    approved: isApproved,
                     createdAt: new Date().toISOString()
                 });
 
-                alert("CONTA CRIADA COM SUCESSO! AGUARDE O DIRECIONAMENTO.");
-                // O redirecionamento ocorrerá pelo onAuthStateChanged
-
+                alert("CONTA CRIADA! AGUARDE O DIRECIONAMENTO.");
+                
             } catch (error) {
-                console.error("Erro cadastro:", error);
+                console.error(error);
                 errorDiv.style.display = 'block';
                 let msg = "Erro ao criar conta.";
-                if (error.code === 'auth/email-already-in-use') msg = "Este e-mail já está cadastrado.";
-                if (error.code === 'auth/weak-password') msg = "A senha deve ter pelo menos 6 caracteres.";
+                if (error.code === 'auth/email-already-in-use') msg = "E-mail já cadastrado.";
+                if (error.code === 'auth/weak-password') msg = "Senha muito fraca.";
                 errorDiv.textContent = msg;
-                btn.innerHTML = 'CADASTRAR';
-                btn.disabled = false;
+                resetButtons();
             }
         });
     </script>
