@@ -9,7 +9,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
-<body style="display:none;"> <div class="mobile-nav">
+<body style="display:none;"> 
+    <div class="mobile-nav">
         <button id="mobileMenuBtn"><i class="fas fa-bars"></i></button>
         <span class="logo-mobile">LOGI<span style="color:var(--primary-color);">MASTER</span></span>
     </div>
@@ -27,10 +28,8 @@
                 <li class="nav-item active" data-page="home"><i class="fas fa-calendar-alt"></i> DASHBOARD / CALENDÁRIO</li>
                 <li class="nav-item" data-page="graficos"><i class="fas fa-chart-pie"></i> GRÁFICOS</li>
                 <li class="nav-item" data-page="operacoes"><i class="fas fa-route"></i> LANÇAR OPERAÇÃO</li> 
-                <li class="nav-item" data-page="checkins-pendentes"><i class="fas fa-bell"></i> CHECK-INS <span id="badgeCheckins" style="background:red; color:white; padding:2px 6px; border-radius:10px; font-size:0.7rem; display:none;">0</span></li>
-                
+                <li class="nav-item" data-page="checkins-pendentes"><i class="fas fa-bell"></i> AGENDAMENTOS <span id="badgeCheckins" style="background:red; color:white; padding:2px 6px; border-radius:10px; font-size:0.7rem; display:none;">0</span></li>
                 <li class="nav-item" data-page="access-management"><i class="fas fa-users-cog"></i> GESTÃO DE ACESSO <span id="badgeAccess" style="background:orange; color:white; padding:2px 6px; border-radius:10px; font-size:0.7rem; display:none;">!</span></li>
-                
                 <li class="nav-item" data-page="despesas"><i class="fas fa-money-check-alt"></i> DESPESAS GERAIS</li> 
                 <li class="nav-item" data-page="cadastros"><i class="fas fa-truck"></i> CADASTROS</li>
                 <li class="nav-item" data-page="relatorios"><i class="fas fa-chart-bar"></i> RELATÓRIOS</li>
@@ -149,56 +148,46 @@
                                 <option value="">SELECIONE A CONTRATANTE...</option>
                             </select>
                         </div>
-                        
                         <div class="form-group">
                             <label for="selectAtividadeOperacao">ATIVIDADE DESENVOLVIDA:</label>
                             <select id="selectAtividadeOperacao" required>
                                 <option value="">SELECIONE A ATIVIDADE...</option>
                             </select>
                         </div>
-
                         <div class="form-group">
                             <label for="operacaoFaturamento">FATURAMENTO (R$):</label>
                             <input type="number" id="operacaoFaturamento" step="0.01" min="0">
                         </div>
-                        
                         <div class="form-group">
                             <label for="operacaoAdiantamento">ADIANTAMENTO RECEBIDO (R$):</label>
                             <input type="number" id="operacaoAdiantamento" step="0.01" min="0">
                         </div>
-
                         <div class="form-group">
                             <label for="operacaoComissao">COMISSÃO MOTORISTA (R$):</label>
                             <input type="number" id="operacaoComissao" step="0.01" min="0">
                         </div>
-                        
                         <div class="form-group">
                             <label for="operacaoCombustivel" style="color: var(--danger-color);"><i class="fas fa-gas-pump"></i> VALOR DO ABASTECIMENTO (R$):</label>
                             <input type="number" id="operacaoCombustivel" step="0.01" min="0">
                         </div>
-                        
                         <div class="form-group">
                             <label for="operacaoPrecoLitro">PREÇO DO LITRO (R$):</label>
                             <input type="number" id="operacaoPrecoLitro" step="0.001" min="0">
                         </div>
-
                         <div class="form-group">
                             <label for="operacaoDespesas">PEDÁGIOS (R$):</label>
                             <input type="number" id="operacaoDespesas" step="0.01" min="0">
                         </div>
-
                         <div class="form-group">
                             <label for="operacaoKmRodado">KM RODADO:</label>
                             <input type="number" id="operacaoKmRodado" min="0" step="any">
                         </div>
-
                         <div class="form-group">
                             <label for="selectAjudantesOperacao">ADICIONAR AJUDANTE (OPCIONAL):</label>
                             <select id="selectAjudantesOperacao">
                                 </select>
                             <small style="color:var(--secondary-color)">SELECIONE PARA ADICIONAR À LISTA.</small>
                         </div>
-
                         <div class="form-group" style="grid-column:1/-1;">
                             <label>AJUDANTES ADICIONADOS:</label>
                             <ul id="listaAjudantesAdicionados" class="simple-list"></ul>
@@ -257,7 +246,7 @@
             <h2>GESTÃO DE FUNCIONÁRIOS</h2>
             <div class="card">
                 <h3 style="color:var(--warning-color);"><i class="fas fa-user-clock"></i> PENDENTES DE APROVAÇÃO</h3>
-                <p style="font-size:0.9rem; color:#666; margin-bottom:15px;">AO APROVAR, O SISTEMA CRIARÁ AUTOMATICAMENTE O CADASTRO NA ABA CORRESPONDENTE.</p>
+                <p style="font-size:0.9rem; color:#666; margin-bottom:15px;">AO APROVAR, O SISTEMA VINCULARÁ O ACESSO AO CADASTRO EXISTENTE.</p>
                 <div class="table-responsive">
                     <table class="data-table" id="tabelaCompanyPendentes">
                         <thead><tr><th>NOME</th><th>EMAIL</th><th>FUNÇÃO</th><th>DATA CADASTRO</th><th>AÇÃO</th></tr></thead>
@@ -301,7 +290,6 @@
                             <label for="despesaGeralValor">VALOR TOTAL (R$):</label>
                             <input type="number" id="despesaGeralValor" step="0.01" min="0" required>
                         </div>
-                        
                         <div class="form-group">
                             <label for="despesaFormaPagamento">FORMA DE PAGAMENTO:</label>
                             <select id="despesaFormaPagamento">
@@ -313,7 +301,6 @@
                                 <option value="transferencia">TRANSFERÊNCIA</option>
                             </select>
                         </div>
-
                         <div class="form-group">
                             <label for="despesaModoPagamento">MODO DE PAGAMENTO:</label>
                             <select id="despesaModoPagamento" onchange="toggleDespesaParcelas()">
@@ -321,7 +308,6 @@
                                 <option value="parcelado">PARCELADO</option>
                             </select>
                         </div>
-
                         <div id="divDespesaParcelas" style="display:none; grid-column:1/-1; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:20px;">
                             <div class="form-group">
                                 <label for="despesaParcelas">QTD PARCELAS:</label>
@@ -343,7 +329,6 @@
                     </div>
                 </form>
             </div>
-
             <div class="card" style="margin-top: 20px;">
                 <h3>HISTÓRICO DE DESPESAS</h3>
                 <div class="table-responsive">
@@ -377,7 +362,7 @@
 
             <div id="motoristas" class="cadastro-form card active">
                 <h3>CADASTRO DE MOTORISTAS</h3>
-                <p style="color:var(--primary-color); font-size:0.9rem; margin-bottom:10px;">PREENCHA O E-MAIL PARA QUE O MOTORISTA POSSA ACESSAR O SISTEMA.</p>
+                <p style="color:var(--primary-color); font-size:0.9rem; margin-bottom:10px;">PREENCHA O E-MAIL PARA PERMITIR O LOGIN DO MOTORISTA.</p>
                 <form id="formMotorista">
                     <input type="hidden" id="motoristaId">
                     <div class="form-grid">
@@ -430,7 +415,7 @@
 
             <div id="ajudantes" class="cadastro-form card">
                 <h3>CADASTRO DE AJUDANTES</h3>
-                <p style="color:var(--primary-color); font-size:0.9rem; margin-bottom:10px;">PREENCHA O E-MAIL PARA QUE O AJUDANTE POSSA ACESSAR O SISTEMA.</p>
+                <p style="color:var(--primary-color); font-size:0.9rem; margin-bottom:10px;">PREENCHA O E-MAIL PARA PERMITIR O LOGIN DO AJUDANTE.</p>
                 <form id="formAjudante">
                     <input type="hidden" id="ajudanteId">
                     <div class="form-grid">
