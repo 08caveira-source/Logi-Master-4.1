@@ -704,42 +704,34 @@
       // Disponibiliza globalmente
       window.dbRef = { db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, updateDoc, query, where, deleteDoc, sendPasswordResetEmail };
       
-      // Função segura para iniciar o sistema apenas quando o script.js estiver pronto
-      function waitForSystem(userData) {
-          if (typeof window.initSystemByRole === 'function') {
-              console.log("Sistema pronto. Iniciando...");
-              window.initSystemByRole(userData);
-          } else {
-              console.log("Aguardando script principal...");
-              setTimeout(() => waitForSystem(userData), 200);
-          }
-      }
-
-      // Controle de Sessão e Roteamento
+      // Controle de Sessão e Roteamento Básico
       onAuthStateChanged(auth, async (user) => {
           if (user) {
+              // Busca dados detalhados do usuário (Role, Empresa, etc)
               try {
                   const userSnap = await getDoc(doc(db, "users", user.uid));
                   if (userSnap.exists()) {
                       const userData = userSnap.data();
                       
-                      // Salva dados globalmente
-                      window.CURRENT_USER = userData; 
+                      // Salva dados do usuário globalmente para o script.js usar
+                      window.currentUser = userData; 
                       
-                      // Mostra a tela
+                      // Atualiza UI básica
                       document.body.style.display = 'flex';
-                      
-                      // Preenche dados do menu lateral
-                      const emailDisplay = document.getElementById('userEmailDisplay');
-                      const roleDisplay = document.getElementById('userRoleDisplay');
-                      if(emailDisplay) emailDisplay.textContent = userData.email.toUpperCase();
-                      if(roleDisplay) roleDisplay.textContent = userData.role.toUpperCase();
+                      document.getElementById('userEmailDisplay').textContent = userData.email.toUpperCase();
+                      document.getElementById('userRoleDisplay').textContent = userData.role.toUpperCase();
 
-                      // Inicia o sistema com segurança
-                      waitForSystem(userData);
+                      // Inicializa o sistema (Chama função do script.js que vai gerenciar as telas)
+                      // Pequeno delay para garantir que script.js carregou
+                      setTimeout(() => {
+                          if (window.initSystemByRole) {
+                              window.initSystemByRole(userData);
+                          }
+                      }, 500);
 
                   } else {
-                      alert("Erro: Perfil não encontrado. Contate o suporte.");
+                      console.error("Perfil de usuário não encontrado no Firestore.");
+                      alert("Erro de perfil. Contate o suporte.");
                       signOut(auth);
                   }
               } catch (e) {
@@ -749,8 +741,10 @@
               window.location.replace("login.html");
           }
       });
-      
+
       console.log("Firebase Auth Listener Ativo.");
     </script>
+
+    <script src="script.js" defer></script>
 </body>
 </html>

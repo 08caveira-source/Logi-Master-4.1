@@ -2387,13 +2387,7 @@ window.initSystemByRole = function(user) {
 // =============================================================================
 
 function setupCompanyUserManagement() {
-    // CORREÇÃO: Adicionado setTimeout para esperar o dbRef estar pronto
-    if (!window.dbRef) {
-        setTimeout(setupCompanyUserManagement, 500);
-        return;
-    }
-    if (!window.CURRENT_USER) return;
-
+    if (!window.dbRef || !window.CURRENT_USER) return;
     const { db, collection, query, where, onSnapshot, updateDoc, doc, deleteDoc } = window.dbRef;
 
     const q = query(collection(db, "users"), where("company", "==", window.CURRENT_USER.company));
@@ -2411,6 +2405,7 @@ function setupCompanyUserManagement() {
             await updateDoc(doc(db, "users", uid), {
                 approved: !currentStatus
             });
+            // Não precisa recriar perfil aqui pois o cadastro inteligente já cuidou disso
             alert("Status do usuário atualizado!");
         } catch (e) {
             console.error(e);
@@ -2475,12 +2470,7 @@ function renderCompanyUserTables(users) {
 // =============================================================================
 
 function setupSuperAdmin() {
-    // CORREÇÃO: Adicionado setTimeout. Sem isso, a tela Super Admin carrega vazia.
-    if (!window.dbRef) {
-        setTimeout(setupSuperAdmin, 500);
-        return;
-    }
-
+    if (!window.dbRef) return;
     const { db, collection, onSnapshot, updateDoc, doc, auth, sendPasswordResetEmail } = window.dbRef;
 
     onSnapshot(collection(db, "users"), (snapshot) => {
