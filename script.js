@@ -343,7 +343,6 @@ function removeAjudanteFromOperation(id) {
     window._operacaoAjudantesTempList = (window._operacaoAjudantesTempList || []).filter(a => Number(a.id) !== Number(id));
     renderAjudantesAdicionadosList();
 }
-
 // =============================================================================
 // 7. POPULATE SELECTS (PREENCHER DROPDOWNS)
 // =============================================================================
@@ -484,8 +483,15 @@ function viewCadastro(key, id) {
     let html = '<div style="line-height:1.6;">';
     if (key === DB_KEYS.MOTORISTAS) {
         html += `<p><strong>NOME:</strong> ${item.nome}</p><p><strong>DOCUMENTO:</strong> ${item.documento}</p><p><strong>TELEFONE:</strong> ${item.telefone || ''}</p><p><strong>CNH:</strong> ${item.cnh || ''}</p><p><strong>VALIDADE CNH:</strong> ${item.validadeCNH ? new Date(item.validadeCNH+'T00:00:00').toLocaleDateString('pt-BR') : 'NÃO INFORMADA'}</p><p><strong>CATEGORIA CNH:</strong> ${item.categoriaCNH || ''}</p><p><strong>CURSOS ESPECIAIS:</strong> ${item.temCurso ? (item.cursoDescricao || 'SIM (NÃO ESPECIFICADO)') : 'NÃO'}</p><p style="display:flex;gap:8px;align-items:center;"><strong>PIX:</strong> <span>${item.pix || ''}</span> ${item.pix ? `<button class="btn-mini" title="COPIAR PIX" onclick="copyToClipboard('${item.pix}', false)"><i class="fas fa-copy"></i></button>` : ''}</p>`;
+        // Exibe o usuário criado automaticamente
+        if(item.email) {
+            html += `<hr><p style="color:var(--primary-color);"><strong>USUÁRIO DE ACESSO (LOGIN):</strong> ${item.email}</p>`;
+        }
     } else if (key === DB_KEYS.AJUDANTES) {
         html += `<p><strong>NOME:</strong> ${item.nome}</p><p><strong>DOCUMENTO:</strong> ${item.documento}</p><p><strong>TELEFONE:</strong> ${item.telefone || ''}</p><p><strong>ENDEREÇO:</strong> ${item.endereco || ''}</p><p style="display:flex;gap:8px;align-items:center;"><strong>PIX:</strong> <span>${item.pix || ''}</span> ${item.pix ? `<button class="btn-mini" title="COPIAR PIX" onclick="copyToClipboard('${item.pix}', false)"><i class="fas fa-copy"></i></button>` : ''}</p>`;
+        if(item.email) {
+            html += `<hr><p style="color:var(--primary-color);"><strong>USUÁRIO DE ACESSO (LOGIN):</strong> ${item.email}</p>`;
+        }
     } else if (key === DB_KEYS.VEICULOS) {
         html += `<p><strong>PLACA:</strong> ${item.placa}</p><p><strong>MODELO:</strong> ${item.modelo}</p><p><strong>ANO:</strong> ${item.ano || ''}</p><p><strong>RENAVAM:</strong> ${item.renavam || ''}</p><p><strong>CHASSI:</strong> ${item.chassi || ''}</p>`;
     } else if (key === DB_KEYS.CONTRATANTES) {
@@ -567,11 +573,37 @@ function setupFormHandlers() {
     if (formMotorista) {
         formMotorista.addEventListener('submit', (e) => {
             e.preventDefault();
+            
+            // Lógica de Criação de Usuário (Domínio/Email)
+            let emailGerado = null;
             let arr = loadData(DB_KEYS.MOTORISTAS).slice();
             const idHidden = document.getElementById('motoristaId').value;
+            const nomeInput = document.getElementById('motoristaNome').value.toUpperCase();
+
+            // Se for novo cadastro, solicita criação de usuário
+            if (!idHidden) {
+                const companyDomain = window.CURRENT_USER ? window.CURRENT_USER.company : 'logimaster.com';
+                const userLogin = prompt(`CRIAÇÃO DE ACESSO PARA ${nomeInput}:\n\nDefina o nome de usuário (ex: joao.silva) para que este motorista possa acessar o sistema.\nO domínio será @${companyDomain}.`);
+                
+                if (!userLogin) {
+                    alert("CADASTRO CANCELADO. É NECESSÁRIO DEFINIR UM USUÁRIO.");
+                    return;
+                }
+                // Remove espaços e acentos simples
+                const cleanLogin = userLogin.trim().toLowerCase().replace(/\s+/g, '.');
+                emailGerado = `${cleanLogin}@${companyDomain}`;
+            }
+
+            // Recupera objeto existente se for edição para manter o email antigo
+            let existingEmail = null;
+            if (idHidden) {
+                const existing = arr.find(a => String(a.id) === String(idHidden));
+                if(existing) existingEmail = existing.email;
+            }
+
             const obj = {
                 id: idHidden ? Number(idHidden) : (arr.length ? Math.max(...arr.map(a => a.id)) + 1 : 101),
-                nome: document.getElementById('motoristaNome').value.toUpperCase(),
+                nome: nomeInput,
                 documento: document.getElementById('motoristaDocumento').value.toUpperCase(),
                 telefone: document.getElementById('motoristaTelefone').value,
                 cnh: document.getElementById('motoristaCNH').value.toUpperCase(),
@@ -579,16 +611,25 @@ function setupFormHandlers() {
                 categoriaCNH: document.getElementById('motoristaCategoriaCNH').value,
                 temCurso: document.getElementById('motoristaTemCurso').value === 'sim',
                 cursoDescricao: document.getElementById('motoristaCursoDescricao').value.toUpperCase() || '',
-                pix: document.getElementById('motoristaPix').value || ''
+                pix: document.getElementById('motoristaPix').value || '',
+                email: emailGerado || existingEmail || '' // Salva o email gerado ou mantém o existente
             };
+            
             const idx = arr.findIndex(a => a.id === obj.id);
             if (idx >= 0) arr[idx] = obj;
             else arr.push(obj);
+            
             saveData(DB_KEYS.MOTORISTAS, arr);
+            
             formMotorista.reset();
             toggleCursoInput();
             document.getElementById('motoristaId').value = '';
-            alert('MOTORISTA SALVO.');
+            
+            if (emailGerado) {
+                alert(`MOTORISTA SALVO!\n\nUSUÁRIO CRIADO: ${emailGerado}\nINFORME ESTE E-MAIL AO MOTORISTA PARA O PRIMEIRO ACESSO (CRIAR SENHA).`);
+            } else {
+                alert('MOTORISTA ATUALIZADO.');
+            }
         });
     }
 
@@ -596,23 +637,54 @@ function setupFormHandlers() {
     if (formAjudante) {
         formAjudante.addEventListener('submit', (e) => {
             e.preventDefault();
+            
+            let emailGerado = null;
             let arr = loadData(DB_KEYS.AJUDANTES).slice();
             const idHidden = document.getElementById('ajudanteId').value;
+            const nomeInput = document.getElementById('ajudanteNome').value.toUpperCase();
+
+            // Se for novo cadastro, solicita criação de usuário
+            if (!idHidden) {
+                const companyDomain = window.CURRENT_USER ? window.CURRENT_USER.company : 'logimaster.com';
+                const userLogin = prompt(`CRIAÇÃO DE ACESSO PARA ${nomeInput}:\n\nDefina o nome de usuário (ex: pedro.souza) para que este ajudante possa acessar o sistema.\nO domínio será @${companyDomain}.`);
+                
+                if (!userLogin) {
+                    alert("CADASTRO CANCELADO. É NECESSÁRIO DEFINIR UM USUÁRIO.");
+                    return;
+                }
+                const cleanLogin = userLogin.trim().toLowerCase().replace(/\s+/g, '.');
+                emailGerado = `${cleanLogin}@${companyDomain}`;
+            }
+
+            let existingEmail = null;
+            if (idHidden) {
+                const existing = arr.find(a => String(a.id) === String(idHidden));
+                if(existing) existingEmail = existing.email;
+            }
+
             const obj = {
                 id: idHidden ? Number(idHidden) : (arr.length ? Math.max(...arr.map(a => a.id)) + 1 : 201),
-                nome: document.getElementById('ajudanteNome').value.toUpperCase(),
+                nome: nomeInput,
                 documento: document.getElementById('ajudanteDocumento').value.toUpperCase(),
                 telefone: document.getElementById('ajudanteTelefone').value,
                 endereco: document.getElementById('ajudanteEndereco').value.toUpperCase() || '',
-                pix: document.getElementById('ajudantePix').value || ''
+                pix: document.getElementById('ajudantePix').value || '',
+                email: emailGerado || existingEmail || ''
             };
+            
             const idx = arr.findIndex(a => a.id === obj.id);
             if (idx >= 0) arr[idx] = obj;
             else arr.push(obj);
+            
             saveData(DB_KEYS.AJUDANTES, arr);
             formAjudante.reset();
             document.getElementById('ajudanteId').value = '';
-            alert('AJUDANTE SALVO.');
+            
+            if (emailGerado) {
+                alert(`AJUDANTE SALVO!\n\nUSUÁRIO CRIADO: ${emailGerado}\nINFORME ESTE E-MAIL AO AJUDANTE PARA O PRIMEIRO ACESSO (CRIAR SENHA).`);
+            } else {
+                alert('AJUDANTE ATUALIZADO.');
+            }
         });
     }
 
@@ -1183,7 +1255,7 @@ window.closeCheckinConfirmModal = function() {
 };
 
 // =============================================================================
-// 13. DASHBOARD E CALENDÁRIO (CORRIGIDO)
+// 13. DASHBOARD E CALENDÁRIO
 // =============================================================================
 
 function updateDashboardStats() {
@@ -1232,8 +1304,6 @@ function updateDashboardStats() {
         elReceita.style.color = receitaLiquida >= 0 ? 'var(--success-color)' : 'var(--danger-color)';
     }
 }
-
-// --- FUNÇÕES DE CALENDÁRIO QUE ESTAVAM FALTANDO ---
 
 function renderCalendar(date) {
     const grid = document.getElementById('calendarGrid');
@@ -1285,7 +1355,6 @@ function renderCalendar(date) {
             div.title = "Clique para ver operações deste dia";
             div.onclick = () => {
                 alert(`OPERAÇÕES DO DIA ${day}/${month + 1}:\n\nConsulte a tabela abaixo para detalhes.`);
-                // Opcional: Filtrar a tabela visualmente (implementação futura)
             };
         }
 
@@ -1298,7 +1367,6 @@ function changeMonth(direction) {
     renderCalendar(currentDate);
     updateDashboardStats(); // Atualiza os cards de faturamento quando muda o mês
 }
-// Expõe para o HTML
 window.changeMonth = changeMonth; 
 window.renderCalendar = renderCalendar;
 
@@ -1614,8 +1682,9 @@ function updateUI() {
     
     renderCheckinsTable(); 
     
+    // Atualiza apenas se for funcionário
     if (window.CURRENT_USER && (window.CURRENT_USER.role === 'motorista' || window.CURRENT_USER.role === 'ajudante')) {
-        // renderMyServices(); // Função não estava definida no original, removido para evitar erro
+         // Se houver lógica específica de UI para funcionário, entra aqui
     }
 
     if (window.IS_READ_ONLY && window.enableReadOnlyMode) {
@@ -1871,7 +1940,7 @@ class ConverterMoeda {
 // =============================================================================
 
 function gerarRelatorio(e) {
-    if (e) e.preventDefault(); // Correção: verificar se evento existe
+    if (e) e.preventDefault();
     const iniVal = document.getElementById('dataInicioRelatorio').value;
     const fimVal = document.getElementById('dataFimRelatorio').value;
     if (!iniVal || !fimVal) return alert('SELECIONE AS DATAS.');
@@ -2336,7 +2405,7 @@ function setupCompanyUserManagement() {
             await updateDoc(doc(db, "users", uid), {
                 approved: !currentStatus
             });
-            if (!currentStatus) await createLinkedProfile(uid, role, name);
+            // Não precisa recriar perfil aqui pois o cadastro inteligente já cuidou disso
             alert("Status do usuário atualizado!");
         } catch (e) {
             console.error(e);
@@ -2354,35 +2423,6 @@ function setupCompanyUserManagement() {
             alert("Erro ao excluir funcionário. Verifique permissões.");
         }
     };
-}
-
-async function createLinkedProfile(uid, role, name) {
-    let key = null;
-    if (role === 'motorista') key = DB_KEYS.MOTORISTAS;
-    else if (role === 'ajudante') key = DB_KEYS.AJUDANTES;
-    if (!key) return;
-
-    let arr = loadData(key).slice();
-    const exists = arr.find(i => i.nome === name);
-    
-    if (!exists) {
-        const newId = arr.length ? Math.max(...arr.map(i => Number(i.id))) + 1 : (role === 'motorista' ? 101 : 201);
-        const newProfile = {
-            id: newId,
-            uid: uid,
-            nome: name,
-            documento: '',
-            telefone: '',
-            pix: ''
-        };
-        if (role === 'motorista') {
-            newProfile.cnh = '';
-            newProfile.validadeCNH = '';
-            newProfile.categoriaCNH = '';
-        }
-        arr.push(newProfile);
-        await saveData(key, arr);
-    }
 }
 
 function renderCompanyUserTables(users) {
