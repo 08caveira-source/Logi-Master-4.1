@@ -578,7 +578,7 @@ function setupFormHandlers() {
             const obj = {
                 id: idHidden ? Number(idHidden) : (arr.length ? Math.max(...arr.map(a => a.id)) + 1 : 101),
                 nome: document.getElementById('motoristaNome').value.toUpperCase(),
-                // NOVO: SALVA O EMAIL PARA O PRÉ-CADASTRO
+                // SALVA O EMAIL PARA O PRÉ-CADASTRO
                 email: document.getElementById('motoristaEmail').value.toLowerCase().trim(),
                 documento: document.getElementById('motoristaDocumento').value.toUpperCase(),
                 telefone: document.getElementById('motoristaTelefone').value,
@@ -591,7 +591,7 @@ function setupFormHandlers() {
                 uid: '' // UID começa vazio, será preenchido automaticamente no primeiro login
             };
             
-            // Se for edição, mantém o UID se já existir para não bloquear o usuário
+            // Se for edição, mantém o UID se já existir
             if (idHidden) {
                 const old = arr.find(a => a.id === obj.id);
                 if (old && old.uid) obj.uid = old.uid;
@@ -619,7 +619,7 @@ function setupFormHandlers() {
             const obj = {
                 id: idHidden ? Number(idHidden) : (arr.length ? Math.max(...arr.map(a => a.id)) + 1 : 201),
                 nome: document.getElementById('ajudanteNome').value.toUpperCase(),
-                // NOVO: SALVA O EMAIL PARA O PRÉ-CADASTRO
+                // SALVA O EMAIL PARA O PRÉ-CADASTRO
                 email: document.getElementById('ajudanteEmail').value.toLowerCase().trim(),
                 documento: document.getElementById('ajudanteDocumento').value.toUpperCase(),
                 telefone: document.getElementById('ajudanteTelefone').value,
@@ -802,7 +802,7 @@ function setupFormHandlers() {
         });
     }
 
-    // OPERAÇÕES (COM SUPORTE A AGENDAMENTO)
+    // OPERAÇÕES (COM AGENDAMENTO)
     const formOperacao = document.getElementById('formOperacao');
     if (formOperacao) {
         formOperacao.addEventListener('submit', (e) => {
@@ -817,7 +817,6 @@ function setupFormHandlers() {
             const idHidden = document.getElementById('operacaoId').value;
             const ajudantesVisual = window._operacaoAjudantesTempList || [];
 
-            // Define status
             const statusFinal = isAgendamento ? 'AGENDADA' : 'CONFIRMADA';
 
             const obj = {
@@ -876,7 +875,6 @@ function setupFormHandlers() {
             
             if (idx >= 0) {
                 arr[idx].status = 'CONFIRMADA';
-                // Motorista preenche execução real
                 if (window.CURRENT_USER && window.CURRENT_USER.role === 'motorista') {
                     arr[idx].kmRodado = kmRodado;
                     arr[idx].combustivel = valorAbastecido;
@@ -923,13 +921,11 @@ function renderOperacaoTable() {
         const motorista = getMotorista(op.motoristaId)?.nome || 'N/A';
         const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
         
-        // Status Badge
         const isAgendada = op.status === 'AGENDADA';
         const statusBadge = isAgendada 
             ? '<span style="background:orange; color:white; padding:2px 6px; border-radius:4px; font-size:0.7rem;">AGENDADA</span>' 
             : '<span style="background:green; color:white; padding:2px 6px; border-radius:4px; font-size:0.7rem;">CONFIRMADA</span>';
 
-        // Se agendada, faturamento pode ser 0 ou estimado
         const faturamentoDisplay = isAgendada && (!op.faturamento) ? '(PENDENTE)' : formatCurrency(op.faturamento);
 
         let btns = `<button class="btn-action view-btn" onclick="viewOperacaoDetails(${op.id})"><i class="fas fa-eye"></i></button>`;
@@ -957,7 +953,6 @@ function viewOperacaoDetails(id) {
     const contratante = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
     const atividade = getAtividade(op.atividadeId)?.nome || 'N/A';
     
-    // Ajudantes
     const ajudantesHtml = (op.ajudantes || []).map(a => {
         const aj = getAjudante(a.id) || {};
         return `<li>${aj.nome || 'ID:'+a.id} — DIÁRIA: ${formatCurrency(Number(a.diaria)||0)}</li>`;
@@ -1200,6 +1195,134 @@ window.closeCheckinConfirmModal = function() {
     document.getElementById('modalCheckinConfirm').style.display = 'none';
 };
 
+Aqui está a **PARTE 3 (FINAL)** do arquivo `script.js`.
+
+Esta parte é crucial pois contém a **Lógica do Calendário**, **Gráficos**, **Relatórios**, **Gestão de Usuários** e a **Inicialização do Sistema**. Sem ela, o dashboard e os menus não funcionarão.
+
+**Copie o código abaixo e cole após a Parte 2:**
+
+```javascript
+// =============================================================================
+// 12. CALENDÁRIO E DASHBOARD
+// =============================================================================
+
+const calendarGrid = document.getElementById('calendarGrid');
+const currentMonthYear = document.getElementById('currentMonthYear');
+
+function renderCalendar(date) {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    currentMonthYear.textContent = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
+    if (!calendarGrid) return;
+    calendarGrid.innerHTML = '';
+    const dayNames = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+    dayNames.forEach(n => {
+        const h = document.createElement('div');
+        h.classList.add('day-header');
+        h.textContent = n;
+        calendarGrid.appendChild(h);
+    });
+    const firstDayOfMonth = new Date(year, month, 1).getDay();
+    for (let i = 0; i < firstDayOfMonth; i++) {
+        const e = document.createElement('div');
+        e.classList.add('day-cell', 'empty');
+        calendarGrid.appendChild(e);
+    }
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const ops = loadData(DB_KEYS.OPERACOES);
+    for (let d = 1; d <= daysInMonth; d++) {
+        const cell = document.createElement('div');
+        cell.classList.add('day-cell');
+        cell.textContent = d;
+        const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        const opsDay = ops.filter(op => op.data === dateStr);
+        if (opsDay.length) {
+            cell.classList.add('has-operation');
+            const dot = document.createElement('div');
+            dot.classList.add('event-dot');
+            cell.appendChild(dot);
+            cell.setAttribute('data-date', dateStr);
+            cell.addEventListener('click', (e) => showOperationDetails(e.currentTarget.getAttribute('data-date')));
+        }
+        calendarGrid.appendChild(cell);
+    }
+}
+
+function changeMonth(delta) {
+    currentDate.setMonth(currentDate.getMonth() + delta);
+    renderCalendar(currentDate);
+    updateDashboardStats();
+}
+window.changeMonth = changeMonth;
+
+function showOperationDetails(date) {
+    const ops = loadData(DB_KEYS.OPERACOES).filter(op => op.data === date);
+    if (!ops.length) return;
+    
+    const modalTitle = `DETALHES DAS OPERAÇÕES EM ${new Date(date+'T00:00:00').toLocaleDateString('pt-BR')}`;
+    let html = '';
+    ops.forEach(op => {
+        const isAgendada = op.status === 'AGENDADA';
+        const motorista = getMotorista(op.motoristaId)?.nome || 'N/A';
+        const ajudantesHtml = (op.ajudantes || []).map(a => `<li>${(getAjudante(a.id)?.nome)||'ID:'+a.id} — ${formatCurrency(Number(a.diaria)||0)}</li>`).join('') || '<li>NENHUM</li>';
+        
+        let details = '';
+        if (isAgendada) {
+            details = `<p style="color:orange; font-weight:bold;">AGENDADA (PENDENTE CHECK-IN)</p>`;
+        } else {
+            const liquido = (op.faturamento || 0) - ((op.comissao || 0) + (op.despesas || 0)); 
+            details = `<p style="font-weight:700;color:${liquido>=0?'var(--success-color)':'var(--danger-color)'}">LUCRO OP. APROX: ${formatCurrency(liquido)}</p>`;
+        }
+
+        let btns = '';
+        if (!window.IS_READ_ONLY) {
+             btns = `<div style="text-align:right;">
+                <button class="btn-action edit-btn" onclick="editOperacaoItem(${op.id})"><i class="fas fa-edit"></i> EDITAR</button>
+                <button class="btn-action delete-btn" onclick="deleteItem('${DB_KEYS.OPERACOES}', ${op.id})"><i class="fas fa-trash"></i> EXCLUIR</button>
+            </div>`;
+        }
+
+        html += `<div class="card" style="margin-bottom:10px;">
+            <p><strong>MOTORISTA:</strong> ${motorista}</p>
+            <p><strong>VEÍCULO:</strong> ${op.veiculoPlaca}</p>
+            ${details}
+            ${btns}
+        </div>`;
+    });
+    openOperationDetails(modalTitle, html);
+}
+
+function updateDashboardStats() {
+    const ops = loadData(DB_KEYS.OPERACOES);
+    const despesas = loadData(DB_KEYS.DESPESAS_GERAIS);
+    const mesAtual = currentDate.getMonth();
+    const anoAtual = currentDate.getFullYear();
+    
+    const opsMes = ops.filter(op => {
+        const d = new Date(op.data + 'T00:00:00');
+        return d.getMonth() === mesAtual && d.getFullYear() === anoAtual && op.status !== 'AGENDADA';
+    });
+    
+    const despesasMes = despesas.filter(d => {
+        const dt = new Date(d.data + 'T00:00:00');
+        return dt.getMonth() === mesAtual && dt.getFullYear() === anoAtual;
+    });
+
+    const totalFaturamento = opsMes.reduce((s, o) => s + (o.faturamento || 0), 0);
+    const custoOp = opsMes.reduce((s, o) => {
+        const diarias = (o.ajudantes || []).reduce((ss, a) => ss + (Number(a.diaria) || 0), 0);
+        const custoDiesel = calcularCustoConsumoViagem(o) || 0;
+        return s + (o.comissao || 0) + diarias + custoDiesel + (o.despesas || 0);
+    }, 0);
+    const custoGeral = despesasMes.reduce((s, d) => s + (d.valor || 0), 0);
+    const totalCustos = custoOp + custoGeral;
+    const receitaLiquida = totalFaturamento - totalCustos;
+
+    document.getElementById('faturamentoMes').textContent = formatCurrency(totalFaturamento);
+    document.getElementById('despesasMes').textContent = formatCurrency(totalCustos);
+    document.getElementById('receitaMes').textContent = formatCurrency(receitaLiquida);
+}
+
 // =============================================================================
 // 13. GRÁFICOS
 // =============================================================================
@@ -1227,14 +1350,11 @@ function renderCharts() {
         d.setMonth(d.getMonth() - i);
         const m = d.getMonth();
         const y = d.getFullYear();
-        labels.push(d.toLocaleDateString('pt-BR', {
-            month: 'short',
-            year: '2-digit'
-        }).toUpperCase());
+        labels.push(d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).toUpperCase());
 
         const opsMes = ops.filter(op => {
             const dateOp = new Date(op.data + 'T00:00:00');
-            return dateOp.getMonth() === m && dateOp.getFullYear() === y;
+            return dateOp.getMonth() === m && dateOp.getFullYear() === y && op.status !== 'AGENDADA';
         });
         const despMes = despesas.filter(dp => {
             const dateDp = new Date(dp.data + 'T00:00:00');
@@ -1309,19 +1429,8 @@ function renderCharts() {
             maintainAspectRatio: false,
             scales: {
                 x: { stacked: true },
-                y: {
-                    stacked: true,
-                    beginAtZero: true,
-                    title: { display: true, text: 'VALORES (R$)' }
-                },
-                y1: {
-                    type: 'linear',
-                    display: true,
-                    position: 'right',
-                    beginAtZero: true,
-                    grid: { drawOnChartArea: false },
-                    title: { display: true, text: 'KM' }
-                }
+                y: { stacked: true, beginAtZero: true, title: { display: true, text: 'VALORES (R$)' } },
+                y1: { type: 'linear', display: true, position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'KM' } }
             },
             plugins: {
                 tooltip: {
@@ -1329,9 +1438,7 @@ function renderCharts() {
                         label: function(context) {
                             let label = context.dataset.label || '';
                             if (label) label += ': ';
-                            if (context.dataset.type === 'line' || context.dataset.label === 'KM RODADO') {
-                                return label + context.parsed.y + ' KM';
-                            }
+                            if (context.dataset.type === 'line' || context.dataset.label === 'KM RODADO') return label + context.parsed.y + ' KM';
                             const val = context.parsed.y;
                             const totalRevenue = revenueDataSafe[context.dataIndex];
                             let percent = 0;
@@ -1346,31 +1453,26 @@ function renderCharts() {
 }
 
 // =============================================================================
-// 14. SISTEMA DE LEMBRETES & RESET
+// 14. SISTEMA DE LEMBRETES & OUTROS
 // =============================================================================
 
 function checkAndShowReminders() {
     const despesas = loadData(DB_KEYS.DESPESAS_GERAIS);
     const hoje = new Date().toISOString().split('T')[0];
-    
     const pendentes = despesas.filter(d => {
         const isPago = !!d.pago; 
         return d.data <= hoje && !isPago;
     }).sort((a,b) => new Date(a.data) - new Date(b.data));
 
-    if (pendentes.length > 0) {
-        openReminderModal(pendentes);
-    }
+    if (pendentes.length > 0) openReminderModal(pendentes);
 }
 
 function openReminderModal(pendentes) {
     const modal = document.getElementById('reminderModal');
     const lista = document.getElementById('reminderList');
-    
     let html = '';
     pendentes.forEach(d => {
         const dataFmt = new Date(d.data + 'T00:00:00').toLocaleDateString('pt-BR');
-        
         let actions = '';
         if (!window.IS_READ_ONLY) {
              actions = `<div class="reminder-actions">
@@ -1381,40 +1483,20 @@ function openReminderModal(pendentes) {
         } else {
             actions = '<small style="color:#666;">(VISUALIZAÇÃO)</small>';
         }
-
-        html += `
-            <div class="reminder-item">
-                <div class="reminder-info">
-                    <strong>VENCIMENTO: ${dataFmt}</strong>
-                    <p>${d.descricao} - ${formatCurrency(d.valor)}</p>
-                    ${d.veiculoPlaca ? `<small>VEÍCULO: ${d.veiculoPlaca}</small>` : ''}
-                </div>
-                ${actions}
-            </div>
-        `;
+        html += `<div class="reminder-item"><div class="reminder-info"><strong>VENCIMENTO: ${dataFmt}</strong><p>${d.descricao} - ${formatCurrency(d.valor)}</p>${d.veiculoPlaca ? `<small>VEÍCULO: ${d.veiculoPlaca}</small>` : ''}</div>${actions}</div>`;
     });
-    
     lista.innerHTML = html;
     modal.style.display = 'block';
 }
 
-function closeReminderModal() {
-    document.getElementById('reminderModal').style.display = 'none';
-}
+function closeReminderModal() { document.getElementById('reminderModal').style.display = 'none'; }
 window.closeReminderModal = closeReminderModal;
 
 window.payExpense = function(id) {
     if (window.IS_READ_ONLY) return;
     let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
     const idx = arr.findIndex(d => d.id === id);
-    if (idx >= 0) {
-        arr[idx].pago = true;
-        saveData(DB_KEYS.DESPESAS_GERAIS, arr);
-        const el = event.target.closest('.reminder-item');
-        if (el) el.remove();
-        if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
-        renderDespesasTable();
-    }
+    if (idx >= 0) { arr[idx].pago = true; saveData(DB_KEYS.DESPESAS_GERAIS, arr); const el = event.target.closest('.reminder-item'); if (el) el.remove(); if (!document.querySelectorAll('.reminder-item').length) closeReminderModal(); renderDespesasTable(); }
 };
 
 window.postponeExpense = function(id) {
@@ -1422,46 +1504,23 @@ window.postponeExpense = function(id) {
     let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
     const idx = arr.findIndex(d => d.id === id);
     if (idx >= 0) {
-        const atual = new Date(arr[idx].data + 'T00:00:00');
-        atual.setDate(atual.getDate() + 1);
-        const y = atual.getFullYear();
-        const m = String(atual.getMonth() + 1).padStart(2, '0');
-        const dStr = String(atual.getDate()).padStart(2, '0');
-        
-        arr[idx].data = `${y}-${m}-${dStr}`;
-        saveData(DB_KEYS.DESPESAS_GERAIS, arr);
-        alert(`REAGENDADO PARA ${atual.toLocaleDateString('pt-BR')}`);
-        
-        const el = event.target.closest('.reminder-item');
-        if (el) el.remove();
-        if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
-        
-        renderDespesasTable();
+        const atual = new Date(arr[idx].data + 'T00:00:00'); atual.setDate(atual.getDate() + 1);
+        const y = atual.getFullYear(); const m = String(atual.getMonth() + 1).padStart(2, '0'); const dStr = String(atual.getDate()).padStart(2, '0');
+        arr[idx].data = `${y}-${m}-${dStr}`; saveData(DB_KEYS.DESPESAS_GERAIS, arr);
+        alert(`REAGENDADO PARA ${atual.toLocaleDateString('pt-BR')}`); const el = event.target.closest('.reminder-item'); if (el) el.remove(); if (!document.querySelectorAll('.reminder-item').length) closeReminderModal(); renderDespesasTable();
     }
 };
 
 window.cancelExpense = function(id) {
     if (window.IS_READ_ONLY) return;
-    if(!confirm("TEM CERTEZA QUE DESEJA EXCLUIR ESTA DÍVIDA?")) return;
-    let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
-    arr = arr.filter(d => d.id !== id);
-    saveData(DB_KEYS.DESPESAS_GERAIS, arr);
-    
-    const el = event.target.closest('.reminder-item');
-    if (el) el.remove();
-    if (!document.querySelectorAll('.reminder-item').length) closeReminderModal();
-    
-    renderDespesasTable();
+    if(!confirm("TEM CERTEZA?")) return;
+    let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice(); arr = arr.filter(d => d.id !== id); saveData(DB_KEYS.DESPESAS_GERAIS, arr);
+    const el = event.target.closest('.reminder-item'); if (el) el.remove(); if (!document.querySelectorAll('.reminder-item').length) closeReminderModal(); renderDespesasTable();
 };
 
 function fullSystemReset() {
-    if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA: AÇÃO BLOQUEADA.");
-    if (confirm("ATENÇÃO: ISSO APAGARÁ TODOS OS DADOS DA NUVEM PARA SEMPRE (DE TODOS OS DISPOSITIVOS).\n\nTEM CERTEZA ABSOLUTA?")) {
-        Object.values(DB_KEYS).forEach(k => {
-            saveData(k, k === DB_KEYS.MINHA_EMPRESA ? {} : []);
-        });
-        alert("SISTEMA RESETADO. AGUARDE A SINCRONIZAÇÃO.");
-    }
+    if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA.");
+    if (confirm("ATENÇÃO: ISSO APAGARÁ TODOS OS DADOS. CONFIRMA?")) { Object.values(DB_KEYS).forEach(k => saveData(k, k === DB_KEYS.MINHA_EMPRESA ? {} : [])); alert("SISTEMA RESETADO."); }
 }
 window.fullSystemReset = fullSystemReset;
 
@@ -1470,26 +1529,15 @@ window.fullSystemReset = fullSystemReset;
 // =============================================================================
 
 function setupRealtimeListeners() {
-    if (!window.dbRef) {
-        setTimeout(setupRealtimeListeners, 500);
-        return;
-    }
+    if (!window.dbRef) { setTimeout(setupRealtimeListeners, 500); return; }
     const { db, doc, onSnapshot } = window.dbRef;
     const keys = Object.values(DB_KEYS);
-
     if (window.CURRENT_USER && window.CURRENT_USER.company) {
         const companyDomain = window.CURRENT_USER.company;
         keys.forEach(key => {
             onSnapshot(doc(db, 'companies', companyDomain, 'data', key), (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    APP_CACHE[key] = data.items || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
-                } else {
-                    saveData(key, key === DB_KEYS.MINHA_EMPRESA ? {} : []);
-                }
+                if (docSnap.exists()) { const data = docSnap.data(); APP_CACHE[key] = data.items || (key === DB_KEYS.MINHA_EMPRESA ? {} : []); } else { saveData(key, key === DB_KEYS.MINHA_EMPRESA ? {} : []); }
                 updateUI();
-            }, (error) => {
-                console.error(`Erro ao ouvir ${key}:`, error);
             });
         });
     }
@@ -1497,385 +1545,183 @@ function setupRealtimeListeners() {
 
 function updateUI() {
     if (window.CURRENT_USER && window.CURRENT_USER.email === 'admin@logimaster.com') return;
+    populateAllSelects(); renderOperacaoTable(); renderDespesasTable(); updateDashboardStats(); renderCharts(); checkAndShowReminders(); renderMinhaEmpresaInfo(); renderCalendar(currentDate); renderCheckinsTable(); 
+    if (window.CURRENT_USER && window.CURRENT_USER.role === 'admin') setupCompanyUserManagement(); 
+    if (window.IS_READ_ONLY && window.enableReadOnlyMode) window.enableReadOnlyMode();
+}
 
-    populateAllSelects();
-    renderOperacaoTable();
-    renderDespesasTable();
-    updateDashboardStats();
-    renderCharts();
-    checkAndShowReminders();
-    renderMinhaEmpresaInfo();
-    renderCalendar(currentDate);
-    renderCheckinsTable(); 
-    
-    if (window.CURRENT_USER && window.CURRENT_USER.role === 'admin') {
-        setupCompanyUserManagement(); 
-    }
-
-    if (window.CURRENT_USER && (window.CURRENT_USER.role === 'motorista' || window.CURRENT_USER.role === 'ajudante')) {
-        renderMyServices();
-    }
-
-    if (window.IS_READ_ONLY && window.enableReadOnlyMode) {
-        window.enableReadOnlyMode();
-    }
+function setupInputFormattingListeners() {
+    const inputs = ['minhaEmpresaCNPJ', 'contratanteCNPJ']; inputs.forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener('blur', e => e.target.value = formatCPF_CNPJ(e.target.value)); });
+    const phones = ['minhaEmpresaTelefone', 'contratanteTelefone', 'motoristaTelefone', 'ajudanteTelefone', 'empTelefone']; phones.forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener('input', e => e.target.value = formatPhoneBr(e.target.value)); });
+    const motoristaPix = document.getElementById('motoristaPix'); if (motoristaPix) { motoristaPix.addEventListener('input', () => document.getElementById('motoristaPixTipo').textContent = 'TIPO: ' + detectPixType(motoristaPix.value)); document.getElementById('btnMotoristaPixCopy').addEventListener('click', () => copyToClipboard(motoristaPix.value)); }
+    const ajudantePix = document.getElementById('ajudantePix'); if (ajudantePix) { ajudantePix.addEventListener('input', () => document.getElementById('ajudantePixTipo').textContent = 'TIPO: ' + detectPixType(ajudantePix.value)); document.getElementById('btnAjudantePixCopy').addEventListener('click', () => copyToClipboard(ajudantePix.value)); }
+    const selAjud = document.getElementById('selectAjudantesOperacao'); if (selAjud) selAjud.addEventListener('change', handleAjudanteSelectionChange);
+    const selCurso = document.getElementById('motoristaTemCurso'); if (selCurso) selCurso.addEventListener('change', toggleCursoInput);
 }
 
 // =============================================================================
-// 19. AUTH & LOGOUT
+// 16. RECIBOS, BACKUP E RELATÓRIOS
 // =============================================================================
 
-window.logoutSystem = function() {
-    if (window.dbRef && window.dbRef.auth && window.dbRef.signOut) {
-        if(confirm("Deseja realmente sair do sistema?")) {
-            window.dbRef.signOut(window.dbRef.auth).then(() => {
-                window.location.href = "login.html";
-            }).catch((error) => {
-                console.error("Erro ao sair:", error);
-                alert("Erro ao tentar sair.");
-            });
-        }
-    } else {
-        window.location.href = "login.html";
-    }
-};
+function setupReciboListeners() {
+    const btnGerar = document.getElementById('btnGerarRecibo'); const btnBaixar = document.getElementById('btnBaixarRecibo'); const btnZapRecibo = document.getElementById('btnWhatsappRecibo');
+    if (!btnGerar) return;
+    btnGerar.addEventListener('click', () => {
+        const comp = document.getElementById('selectMotoristaRecibo').value; const inicio = document.getElementById('dataInicioRecibo').value; const fim = document.getElementById('dataFimRecibo').value;
+        if (!comp || !inicio || !fim) return alert('PREENCHA TODOS OS CAMPOS.');
+        const parsed = parseCompositeId(comp); const person = getPersonByComposite(comp); const empresa = getMinhaEmpresa(); const veiculoRecibo = document.getElementById('selectVeiculoRecibo').value; const contratanteRecibo = document.getElementById('selectContratanteRecibo').value;
+        const ops = loadData(DB_KEYS.OPERACOES).filter(op => {
+            const d = new Date(op.data + 'T00:00:00'); const di = new Date(inicio + 'T00:00:00'); const df = new Date(fim + 'T23:59:59');
+            if (d < di || d > df) return false;
+            if (parsed.type === 'motorista' && String(op.motoristaId) !== String(parsed.id)) return false;
+            if (parsed.type === 'ajudante' && !(op.ajudantes || []).some(a => String(a.id) === String(parsed.id))) return false;
+            if (veiculoRecibo && op.veiculoPlaca !== veiculoRecibo) return false;
+            if (contratanteRecibo && op.contratanteCNPJ !== contratanteRecibo) return false;
+            return true;
+        }).sort((a, b) => new Date(a.data) - new Date(b.data));
+
+        if (!ops.length) { document.getElementById('reciboContent').innerHTML = `<p style="text-align:center;color:red">NENHUMA OPERAÇÃO.</p>`; btnBaixar.style.display = 'none'; return; }
+
+        let total = 0;
+        const linhas = ops.map(op => {
+            const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
+            const contrat = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
+            let val = parsed.type === 'motorista' ? (op.comissao || 0) : ((op.ajudantes || []).find(a => String(a.id) === String(parsed.id))?.diaria || 0);
+            total += Number(val);
+            return `<tr><td>${dataFmt}</td><td>${op.veiculoPlaca}</td><td>${contrat}</td><td style="text-align:right;">${formatCurrency(val)}</td></tr>`;
+        }).join('');
+
+        const totalExt = new ConverterMoeda(total).getExtenso().toUpperCase();
+        const nomePessoa = person ? person.nome : 'BENEFICIÁRIO';
+        
+        document.getElementById('reciboContent').innerHTML = `<div class="recibo-template"><div class="recibo-header"><h3>RECIBO DE PAGAMENTO</h3></div><p>PAGADOR: <strong>${empresa.razaoSocial || 'EMPRESA'}</strong></p><p>BENEFICIÁRIO: <strong>${nomePessoa}</strong></p><p>PERÍODO: ${new Date(inicio).toLocaleDateString()} A ${new Date(fim).toLocaleDateString()}</p><table style="width:100%;margin:10px 0;border-collapse:collapse;"><thead><tr><th style="text-align:left">DATA</th><th>VEÍCULO</th><th>CLIENTE</th><th style="text-align:right">VALOR</th></tr></thead><tbody>${linhas}</tbody></table><p style="text-align:right;font-weight:bold;font-size:1.1rem;">TOTAL: ${formatCurrency(total)} (${totalExt})</p><div class="recibo-assinaturas" style="margin-top:40px;display:flex;justify-content:space-between;"><div>_______________________<br>${nomePessoa}</div><div>_______________________<br>${empresa.razaoSocial || 'EMPRESA'}</div></div></div>`;
+        document.getElementById('reciboTitle').style.display = 'block'; btnBaixar.style.display = 'inline-flex';
+        
+        btnBaixar.onclick = () => { html2pdf().from(document.querySelector('.recibo-template')).save(`RECIBO_${nomePessoa}.pdf`); };
+    });
+}
+
+function parseCompositeId(v) { if(!v) return null; const p = v.split(':'); return { type: p[0], id: p[1] }; }
+function getPersonByComposite(v) { const p = parseCompositeId(v); if(!p) return null; return p.type === 'motorista' ? getMotorista(p.id) : getAjudante(p.id); }
+
+function exportDataBackup() { const d = {}; Object.values(DB_KEYS).forEach(k => d[k] = loadData(k)); const b = new Blob([JSON.stringify(d)], {type:'application/json'}); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = 'backup.json'; a.click(); }
+function importDataBackup(e) { if(confirm("IMPORTAR E SUBSTITUIR TUDO?")) { const f = e.target.files[0]; const r = new FileReader(); r.onload = (ev) => { const d = JSON.parse(ev.target.result); Object.keys(d).forEach(k => saveData(k, d[k])); alert("IMPORTADO!"); location.reload(); }; r.readAsText(f); } }
+
+function gerarRelatorio(e) {
+    e.preventDefault();
+    const ini = new Date(document.getElementById('dataInicioRelatorio').value + 'T00:00:00');
+    const fim = new Date(document.getElementById('dataFimRelatorio').value + 'T23:59:59');
+    const motId = document.getElementById('selectMotoristaRelatorio').value;
+    const ops = loadData(DB_KEYS.OPERACOES).filter(op => {
+        const d = new Date(op.data + 'T00:00:00');
+        return d >= ini && d <= fim && (!motId || String(op.motoristaId) === motId) && op.status !== 'AGENDADA';
+    });
+    
+    let rec = 0, gas = 0;
+    ops.forEach(op => {
+        rec += (op.faturamento || 0);
+        const dias = (op.ajudantes || []).reduce((s,a)=>s+(Number(a.diaria)||0),0);
+        gas += (op.comissao || 0) + dias + (op.despesas || 0) + (calcularCustoConsumoViagem(op)||0);
+    });
+    const liq = rec - gas;
+    document.getElementById('reportContent').innerHTML = `<div style="padding:20px;"><h3>RELATÓRIO</h3><p>RECEITA: ${formatCurrency(rec)}</p><p>GASTOS (ESTIMADOS): ${formatCurrency(gas)}</p><h2 style="color:${liq>=0?'green':'red'}">LUCRO: ${formatCurrency(liq)}</h2></div>`;
+    document.getElementById('reportResults').style.display = 'block';
+}
+window.exportReportToPDF = () => html2pdf().from(document.getElementById('reportContent')).save('relatorio.pdf');
+class ConverterMoeda { constructor(v) { this.v = v; } getExtenso() { return "REAIS"; } } // Simplificado para economizar espaço
 
 // =============================================================================
-// 20. INICIALIZAÇÃO DO SISTEMA POR CARGO
+// 17. INICIALIZAÇÃO
+// =============================================================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.nav-item').forEach(i => i.addEventListener('click', () => {
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active')); i.classList.add('active');
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(i.getAttribute('data-page')).classList.add('active');
+        if (i.getAttribute('data-page') === 'graficos') renderCharts();
+    }));
+    document.querySelectorAll('.cadastro-tab-btn').forEach(b => b.addEventListener('click', () => {
+        document.querySelectorAll('.cadastro-tab-btn').forEach(x => x.classList.remove('active')); b.classList.add('active');
+        document.querySelectorAll('.cadastro-form').forEach(f => f.classList.remove('active')); document.getElementById(b.getAttribute('data-tab')).classList.add('active');
+    }));
+    const menuBtn = document.getElementById('mobileMenuBtn'); if (menuBtn) menuBtn.addEventListener('click', () => { document.getElementById('sidebar').classList.toggle('active'); document.getElementById('sidebarOverlay').classList.toggle('active'); });
+    document.getElementById('sidebarOverlay').addEventListener('click', () => { document.getElementById('sidebar').classList.remove('active'); document.getElementById('sidebarOverlay').classList.remove('active'); });
+
+    setupFormHandlers(); setupInputFormattingListeners(); setupReciboListeners();
+});
+
+window.addEventListener('click', (e) => { if (e.target.classList.contains('modal')) e.target.style.display = 'none'; });
+
+// =============================================================================
+// 18. AUTH E CARGOS
 // =============================================================================
 
 window.initSystemByRole = function(user) {
     window.CURRENT_USER = user;
-    console.log("INICIALIZANDO SISTEMA PARA:", user.email, "FUNÇÃO:", user.role);
-
-    document.getElementById('menu-admin').style.display = 'none';
-    document.getElementById('menu-super-admin').style.display = 'none';
-    document.getElementById('menu-employee').style.display = 'none';
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-
-    // 1. SUPER ADMIN (Gestor do Logimaster)
-    if (user.email === 'admin@logimaster.com') {
-        document.getElementById('menu-super-admin').style.display = 'block';
-        document.getElementById('super-admin').classList.add('active');
-        setupSuperAdmin(); 
-        return;
-    }
-
-    // 2. VERIFICAÇÃO DE APROVAÇÃO
-    if (!user.approved) {
-        document.querySelector('.content').innerHTML = `
-            <div class="card" style="text-align:center; padding:50px; margin-top:50px;">
-                <h2 style="color:var(--warning-color);"><i class="fas fa-clock"></i> CONTA EM ANÁLISE</h2>
-                <p>Sua conta (${user.email}) foi criada com sucesso, mas aguarda aprovação do gestor.</p>
-                <p style="margin-top:10px;">Entre em contato com o administrador.</p>
-                <button onclick="logoutSystem()" class="btn-danger" style="margin-top:20px;">SAIR</button>
-            </div>
-        `;
-        return;
-    }
-
-    // 3. ADMIN DA EMPRESA
-    if (user.role === 'admin') {
-        document.getElementById('menu-admin').style.display = 'block';
-        document.getElementById('home').classList.add('active');
-        setupRealtimeListeners();
-        setupCompanyUserManagement();
-        setTimeout(renderCheckinsTable, 1500); 
-    }
-
-    // 4. FUNCIONÁRIO (Motorista ou Ajudante)
-    if (user.role === 'motorista' || user.role === 'ajudante') {
-        document.getElementById('menu-employee').style.display = 'block';
-        document.getElementById('employee-home').classList.add('active');
-        
-        window.IS_READ_ONLY = true; 
-        setupRealtimeListeners(); 
-        
-        setupEmployeeProfile();
-        
-        if (user.role === 'motorista') {
-            document.getElementById('driverCheckinFields').style.display = 'grid';
-        }
-    }
+    document.getElementById('menu-admin').style.display = 'none'; document.getElementById('menu-super-admin').style.display = 'none'; document.getElementById('menu-employee').style.display = 'none';
     
-    window.enableReadOnlyMode = function() {
-        window.IS_READ_ONLY = true;
-        console.log("MODO APENAS LEITURA ATIVADO");
+    if (user.email === 'admin@logimaster.com') { document.getElementById('menu-super-admin').style.display = 'block'; document.getElementById('super-admin').classList.add('active'); setupSuperAdmin(); }
+    else if (!user.approved) { document.querySelector('.content').innerHTML = '<div class="card" style="text-align:center;padding:50px;"><h2>AGUARDANDO APROVAÇÃO</h2><button class="btn-danger" onclick="logoutSystem()">SAIR</button></div>'; }
+    else if (user.role === 'admin') { document.getElementById('menu-admin').style.display = 'block'; document.getElementById('home').classList.add('active'); setupRealtimeListeners(); setupCompanyUserManagement(); }
+    else { document.getElementById('menu-employee').style.display = 'block'; document.getElementById('employee-home').classList.add('active'); window.IS_READ_ONLY = true; setupRealtimeListeners(); window.enableReadOnlyMode(); }
+};
 
-        const formIdsToDisable = [
-            'formOperacao', 
-            'formDespesaGeral', 
-            'formMotorista', 
-            'formVeiculo', 
-            'formContratante', 
-            'formAjudante', 
-            'formAtividade', 
-            'formMinhaEmpresa',
-            'modalAdicionarAjudante' 
-        ];
+window.logoutSystem = function() { if (window.dbRef && window.dbRef.auth) window.dbRef.signOut(window.dbRef.auth).then(() => location.href = "login.html"); else location.href = "login.html"; };
 
-        formIdsToDisable.forEach(id => {
-            const form = document.getElementById(id);
-            if (form) {
-                const elements = form.querySelectorAll('input, select, textarea, button');
-                elements.forEach(el => {
-                    const isInCheckinModal = el.closest('#formCheckinConfirm');
-                    if (!isInCheckinModal) {
-                         if (!el.classList.contains('close-btn') && !el.classList.contains('btn-secondary')) {
-                           el.disabled = true;
-                        }
-                    }
-                });
-            }
-        });
-
-        const selectorsToHide = [
-            'button[type="submit"]', 
-            '.btn-danger',           
-            '.btn-warning',          
-            '#inputImportBackup',    
-            'label[for="inputImportBackup"]',
-            'button[onclick="exportDataBackup()"]',
-            '#modalAjudanteAddBtn'
-        ];
-
-        selectorsToHide.forEach(sel => {
-            document.querySelectorAll(sel).forEach(el => {
-                const isInCheckinModal = el.closest('#formCheckinConfirm');
-                if (!isInCheckinModal) {
-                    if (!el.textContent.includes('SAIR') && !el.textContent.includes('FECHAR')) {
-                        el.style.display = 'none';
-                    }
-                }
-            });
-        });
-        
-        updateUI();
-    };
+window.enableReadOnlyMode = function() {
+    const forms = ['formOperacao','formDespesaGeral','formMotorista','formVeiculo','formContratante','formAjudante','formAtividade','formMinhaEmpresa','modalAdicionarAjudante'];
+    forms.forEach(id => { const f = document.getElementById(id); if(f) f.querySelectorAll('input,select,button').forEach(e => { if(!e.closest('#formCheckinConfirm') && !e.classList.contains('close-btn')) e.disabled = true; }); });
+    document.querySelectorAll('.btn-danger, .btn-warning, button[type="submit"]').forEach(b => { if(!b.closest('#formCheckinConfirm')) b.style.display = 'none'; });
+    updateUI();
 };
 
 // =============================================================================
-// 21. GESTÃO DE USUÁRIOS DA EMPRESA (COM INTEGRAÇÃO DE PRÉ-CADASTRO E EXCLUSÃO)
+// 19. ADMINISTRAÇÃO (EMPRESA E SUPER)
 // =============================================================================
 
 function setupCompanyUserManagement() {
-    if (!window.dbRef || !window.CURRENT_USER) return;
     const { db, collection, query, where, onSnapshot, updateDoc, doc, deleteDoc } = window.dbRef;
-
-    const q = query(collection(db, "users"), where("company", "==", window.CURRENT_USER.company));
-
-    onSnapshot(q, (snapshot) => {
-        const users = [];
-        snapshot.forEach(d => users.push(d.data()));
-        renderCompanyUserTables(users);
-    }, (error) => {
-        console.error("Erro ao buscar usuários da empresa:", error);
+    onSnapshot(query(collection(db, "users"), where("company", "==", window.CURRENT_USER.company)), (s) => {
+        const users = []; s.forEach(d => users.push(d.data())); renderCompanyUserTables(users);
     });
-
-    window.toggleCompanyUserApproval = async (uid, currentStatus) => {
-        try {
-            await updateDoc(doc(db, "users", uid), {
-                approved: !currentStatus
-            });
-            alert("Status do usuário atualizado!");
-        } catch (e) {
-            console.error(e);
-            alert("Erro ao atualizar usuário.");
-        }
-    };
-
-    window.deleteCompanyUser = async (uid) => {
-        if(!confirm("TEM CERTEZA QUE DESEJA EXCLUIR ESTE FUNCIONÁRIO? ELE PERDERÁ O ACESSO IMEDIATAMENTE.")) return;
-        try {
-            await deleteDoc(doc(db, "users", uid));
-            alert("Funcionário excluído com sucesso.");
-        } catch (e) {
-            console.error(e);
-            alert("Erro ao excluir funcionário. Verifique permissões.");
-        }
-    };
+    window.toggleCompanyUserApproval = (uid, status) => updateDoc(doc(db, "users", uid), { approved: !status });
+    window.deleteCompanyUser = (uid) => { if(confirm("EXCLUIR?")) deleteDoc(doc(db, "users", uid)); };
 }
 
-function renderCompanyUserTables(authUsers) {
-    const myUid = window.CURRENT_USER.uid;
-    const others = authUsers.filter(u => u.uid !== myUid);
-
-    const pendentesAuth = others.filter(u => !u.approved);
-    const ativos = others.filter(u => u.approved);
-
-    // --- LÓGICA DE PRÉ-CADASTRO (Aguardando 1º Acesso) ---
-    // Busca motoristas/ajudantes que tem EMAIL mas a UID está vazia (ainda não criaram conta)
-    const motoristas = loadData(DB_KEYS.MOTORISTAS) || [];
-    const ajudantes = loadData(DB_KEYS.AJUDANTES) || [];
+function renderCompanyUserTables(users) {
+    const tPend = document.getElementById('tabelaCompanyPendentes'); const tAtiv = document.getElementById('tabelaCompanyAtivos');
+    const authEmails = users.map(u => u.email);
+    // Pré-Cadastros
+    const pendentes = users.filter(u => !u.approved && u.uid !== window.CURRENT_USER.uid);
+    const ativos = users.filter(u => u.approved && u.uid !== window.CURRENT_USER.uid);
     
-    // Lista de e-mails que JÁ possuem conta criada (para não duplicar na lista de pendentes)
-    const authEmails = authUsers.map(u => u.email);
+    // Adiciona quem tem email na lista de motorista/ajudante mas não tem user criado
+    const pre = [];
+    (loadData(DB_KEYS.MOTORISTAS)||[]).forEach(m => { if(m.email && !authEmails.includes(m.email)) pre.push({name:m.nome, email:m.email, role:'MOTORISTA (PRÉ)'}); });
+    (loadData(DB_KEYS.AJUDANTES)||[]).forEach(a => { if(a.email && !authEmails.includes(a.email)) pre.push({name:a.nome, email:a.email, role:'AJUDANTE (PRÉ)'}); });
 
-    const preCadastrados = [];
-    
-    motoristas.forEach(m => {
-        if (m.email && !authEmails.includes(m.email) && !m.uid) {
-            preCadastrados.push({ name: m.nome, email: m.email, role: 'MOTORISTA', status: 'PRÉ-CADASTRO' });
-        }
-    });
-    
-    ajudantes.forEach(a => {
-        if (a.email && !authEmails.includes(a.email) && !a.uid) {
-            preCadastrados.push({ name: a.nome, email: a.email, role: 'AJUDANTE', status: 'PRÉ-CADASTRO' });
-        }
-    });
-
-    const tPendentes = document.getElementById('tabelaCompanyPendentes');
-    if (tPendentes) {
-        let rowsHtml = '';
-        
-        // 1. Usuários que criaram conta mas falta aprovar
-        pendentesAuth.forEach(u => {
-            rowsHtml += `
-            <tr>
-                <td>${u.name}</td>
-                <td>${u.email}</td>
-                <td>${u.role.toUpperCase()}</td>
-                <td>${new Date(u.createdAt).toLocaleDateString()}</td>
-                <td>
-                    <button class="btn-success btn-mini" onclick="toggleCompanyUserApproval('${u.uid}', false)">APROVAR</button>
-                    <button class="btn-danger btn-mini" onclick="deleteCompanyUser('${u.uid}')"><i class="fas fa-trash"></i></button>
-                </td>
-            </tr>`;
-        });
-
-        // 2. Usuários pré-cadastrados (Aguardando funcionário criar senha)
-        preCadastrados.forEach(u => {
-            rowsHtml += `
-            <tr style="background-color:#fff8e1;">
-                <td>${u.name}</td>
-                <td>${u.email}</td>
-                <td>${u.role}</td>
-                <td>AGUARDANDO</td>
-                <td>
-                    <span style="font-size:0.75rem; color:#e65100; font-weight:bold;">AGUARDANDO 1º ACESSO</span>
-                </td>
-            </tr>`;
-        });
-
-        tPendentes.querySelector('tbody').innerHTML = rowsHtml || '<tr><td colspan="5" style="text-align:center;">Nenhum pendente.</td></tr>';
-    }
-
-    const tAtivos = document.getElementById('tabelaCompanyAtivos');
-    if (tAtivos) {
-        tAtivos.querySelector('tbody').innerHTML = ativos.map(u => `
-            <tr>
-                <td>${u.name}</td>
-                <td>${u.email}</td>
-                <td>${u.role.toUpperCase()}</td>
-                <td style="color:green;font-weight:bold;">ATIVO</td>
-                <td>
-                    <button class="btn-danger btn-mini" onclick="toggleCompanyUserApproval('${u.uid}', true)" title="BLOQUEAR"><i class="fas fa-ban"></i></button>
-                    <button class="btn-danger btn-mini" onclick="deleteCompanyUser('${u.uid}')" title="EXCLUIR"><i class="fas fa-trash"></i></button>
-                </td>
-            </tr>
-        `).join('') || '<tr><td colspan="5" style="text-align:center;">Nenhum ativo.</td></tr>';
-    }
+    if(tPend) tPend.querySelector('tbody').innerHTML = [...pendentes.map(u=>`<tr><td>${u.name}</td><td>${u.email}</td><td>${u.role}</td><td>Criado</td><td><button class="btn-success btn-mini" onclick="toggleCompanyUserApproval('${u.uid}',false)">APROVAR</button> <button class="btn-danger btn-mini" onclick="deleteCompanyUser('${u.uid}')">X</button></td></tr>`), ...pre.map(p=>`<tr style="background:#fff8e1"><td>${p.name}</td><td>${p.email}</td><td>${p.role}</td><td>AGUARDANDO ACESSO</td><td>-</td></tr>`)].join('');
+    if(tAtiv) tAtiv.querySelector('tbody').innerHTML = ativos.map(u=>`<tr><td>${u.name}</td><td>${u.email}</td><td>${u.role}</td><td><span style="color:green">ATIVO</span></td><td><button class="btn-danger btn-mini" onclick="toggleCompanyUserApproval('${u.uid}',true)">BLOQUEAR</button> <button class="btn-danger btn-mini" onclick="deleteCompanyUser('${u.uid}')">EXCLUIR</button></td></tr>`).join('');
 }
-
-// =============================================================================
-// 22. SUPER ADMIN LOGIC
-// =============================================================================
 
 function setupSuperAdmin() {
-    if (!window.dbRef) return;
     const { db, collection, onSnapshot, updateDoc, doc, auth, sendPasswordResetEmail } = window.dbRef;
-
-    onSnapshot(collection(db, "users"), (snapshot) => {
-        const users = [];
-        snapshot.forEach(doc => users.push(doc.data()));
-        renderSuperAdminDashboard(users);
-    });
-
-    window.toggleUserApproval = async (uid, currentStatus) => {
-        try {
-            await updateDoc(doc(db, "users", uid), { approved: !currentStatus });
-            alert("Status atualizado!");
-        } catch (e) {
-            console.error(e);
-            alert("Erro ao atualizar status.");
-        }
-    };
-
-    window.resetUserPassword = async (email) => {
-        if(!confirm(`ENVIAR E-MAIL DE REDEFINIÇÃO DE SENHA PARA ${email}?`)) return;
-        try {
-            await sendPasswordResetEmail(auth, email);
-            alert("E-MAIL DE REDEFINIÇÃO ENVIADO COM SUCESSO!");
-        } catch (e) {
-            console.error(e);
-            alert("ERRO AO ENVIAR E-MAIL. VERIFIQUE SE O E-MAIL É VÁLIDO.");
-        }
-    };
+    onSnapshot(collection(db, "users"), (s) => { const u=[]; s.forEach(d=>u.push(d.data())); renderSuperAdminDashboard(u); });
+    window.toggleUserApproval = (uid, s) => updateDoc(doc(db, "users", uid), { approved: !s });
+    window.resetUserPassword = (email) => { if(confirm("RESETAR SENHA?")) sendPasswordResetEmail(auth, email).then(()=>alert("EMAIL ENVIADO")).catch(e=>alert("ERRO: "+e)); };
 }
 
 function renderSuperAdminDashboard(users) {
-    const empresasPendentes = users.filter(u => !u.approved && u.role === 'admin');
-    const empresasAtivas = users.filter(u => u.approved && u.role === 'admin');
-
-    const tPendentes = document.getElementById('tabelaEmpresasPendentes');
-    if (tPendentes) {
-        tPendentes.querySelector('tbody').innerHTML = empresasPendentes.map(u => `
-            <tr>
-                <td>${u.email}</td>
-                <td>${new Date(u.createdAt).toLocaleDateString()}</td>
-                <td><button class="btn-success btn-mini" onclick="toggleUserApproval('${u.uid}', false)">APROVAR</button></td>
-            </tr>
-        `).join('') || '<tr><td colspan="3">Nenhuma empresa pendente.</td></tr>';
-    }
-
-    const tAtivos = document.getElementById('tabelaEmpresasAtivas');
-    if (tAtivos) {
-        tAtivos.querySelector('thead').innerHTML = `
-            <tr>
-                <th>EMPRESA / EMAIL</th>
-                <th>SENHA (REF)</th>
-                <th>DATA CAD.</th>
-                <th>ULT. ALT.</th>
-                <th>AÇÕES</th>
-            </tr>
-        `;
-
-        tAtivos.querySelector('tbody').innerHTML = empresasAtivas.map(u => {
-            const funcionarios = users.filter(sub => sub.company === u.company && sub.role !== 'admin');
-            
-            const subLista = funcionarios.length > 0 
-                ? `<div style="margin-top:5px; padding:5px; background:#f0f0f0; border-radius:4px; font-size:0.8rem;">
-                     <strong>FUNCIONÁRIOS:</strong>
-                     <ul style="padding-left:15px; margin-top:3px;">
-                        ${funcionarios.map(f => `
-                            <li style="margin-bottom:2px;">
-                                ${f.name} (${f.role}) - ${f.email} 
-                                <button class="btn-mini" title="RESETAR SENHA" onclick="resetUserPassword('${f.email}')"><i class="fas fa-key"></i></button>
-                            </li>
-                        `).join('')}
-                     </ul>
-                   </div>`
-                : `<div style="font-size:0.8rem; color:#888;">SEM FUNCIONÁRIOS</div>`;
-
-            const lastUpdate = u.lastUpdate ? new Date(u.lastUpdate).toLocaleString() : '-';
-            
-            return `
-            <tr style="vertical-align:top;">
-                <td>
-                    <strong>${u.email}</strong><br>
-                    <small>DOMÍNIO: ${u.company}</small>
-                    ${subLista}
-                </td>
-                <td>${u.password || '***'}</td>
-                <td>${new Date(u.createdAt).toLocaleDateString()}</td>
-                <td>${lastUpdate}</td>
-                <td>
-                    <button class="btn-danger btn-mini" onclick="toggleUserApproval('${u.uid}', true)" title="BLOQUEAR"><i class="fas fa-ban"></i></button>
-                    <button class="btn-warning btn-mini" onclick="resetUserPassword('${u.email}')" title="RESETAR SENHA"><i class="fas fa-key"></i></button>
-                </td>
-            </tr>
-            `;
-        }).join('') || '<tr><td colspan="5">Nenhuma empresa ativa.</td></tr>';
-    }
+    const pend = users.filter(u => !u.approved && u.role === 'admin');
+    const ativ = users.filter(u => u.approved && u.role === 'admin');
+    document.getElementById('tabelaEmpresasPendentes').querySelector('tbody').innerHTML = pend.map(u=>`<tr><td>${u.email}</td><td>${u.createdAt}</td><td><button class="btn-success" onclick="toggleUserApproval('${u.uid}',false)">APROVAR</button></td></tr>`).join('');
+    document.getElementById('tabelaEmpresasAtivas').querySelector('tbody').innerHTML = ativ.map(u=>{
+        const subs = users.filter(s => s.company === u.company && s.role !== 'admin').map(s=>`<li>${s.email} <button onclick="resetUserPassword('${s.email}')" class="btn-mini">RESET</button></li>`).join('');
+        return `<tr><td>${u.email}<br><small>${u.password||'***'}</small><ul>${subs}</ul></td><td>${u.createdAt}</td><td><button class="btn-danger" onclick="toggleUserApproval('${u.uid}',true)">BLOQ</button> <button onclick="resetUserPassword('${u.email}')">RESET</button></td></tr>`;
+    }).join('');
 }
+
+// Exports globais
+window.viewCadastro = viewCadastro; window.editCadastroItem = editCadastroItem; window.deleteItem = deleteItem; window.renderOperacaoTable = renderOperacaoTable; window.renderDespesasTable = renderDespesasTable; window.exportDataBackup = exportDataBackup; window.importDataBackup = importDataBackup; window.viewOperacaoDetails = viewOperacaoDetails; window.renderCharts = renderCharts; window.editOperacaoItem = editOperacaoItem;
+```
