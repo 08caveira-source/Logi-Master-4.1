@@ -1,7 +1,8 @@
 // =============================================================================
-// 1. CONFIGURAÇÕES E UTILITÁRIOS
+// ARQUIVO: script.js (COMPLETO - PARTE 1/5)
 // =============================================================================
 
+// 1. CONFIGURAÇÕES E BANCO DE DADOS
 const DB_KEYS = {
     MOTORISTAS: 'db_motoristas',
     VEICULOS: 'db_veiculos',
@@ -15,6 +16,7 @@ const DB_KEYS = {
     SOLICITACOES_DADOS: 'db_solicitacoes_dados'
 };
 
+// Cache para evitar leituras repetitivas e travamentos
 const APP_CACHE = {
     [DB_KEYS.MOTORISTAS]: [],
     [DB_KEYS.VEICULOS]: [],
@@ -24,90 +26,210 @@ const APP_CACHE = {
     [DB_KEYS.DESPESAS_GERAIS]: [],
     [DB_KEYS.AJUDANTES]: [],
     [DB_KEYS.ATIVIDADES]: [],
+    [DB_KEYS.CHECKINS]: [],
     [DB_KEYS.SOLICITACOES_DADOS]: []
 };
 
+// Variáveis de Controle de Sessão
 window.IS_READ_ONLY = false;
 window.CURRENT_USER = null;
+let currentDate = new Date(); // Para o calendário
 
+// --- FUNÇÕES DE ACESSO A DADOS (DATA LAYER) ---
+
+// Carrega dados do Cache (Síncrono)
 function loadData(key) {
     return APP_CACHE[key] || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
 }
 
+// Salva dados no Firebase e atualiza Cache
 async function saveData(key, value) {
+    // Atualiza cache local imediatamente
     APP_CACHE[key] = value;
+    
+    // Se estiver conectado ao Firebase, salva na nuvem
     if (window.dbRef && window.CURRENT_USER) {
         const { db, doc, setDoc } = window.dbRef;
         const companyDomain = window.CURRENT_USER.company; 
+
         try {
             await setDoc(doc(db, 'companies', companyDomain, 'data', key), { items: value });
         } catch (e) {
-            console.error("Erro ao salvar no Firebase:", e);
+            console.error(`Erro ao salvar ${key}:`, e);
+            // Não alertamos erro em toda falha para não interromper o fluxo, apenas logamos
         }
+    } else {
+        // Fallback para LocalStorage se não houver internet/firebase (Modo Offline básico)
+        localStorage.setItem(key, JSON.stringify(value));
+        return Promise.resolve();
     }
 }
 
+// --- GETTERS (Buscar itens específicos por ID/Chave) ---
+
+function getMotorista(id) {
+    const lista = loadData(DB_KEYS.MOTORISTAS);
+    return lista.find(m => String(m.id) === String(id));
+}
+
+function getVeiculo(placa) {
+    const lista = loadData(DB_KEYS.VEICULOS);
+    return lista.find(v => v.placa === placa);
+}
+
+function getContratante(cnpj) {
+    const lista = loadData(DB_KEYS.CONTRATANTES);
+    return lista.find(c => c.cnpj === cnpj);
+}
+
+function getAjudante(id) {
+    const lista = loadData(DB_KEYS.AJUDANTES);
+    return lista.find(a => String(a.id) === String(id));
+}
+
+function getAtividade(id) {
+    const lista = loadData(DB_KEYS.ATIVIDADES);
+    return lista.find(a => String(a.id) === String(id));
+}
+
+function getMinhaEmpresa() {
+    return loadData(DB_KEYS.MINHA_EMPRESA);
+}
+
+// --- FORMATADORES E UTILITÁRIOS GERAIS ---
+
 const onlyDigits = (v) => (v || '').toString().replace(/\D/g, '');
+
 const formatCurrency = (value) => {
     if (typeof value !== 'number' || isNaN(value)) value = 0;
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+    return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    }).format(value);
 };
 
+function formatCPF_CNPJ(value) {
+    const digits = onlyDigits(value);
+    if (digits.length <= 11) {
+        return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, (m, a, b, c, d) => {
+            if (!d) return `${a}.${b}.${c}`;
+            return `${a}.${b}.${c}-${d}`;
+        });
+    } else {
+        return digits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})/, (m, a, b, c, d, e) => {
+            if (!e) return `${a}.${b}.${c}/${d}`;
+            return `${a}.${b}.${c}/${d}-${e}`;
+        });
+    }
+}
+
+function formatPhoneBr(value) {
+    const d = onlyDigits(value);
+    if (d.length <= 2) return d;
+    if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+    if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+    return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7, 11)}`;
+}
+
+function detectPixType(key) {
+    if (!key) return '';
+    const v = key.trim();
+    const d = onlyDigits(v);
+    if (v.includes('@')) return 'EMAIL';
+    if (/^\+?\d+$/.test(v) && (d.length >= 10 && d.length <= 13)) return 'TELEFONE';
+    if (/^\d{11}$/.test(d)) return 'CPF';
+    if (/^\d{14}$/.test(d)) return 'CNPJ';
+    return 'ALEATÓRIA';
+}
+
+function copyToClipboard(text, silent = false) {
+    if (!text) return alert('NADA PARA COPIAR.');
+    navigator.clipboard.writeText(text).then(() => {
+        if (!silent) alert('COPIADO PARA A ÁREA DE TRANSFERÊNCIA!');
+    }, () => alert('FALHA AO COPIAR.'));
+}
+
 // =============================================================================
-// 2. GETTERS E CÁLCULOS
+// 3. INTELIGÊNCIA DE FROTA E CÁLCULOS
 // =============================================================================
 
-function getMotorista(id) { return loadData(DB_KEYS.MOTORISTAS).find(m => String(m.id) === String(id)); }
-function getVeiculo(placa) { return loadData(DB_KEYS.VEICULOS).find(v => v.placa === placa); }
-function getContratante(cnpj) { return loadData(DB_KEYS.CONTRATANTES).find(c => c.cnpj === cnpj); }
-function getAjudante(id) { return loadData(DB_KEYS.AJUDANTES).find(a => String(a.id) === String(id)); }
-function getAtividade(id) { return loadData(DB_KEYS.ATIVIDADES).find(a => String(a.id) === String(id)); }
-function getMinhaEmpresa() { return loadData(DB_KEYS.MINHA_EMPRESA); }
-
+// Retorna o maior KM Final registrado para um veículo (para validação)
 function obterUltimoKmFinal(placa) {
     if (!placa) return 0;
     const todasOps = loadData(DB_KEYS.OPERACOES) || [];
-    const opsVeiculo = todasOps.filter(op => op.veiculoPlaca === placa && op.kmFinal && Number(op.kmFinal) > 0);
+    
+    // Filtra operações que têm KM Final (já concluídas ou em andamento avançado)
+    const opsVeiculo = todasOps.filter(op => 
+        op.veiculoPlaca === placa && op.kmFinal && Number(op.kmFinal) > 0
+    );
+    
     if (opsVeiculo.length === 0) return 0;
-    opsVeiculo.sort((a, b) => new Date(b.data) - new Date(a.data));
-    return Math.max(...opsVeiculo.map(o => Number(o.kmFinal)));
+    
+    // Encontra o maior valor
+    const maxKm = Math.max(...opsVeiculo.map(o => Number(o.kmFinal)));
+    return maxKm;
 }
 
 function obterUltimoPrecoCombustivel(placa) {
     if (!placa) return 0;
     const todasOps = loadData(DB_KEYS.OPERACOES) || [];
-    const opsComPreco = todasOps.filter(op => op.veiculoPlaca === placa && op.precoLitro && Number(op.precoLitro) > 0);
+    const opsComPreco = todasOps.filter(op => 
+        op && op.veiculoPlaca === placa && op.precoLitro && Number(op.precoLitro) > 0
+    );
+    
     if (opsComPreco.length === 0) return 0;
-    opsComPreco.sort((a, b) => new Date(b.data) - new Date(a.data));
+    
+    opsComPreco.sort((a, b) => new Date(b.data || '1970-01-01') - new Date(a.data || '1970-01-01'));
+    
     return Number(opsComPreco[0].precoLitro) || 0;
 }
 
 function calcularMediaHistoricaVeiculo(placa) {
     if (!placa) return 0;
-    const opsVeiculo = loadData(DB_KEYS.OPERACOES).filter(op => op && op.veiculoPlaca === placa && op.status === 'CONFIRMADA');
-    let totalKm = 0, totalLitros = 0;
+    const todasOps = loadData(DB_KEYS.OPERACOES) || [];
+    // Só usa operações CONFIRMADAS para média confiável
+    const opsVeiculo = todasOps.filter(op => op && op.veiculoPlaca === placa && op.status === 'CONFIRMADA');
+    
+    let totalKmAcumulado = 0;
+    let totalLitrosAbastecidos = 0;
+
     opsVeiculo.forEach(op => {
-        if(op.kmRodado) totalKm += Number(op.kmRodado);
-        const vlr = Number(op.combustivel) || 0;
-        const prc = Number(op.precoLitro) || 0;
-        if (vlr > 0 && prc > 0) totalLitros += (vlr / prc);
+        if(op.kmRodado) totalKmAcumulado += Number(op.kmRodado);
+        
+        const vlrCombustivel = Number(op.combustivel) || 0;
+        const vlrPreco = Number(op.precoLitro) || 0;
+        
+        if (vlrCombustivel > 0 && vlrPreco > 0) {
+            totalLitrosAbastecidos += (vlrCombustivel / vlrPreco);
+        }
     });
-    if (totalLitros <= 0) return 0;
-    return totalKm / totalLitros; 
+
+    if (totalLitrosAbastecidos <= 0) return 0;
+    return totalKmAcumulado / totalLitrosAbastecidos; 
 }
 
 function calcularCustoConsumoViagem(op) {
-    if (!op || !op.veiculoPlaca || op.status !== 'CONFIRMADA') return 0;
+    if (!op || !op.veiculoPlaca) return 0;
+    // Se não estiver confirmada, o cálculo é apenas estimativa ou zero
+    if (op.status !== 'CONFIRMADA') return 0;
+    
     const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca);
     const kmRodado = Number(op.kmRodado) || 0;
+    
     if (mediaKmL <= 0 || kmRodado <= 0) return 0;
-    let preco = Number(op.precoLitro) || 0;
-    if (preco <= 0) preco = obterUltimoPrecoCombustivel(op.veiculoPlaca);
-    if (preco <= 0) return 0; 
-    return (kmRodado / mediaKmL) * preco;
+
+    let precoParaCalculo = Number(op.precoLitro) || 0;
+    if (precoParaCalculo <= 0) {
+        precoParaCalculo = obterUltimoPrecoCombustivel(op.veiculoPlaca);
+    }
+
+    if (precoParaCalculo <= 0) return 0; 
+
+    const litrosConsumidos = kmRodado / mediaKmL;
+    return litrosConsumidos * precoParaCalculo;
 }
 // =============================================================================
-// 4. FORMATADORES
+// 4. FORMATADORES E UTILITÁRIOS DE UI
 // =============================================================================
 
 function formatCPF_CNPJ(value) {
@@ -152,7 +274,7 @@ function copyToClipboard(text, silent = false) {
 }
 
 // =============================================================================
-// 5. VALIDAÇÕES E UI
+// 5. FUNÇÕES DE MODAIS E INTERAÇÃO
 // =============================================================================
 
 function verificarValidadeCNH(motoristaId) {
@@ -194,7 +316,7 @@ function closeModal() {
     document.getElementById('operationDetailsModal').style.display = 'none';
 }
 
-// LÓGICA DO NOVO MODAL DE SOLICITAÇÃO (PERFIL)
+// --- LÓGICA DO MODAL DE SOLICITAÇÃO (PERFIL FUNCIONÁRIO) ---
 window.openSolicitacaoModal = function() {
     if (!window.CURRENT_USER) return;
     const modal = document.getElementById('modalSolicitarAlteracao');
@@ -226,7 +348,7 @@ window.openSolicitacaoModal = function() {
 };
 
 // =============================================================================
-// 6. LÓGICA DE AJUDANTES (SELEÇÃO)
+// 6. GESTÃO DE AJUDANTES (SELEÇÃO PARA OPERAÇÃO)
 // =============================================================================
 
 let _pendingAjudanteToAdd = null;
@@ -241,6 +363,7 @@ function openAdicionarAjudanteModal(ajudanteObj, onAddCallback) {
     setTimeout(() => document.getElementById('modalDiariaInput').focus(), 150);
 }
 
+// Listener global para o botão de adicionar no modal
 document.addEventListener('click', (e) => {
     if (e.target && e.target.id === 'modalAjudanteAddBtn') {
         const val = parseFloat(document.getElementById('modalDiariaInput').value) || 0;
@@ -262,7 +385,7 @@ function handleAjudanteSelectionChange() {
     if (!sel || !sel.value) return;
     const id = Number(sel.value);
     const already = (window._operacaoAjudantesTempList || []).some(a => Number(a.id) === id);
-    if (already) { alert('JÁ ADICIONADO.'); sel.value = ""; return; }
+    if (already) { alert('ESTE AJUDANTE JÁ FOI ADICIONADO.'); sel.value = ""; return; }
     
     const ajud = getAjudante(id);
     if (!ajud) return;
@@ -279,7 +402,8 @@ function renderAjudantesAdicionadosList() {
     const list = document.getElementById('listaAjudantesAdicionados');
     if (!list) return;
     const arr = window._operacaoAjudantesTempList || [];
-    if (!arr.length) { list.innerHTML = '<li style="color:var(--secondary-color)">NENHUM.</li>'; return; }
+    if (!arr.length) { list.innerHTML = '<li style="color:var(--secondary-color)">NENHUM AJUDANTE SELECIONADO.</li>'; return; }
+    
     list.innerHTML = arr.map(a => {
         const aj = getAjudante(a.id) || {};
         const btnDel = window.IS_READ_ONLY ? '' : `<button class="btn-mini" type="button" onclick="removeAjudanteFromOperation(${a.id})"><i class="fas fa-trash"></i></button>`;
@@ -294,12 +418,13 @@ window.removeAjudanteFromOperation = function(id) {
 };
 
 // =============================================================================
-// 7. POPULATE SELECTS
+// 7. PREENCHIMENTO DE SELECTS (DROPDOWNS)
 // =============================================================================
 
 function populateSelect(selectId, data, valueKey, textKey, initialText) {
     const sel = document.getElementById(selectId);
-    if (!sel) return;
+    if (!sel) return; // Se o elemento não existir na tela, ignora (evita erro no perfil func)
+    
     const prev = Array.from(sel.selectedOptions).map(o => o.value);
     sel.innerHTML = `<option value="">${initialText}</option>`;
     data.forEach(item => {
@@ -308,11 +433,11 @@ function populateSelect(selectId, data, valueKey, textKey, initialText) {
         opt.textContent = item[textKey];
         sel.appendChild(opt);
     });
+    // Tenta restaurar seleção anterior se houver
     try { Array.from(sel.options).forEach(o => { if (prev.includes(o.value)) o.selected = true; }); } catch {}
 }
 
 function populateAllSelects() {
-    // Só popula se os elementos existirem (Admin)
     const motoristas = loadData(DB_KEYS.MOTORISTAS);
     const veiculos = loadData(DB_KEYS.VEICULOS);
     const contratantes = loadData(DB_KEYS.CONTRATANTES);
@@ -338,6 +463,18 @@ function populateAllSelects() {
         motoristas.forEach(m => selRecibo.add(new Option(`MOTORISTA - ${m.nome}`, `motorista:${m.id}`)));
         ajudantes.forEach(a => selRecibo.add(new Option(`AJUDANTE - ${a.nome}`, `ajudante:${a.id}`)));
     }
+    
+    // Selects do Modal de Checkin (usado pelo funcionário também)
+    populateSelect('checkinVeiculo', veiculos, 'placa', 'placa', 'SELECIONE O VEÍCULO...');
+    populateSelect('checkinContratante', contratantes, 'cnpj', 'razaoSocial', 'SELECIONE A CONTRATANTE...');
+    
+    // Renderiza as tabelas de cadastro se estiverem na tela
+    renderCadastroTable(DB_KEYS.MOTORISTAS);
+    renderCadastroTable(DB_KEYS.AJUDANTES);
+    renderCadastroTable(DB_KEYS.VEICULOS);
+    renderCadastroTable(DB_KEYS.CONTRATANTES);
+    renderCadastroTable(DB_KEYS.ATIVIDADES);
+    renderMinhaEmpresaInfo();
 }
 
 function renderMinhaEmpresaInfo() {
@@ -354,18 +491,18 @@ function renderMinhaEmpresaInfo() {
 // =============================================================================
 
 function renderCadastroTable(key) {
-    // Esta função só roda se a tabela existir no DOM (Admin)
     let tabela, idKey = 'id';
     if (key === DB_KEYS.VEICULOS) idKey = 'placa';
     if (key === DB_KEYS.CONTRATANTES) idKey = 'cnpj';
 
+    // Mapeia ID da tabela no HTML
     if (key === DB_KEYS.MOTORISTAS) tabela = document.getElementById('tabelaMotoristas');
     else if (key === DB_KEYS.AJUDANTES) tabela = document.getElementById('tabelaAjudantes');
     else if (key === DB_KEYS.VEICULOS) tabela = document.getElementById('tabelaVeiculos');
     else if (key === DB_KEYS.CONTRATANTES) tabela = document.getElementById('tabelaContratantes');
     else if (key === DB_KEYS.ATIVIDADES) tabela = document.getElementById('tabelaAtividades');
 
-    if (!tabela) return;
+    if (!tabela) return; // Se não estiver na tela de cadastros, sai.
 
     const data = loadData(key);
     let rowsHtml = '';
@@ -384,9 +521,12 @@ function renderCadastroTable(key) {
         }
         rowsHtml += `<tr><td>${col1}</td><td>${col2}</td><td>${btns}</td></tr>`;
     });
-    tabela.querySelector('tbody').innerHTML = rowsHtml || `<tr><td colspan="3" style="text-align:center;">VAZIO.</td></tr>`;
+    
+    const tbody = tabela.querySelector('tbody');
+    if (tbody) tbody.innerHTML = rowsHtml || `<tr><td colspan="3" style="text-align:center;">NENHUM CADASTRO ENCONTRADO.</td></tr>`;
 }
 
+// Funções de CRUD (Visualizar, Editar, Excluir)
 function viewCadastro(key, id) {
     let item, html = '';
     if (key === DB_KEYS.MOTORISTAS) { item = getMotorista(id); html = `<p>NOME: ${item.nome}</p><p>TEL: ${item.telefone}</p><p>PIX: ${item.pix}</p><p>CNH: ${item.cnh}</p>`; }
@@ -399,10 +539,7 @@ function viewCadastro(key, id) {
 
 function editCadastroItem(key, id) {
     if (window.IS_READ_ONLY) return alert("SOMENTE LEITURA.");
-    // Lógica simplificada de preencher form (já que é repetitiva)
-    // O código original tinha um switch/case gigante aqui, mas a lógica é:
-    // Pega o item, joga nos inputs pelo ID.
-    // Como você já tem isso funcionando, vou manter a estrutura segura:
+    // Preenchimento reverso dos inputs
     if (key === DB_KEYS.MOTORISTAS) {
         const m = getMotorista(id);
         document.getElementById('motoristaNome').value = m.nome;
@@ -454,7 +591,6 @@ function deleteItem(key, id) {
     arr = arr.filter(it => String(it[idKey]) !== String(id));
     saveData(key, arr);
     alert('ITEM EXCLUÍDO.');
-    // Re-renderiza a tabela correta
     renderCadastroTable(key);
 }
 // =============================================================================
@@ -754,6 +890,7 @@ function setupFormHandlers() {
             const idHidden = document.getElementById('operacaoId').value;
             const ajudantesVisual = window._operacaoAjudantesTempList || [];
             
+            // Se marcado como agendamento, cria como AGENDADA. Se não, já cria como CONFIRMADA.
             const statusFinal = isAgendamento ? 'AGENDADA' : 'CONFIRMADA';
             
             const obj = {
@@ -794,7 +931,7 @@ function setupFormHandlers() {
         });
     }
     
-    // --- CHECK-IN DO FUNCIONÁRIO (KM INICIAL / FINAL) ---
+    // --- CHECK-IN DO FUNCIONÁRIO (KM INICIAL / FINAL) COM VALIDAÇÃO ---
     const formCheckinConfirm = document.getElementById('formCheckinConfirm');
     if (formCheckinConfirm) {
         formCheckinConfirm.addEventListener('submit', (e) => {
@@ -828,7 +965,7 @@ function setupFormHandlers() {
                             if(!kmIni || kmIni <= 0) return alert("INFORME O KM INICIAL VÁLIDO.");
                             
                             if (kmIni < ultimoKmRegistrado) {
-                                return alert(`ERRO: O KM INICIAL (${kmIni}) NÃO PODE SER MENOR QUE O ÚLTIMO REGISTRADO (${ultimoKmRegistrado}).`);
+                                return alert(`ERRO: O KM INICIAL (${kmIni}) NÃO PODE SER MENOR QUE O ÚLTIMO REGISTRADO (${ultimoKmRegistrado}) PARA ESTE VEÍCULO.`);
                             }
                             
                             op.kmInicial = kmIni;
@@ -899,7 +1036,7 @@ function renderOperacaoTable() {
     const tabela = document.getElementById('tabelaOperacoes');
     if (!tabela || !tabela.querySelector('tbody')) return;
     
-    // OTIMIZAÇÃO: Renderiza apenas os 50 últimos para não travar a tela
+    // OTIMIZAÇÃO: Renderiza apenas os 50 últimos para não travar a tela do Admin
     const opsExibidas = ops.slice(0, 50);
 
     if (!opsExibidas.length) {
@@ -944,11 +1081,19 @@ function viewOperacaoDetails(id) {
     const contratante = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
     const atividade = getAtividade(op.atividadeId)?.nome || 'N/A';
     
+    // LISTA DE AJUDANTES COM STATUS DE PRESENÇA
     const ajudantesHtml = (op.ajudantes || []).map(a => {
         const aj = getAjudante(a.id) || {};
         const checkins = op.checkins || { ajudantes: [] };
         const presente = checkins.ajudantes && checkins.ajudantes.includes(a.id);
-        const statusPresenca = isFinalizada ? (presente ? '<span style="color:green;font-size:0.7rem;font-weight:bold;">(PRESENTE)</span>' : '<span style="color:red;font-size:0.7rem;font-weight:bold;">(FALTA)</span>') : '';
+        
+        // Se a rota já acabou, mostra quem faltou
+        let statusPresenca = '';
+        if (isFinalizada) {
+            statusPresenca = presente 
+                ? '<span style="color:green;font-size:0.7rem;font-weight:bold;">(PRESENTE)</span>' 
+                : '<span style="color:red;font-size:0.7rem;font-weight:bold;">(FALTA - NÃO PAGO)</span>';
+        }
         
         return `<li>${aj.nome || 'ID:'+a.id} — DIÁRIA: ${formatCurrency(Number(a.diaria)||0)} ${statusPresenca}</li>`;
     }).join('') || '<li>NENHUM</li>';
@@ -972,7 +1117,7 @@ function viewOperacaoDetails(id) {
         `;
     } else {
         // Detalhes Completos (Confirmada)
-        // Calcula apenas quem estava presente (Lógica de "Pagamento por Presença")
+        // REGRA DE NEGÓCIO: Só soma custo de quem estava presente
         const checkins = op.checkins || { ajudantes: [] };
         const totalDiarias = (op.ajudantes || []).reduce((s, a) => {
             if (checkins.ajudantes && checkins.ajudantes.includes(a.id)) {
@@ -1016,7 +1161,7 @@ function viewOperacaoDetails(id) {
             ${infoConsumoHTML}
             <hr style="margin:10px 0; border:0; border-top:1px solid #eee;">
             <p style="font-size:1.1rem;"><strong>RESULTADO OPERACIONAL (LUCRO):</strong> <span style="color:${liquidoOperacional>=0?'var(--success-color)':'var(--danger-color)'}">${formatCurrency(liquidoOperacional)}</span></p>
-            <div style="margin-top:10px;"><strong>LISTA DE PRESENÇA (AJUDANTES):</strong><ul style="margin-top:6px;">${ajudantesHtml}</ul></div>
+            <div style="margin-top:10px;"><strong>LISTA DE PRESENÇA:</strong><ul style="margin-top:6px;">${ajudantesHtml}</ul></div>
         `;
     }
     openOperationDetails('DETALHES DA OPERAÇÃO', detailsHtml);
@@ -1084,6 +1229,7 @@ function editDespesaItem(id) {
 
 function renderCheckinsTable() {
     const ops = loadData(DB_KEYS.OPERACOES);
+    // Pendentes são Agendadas ou Em Andamento
     const pendentes = ops.filter(o => o.status !== 'CONFIRMADA').sort((a,b) => new Date(a.data) - new Date(b.data));
 
     // A. LÓGICA DO ADMIN
@@ -1146,7 +1292,7 @@ function renderCheckinsTable() {
         }
     }
 
-    // B. LÓGICA DO FUNCIONÁRIO
+    // B. LÓGICA DO FUNCIONÁRIO (PAINEL + RESUMO HISTÓRICO)
     if (window.CURRENT_USER && (window.CURRENT_USER.role === 'motorista' || window.CURRENT_USER.role === 'ajudante')) {
         const myUid = window.CURRENT_USER.uid;
         const myEmail = window.CURRENT_USER.email;
@@ -1163,7 +1309,7 @@ function renderCheckinsTable() {
             return;
         }
 
-        // 1. LISTA DE PENDENTES
+        // 1. LISTA DE PENDENTES (AGENDADAS OU EM ANDAMENTO)
         const listaFunc = document.getElementById('listaServicosAgendados');
         if (listaFunc) {
             const myPendentes = pendentes.filter(op => {
@@ -1172,7 +1318,7 @@ function renderCheckinsTable() {
             });
 
             if (!myPendentes.length) {
-                listaFunc.innerHTML = '<p style="text-align:center; color:#666;">NENHUMA VIAGEM ATIVA OU AGENDADA.</p>';
+                listaFunc.innerHTML = '<p style="text-align:center; color:#666;">NENHUMA VIAGEM ATIVA.</p>';
             } else {
                 let html = '';
                 myPendentes.forEach(op => {
@@ -1334,7 +1480,16 @@ function renderCharts() {
             sumFaturamento += (op.faturamento || 0);
             sumCombustivelEstimado += (calcularCustoConsumoViagem(op) || 0);
             sumKm += (Number(op.kmRodado) || 0);
-            const diarias = (op.ajudantes || []).reduce((acc, a) => acc + (Number(a.diaria) || 0), 0);
+            
+            // Custo real com ajudantes (apenas os presentes)
+            const checkins = op.checkins || { ajudantes: [] };
+            const diarias = (op.ajudantes || []).reduce((acc, a) => {
+                if(checkins.ajudantes && checkins.ajudantes.includes(a.id)) {
+                    return acc + (Number(a.diaria) || 0);
+                }
+                return acc;
+            }, 0);
+            
             sumOutros += (op.comissao || 0) + diarias + (op.despesas || 0);
         });
         const sumDespGeral = despMes.reduce((acc, d) => acc + (d.valor || 0), 0);
@@ -1436,8 +1591,7 @@ function setupRealtimeListeners() {
     if (window.CURRENT_USER && window.CURRENT_USER.company) {
         const domain = window.CURRENT_USER.company;
         
-        // SE FOR FUNCIONÁRIO: Carrega apenas o essencial para evitar travamento
-        // (Carregamos tudo em cache, mas só desenhamos o necessário na updateUI)
+        // Carrega dados. Se for funcionário, a UI só vai desenhar o necessário depois.
         Object.values(DB_KEYS).forEach(key => {
             onSnapshot(doc(db, 'companies', domain, 'data', key), (s) => {
                 if (s.exists()) APP_CACHE[key] = s.data().items || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
@@ -1456,8 +1610,8 @@ function updateUI() {
 
     if (isFuncionario) {
         // Se for funcionário, renderiza APENAS as tabelas dele
+        // Isso evita que o calendário e tabelas de admin carreguem e travem o celular
         renderCheckinsTable(); 
-        // Não renderiza gráficos, despesas ou selects administrativos
     } else {
         // Se for ADMIN, renderiza tudo
         populateAllSelects();
@@ -1515,23 +1669,24 @@ window.filtrarHistoricoFuncionario = function(e) {
 
         if (isMotorista) {
             if (op.motoristaId === myProfileId) {
+                // Motorista: recebe comissão se a rota foi confirmada
                 participou = true;
                 valorOp = op.comissao || 0;
             }
         } else {
-            // AJUDANTE: Regra de Falta
+            // AJUDANTE: Lógica de Falta
             const checkins = op.checkins || { ajudantes: [] };
             const estavaNaLista = (op.ajudantes || []).some(a => a.id === myProfileId);
             
             if (estavaNaLista) {
                 participou = true;
-                // Só paga se fez check-in
+                // Só paga se fez check-in (ID está na lista de confirmados)
                 if (checkins.ajudantes && checkins.ajudantes.includes(myProfileId)) {
                     const ajData = op.ajudantes.find(a => a.id === myProfileId);
                     valorOp = Number(ajData.diaria) || 0;
                     statusPresenca = "PRESENTE";
                 } else {
-                    valorOp = 0;
+                    valorOp = 0; // Se não fez checkin, não recebe
                     statusPresenca = "FALTA";
                 }
             }
@@ -1546,7 +1701,7 @@ window.filtrarHistoricoFuncionario = function(e) {
         return false;
     }).sort((a,b) => new Date(a.data) - new Date(b.data));
 
-    // 3. Renderiza Resultado
+    // 3. Renderiza Resultado na Tabela
     const displayTotal = document.getElementById('empTotalReceber');
     const divResult = document.getElementById('resultadoFinanceiroFuncionario');
     const tbody = document.getElementById('tabelaHistoricoCompleto').querySelector('tbody');
@@ -1562,7 +1717,7 @@ window.filtrarHistoricoFuncionario = function(e) {
             const d = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
             const c = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
             
-            // Cor vermelha se for Falta
+            // Destaca se foi falta (vermelho) ou pago (verde)
             const colorClass = op._statusTemp === 'FALTA' ? 'color:red' : 'color:green';
             const valStr = op._statusTemp === 'FALTA' ? 'R$ 0,00' : formatCurrency(op._valorTemp);
 
@@ -1582,14 +1737,14 @@ window.filtrarHistoricoFuncionario = function(e) {
 // 18. BACKUP & EXTRAS
 // =============================================================================
 
-function exportDataBackup() { /* ... Lógica Mantida ... */ 
+function exportDataBackup() { 
     const data = {}; Object.values(DB_KEYS).forEach(k => data[k] = loadData(k));
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'}));
     a.download = 'backup.json'; a.click();
 }
 window.exportDataBackup = exportDataBackup;
 
-window.importDataBackup = function(e) { /* ... Lógica Mantida ... */ 
+window.importDataBackup = function(e) { 
     const f = e.target.files[0]; if(!f) return;
     const r = new FileReader();
     r.onload = (ev) => {
@@ -1606,7 +1761,7 @@ window.exportReportToPDF = function() { alert("PDF Admin"); };
 window.gerarRelatorioCobranca = function() { alert("Cobrança Admin"); };
 
 // =============================================================================
-// 20. LISTENERS E ATRIBUIÇÕES GLOBAIS
+// 20. LISTENERS GLOBAIS
 // =============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
