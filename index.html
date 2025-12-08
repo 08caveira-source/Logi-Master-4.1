@@ -558,7 +558,7 @@
             </div>
         </section>
 
-        <section id="employee-home" class="page">
+<section id="employee-home" class="page">
             <h2>PAINEL DO FUNCIONÁRIO</h2>
             
             <div id="profileIncompleteAlert" class="card" style="background:#fff3e0; border-left:5px solid orange; display:none;">
@@ -567,25 +567,72 @@
             </div>
 
             <div class="card" style="margin-top:20px;">
-                <h3 style="color:var(--primary-color); margin-bottom:15px;"><i class="fas fa-tasks"></i> SERVIÇOS AGENDADOS (PENDENTES)</h3>
+                <h3 style="color:var(--primary-color); margin-bottom:15px;"><i class="fas fa-tasks"></i> CHECK-IN (SERVIÇOS ATIVOS)</h3>
                 <div id="listaServicosAgendados">
-                    <p style="text-align:center; color:#666;">NENHUM SERVIÇO AGENDADO NO MOMENTO.</p>
+                    <p style="text-align:center; color:#666;">CARREGANDO AGENDAMENTOS...</p>
                 </div>
             </div>
 
             <div class="card" style="margin-top:20px;">
-                <h3>MEUS ÚLTIMOS SERVIÇOS (HISTÓRICO)</h3>
+                <h3>ÚLTIMOS 5 SERVIÇOS</h3>
                 <div class="table-responsive">
-                    <table class="data-table" id="tabelaMeusServicos">
+                    <table class="data-table" id="tabelaMeusServicosResumo">
+                        <thead><tr><th>DATA</th><th>VEÍCULO</th><th>CLIENTE</th><th>STATUS</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div style="text-align:center; margin-top:10px;">
+                    <button class="btn-secondary" onclick="document.querySelector('[data-page=\'employee-history\']').click()">VER HISTÓRICO COMPLETO</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="employee-history" class="page">
+            <h2>MEUS SERVIÇOS E FINANCEIRO</h2>
+            
+            <div class="card">
+                <h3><i class="fas fa-filter"></i> FILTRAR PERÍODO</h3>
+                <form id="formFiltroFuncionario" onsubmit="filtrarHistoricoFuncionario(event)">
+                    <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
+                        <div class="form-group">
+                            <label>DATA INICIAL:</label>
+                            <input type="date" id="empDataInicio" required>
+                        </div>
+                        <div class="form-group">
+                            <label>DATA FINAL:</label>
+                            <input type="date" id="empDataFim" required>
+                        </div>
+                        <div class="form-group" style="display:flex; align-items:flex-end;">
+                            <button type="submit" class="btn-primary" style="width:100%; justify-content:center;">
+                                <i class="fas fa-search"></i> BUSCAR
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <div id="resultadoFinanceiroFuncionario" class="card" style="margin-top:20px; display:none; background:#e8f5e9; border:1px solid #c8e6c9;">
+                <h3 style="color:var(--success-color); text-align:center; margin-bottom:5px;">VALOR A RECEBER NO PERÍODO</h3>
+                <h1 style="color:var(--success-color); text-align:center; font-size:2.5rem;" id="empTotalReceber">R$ 0,00</h1>
+                <p style="text-align:center; color:#555; font-size:0.8rem;">REFERENTE AOS SERVIÇOS LISTADOS ABAIXO.</p>
+            </div>
+
+            <div class="card" style="margin-top:20px;">
+                <h3>RELATÓRIO DETALHADO</h3>
+                <div class="table-responsive">
+                    <table class="data-table" id="tabelaHistoricoCompleto">
                         <thead>
                             <tr>
                                 <th>DATA</th>
                                 <th>VEÍCULO</th>
-                                <th>CONTRATANTE</th>
+                                <th>CLIENTE</th>
+                                <th>VALOR (R$)</th>
                                 <th>STATUS</th>
                             </tr>
                         </thead>
-                        <tbody></tbody>
+                        <tbody>
+                            <tr><td colspan="5" style="text-align:center;">USE O FILTRO ACIMA PARA CARREGAR OS DADOS.</td></tr>
+                        </tbody>
                     </table>
                 </div>
             </div>
