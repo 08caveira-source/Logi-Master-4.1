@@ -572,8 +572,6 @@ function setupFormHandlers() {
     if (formMotorista) {
         formMotorista.addEventListener('submit', (e) => {
             e.preventDefault();
-            
-            // Lógica de Criação de Usuário (Domínio/Email)
             let emailGerado = null;
             let arr = loadData(DB_KEYS.MOTORISTAS).slice();
             const idHidden = document.getElementById('motoristaId').value;
@@ -582,7 +580,6 @@ function setupFormHandlers() {
             if (!idHidden) {
                 const companyDomain = window.CURRENT_USER ? window.CURRENT_USER.company : 'logimaster.com';
                 const userLogin = prompt(`CRIAÇÃO DE ACESSO PARA ${nomeInput}:\n\nDefina o nome de usuário (ex: joao.silva).\nO domínio será @${companyDomain}.`);
-                
                 if (!userLogin) {
                     alert("CADASTRO CANCELADO. É NECESSÁRIO DEFINIR UM USUÁRIO.");
                     return;
@@ -610,22 +607,14 @@ function setupFormHandlers() {
                 pix: document.getElementById('motoristaPix').value || '',
                 email: emailGerado || existingEmail || ''
             };
-            
             const idx = arr.findIndex(a => a.id === obj.id);
-            if (idx >= 0) arr[idx] = obj;
-            else arr.push(obj);
-            
+            if (idx >= 0) arr[idx] = obj; else arr.push(obj);
             saveData(DB_KEYS.MOTORISTAS, arr);
-            
             formMotorista.reset();
             toggleCursoInput();
             document.getElementById('motoristaId').value = '';
-            
-            if (emailGerado) {
-                alert(`MOTORISTA SALVO!\n\nUSUÁRIO CRIADO: ${emailGerado}\nINFORME ESTE E-MAIL PARA O PRIMEIRO ACESSO.`);
-            } else {
-                alert('MOTORISTA ATUALIZADO.');
-            }
+            if (emailGerado) alert(`MOTORISTA SALVO! USUÁRIO: ${emailGerado}`);
+            else alert('MOTORISTA ATUALIZADO.');
         });
     }
 
@@ -633,7 +622,6 @@ function setupFormHandlers() {
     if (formAjudante) {
         formAjudante.addEventListener('submit', (e) => {
             e.preventDefault();
-            
             let emailGerado = null;
             let arr = loadData(DB_KEYS.AJUDANTES).slice();
             const idHidden = document.getElementById('ajudanteId').value;
@@ -642,7 +630,6 @@ function setupFormHandlers() {
             if (!idHidden) {
                 const companyDomain = window.CURRENT_USER ? window.CURRENT_USER.company : 'logimaster.com';
                 const userLogin = prompt(`CRIAÇÃO DE ACESSO PARA ${nomeInput}:\n\nDefina o nome de usuário (ex: pedro.souza).\nO domínio será @${companyDomain}.`);
-                
                 if (!userLogin) {
                     alert("CADASTRO CANCELADO. É NECESSÁRIO DEFINIR UM USUÁRIO.");
                     return;
@@ -666,20 +653,13 @@ function setupFormHandlers() {
                 pix: document.getElementById('ajudantePix').value || '',
                 email: emailGerado || existingEmail || ''
             };
-            
             const idx = arr.findIndex(a => a.id === obj.id);
-            if (idx >= 0) arr[idx] = obj;
-            else arr.push(obj);
-            
+            if (idx >= 0) arr[idx] = obj; else arr.push(obj);
             saveData(DB_KEYS.AJUDANTES, arr);
             formAjudante.reset();
             document.getElementById('ajudanteId').value = '';
-            
-            if (emailGerado) {
-                alert(`AJUDANTE SALVO!\n\nUSUÁRIO CRIADO: ${emailGerado}\nINFORME ESTE E-MAIL PARA O PRIMEIRO ACESSO.`);
-            } else {
-                alert('AJUDANTE ATUALIZADO.');
-            }
+            if (emailGerado) alert(`AJUDANTE SALVO! USUÁRIO: ${emailGerado}`);
+            else alert('AJUDANTE ATUALIZADO.');
         });
     }
 
@@ -697,8 +677,7 @@ function setupFormHandlers() {
                 chassi: document.getElementById('veiculoChassi').value.toUpperCase() || ''
             };
             const idx = arr.findIndex(v => v.placa === placa);
-            if (idx >= 0) arr[idx] = obj;
-            else arr.push(obj);
+            if (idx >= 0) arr[idx] = obj; else arr.push(obj);
             saveData(DB_KEYS.VEICULOS, arr);
             formVeiculo.reset();
             alert('VEÍCULO SALVO.');
@@ -718,8 +697,7 @@ function setupFormHandlers() {
                 telefone: document.getElementById('contratanteTelefone').value || ''
             };
             const idx = arr.findIndex(c => c.cnpj === cnpj);
-            if (idx >= 0) arr[idx] = obj;
-            else arr.push(obj);
+            if (idx >= 0) arr[idx] = obj; else arr.push(obj);
             saveData(DB_KEYS.CONTRATANTES, arr);
             formContratante.reset();
             alert('CONTRATANTE SALVA.');
@@ -738,8 +716,7 @@ function setupFormHandlers() {
                 nome: document.getElementById('atividadeNome').value.toUpperCase()
             };
             const idx = arr.findIndex(a => a.id === obj.id);
-            if (idx >= 0) arr[idx] = obj;
-            else arr.push(obj);
+            if (idx >= 0) arr[idx] = obj; else arr.push(obj);
             saveData(DB_KEYS.ATIVIDADES, arr);
             formAtividade.reset();
             document.getElementById('atividadeId').value = '';
@@ -832,8 +809,10 @@ function setupFormHandlers() {
             let arr = loadData(DB_KEYS.OPERACOES).slice();
             const idHidden = document.getElementById('operacaoId').value;
             const ajudantesVisual = window._operacaoAjudantesTempList || [];
-            // Status: Se for agendamento -> AGENDADA, se não -> CONFIRMADA
+            
+            // Se marcado como agendamento, cria como AGENDADA. Se não, já cria como CONFIRMADA (uso do Admin)
             const statusFinal = isAgendamento ? 'AGENDADA' : 'CONFIRMADA';
+            
             const obj = {
                 id: idHidden ? Number(idHidden) : (arr.length ? Math.max(...arr.map(o => o.id)) + 1 : 1),
                 status: statusFinal,
@@ -849,6 +828,9 @@ function setupFormHandlers() {
                 precoLitro: Number(document.getElementById('operacaoPrecoLitro').value) || 0,
                 despesas: Number(document.getElementById('operacaoDespesas').value) || 0,
                 kmRodado: Number(document.getElementById('operacaoKmRodado').value) || 0, 
+                // Novos campos para controle de Km
+                kmInicial: 0, 
+                kmFinal: 0,
                 ajudantes: ajudantesVisual.slice()
             };
             const idx = arr.findIndex(o => o.id === obj.id);
@@ -871,7 +853,7 @@ function setupFormHandlers() {
         });
     }
     
-    // --- LÓGICA DE CHECK-IN DO FUNCIONÁRIO (COM AUTO-INÍCIO) ---
+    // --- LÓGICA DE CHECK-IN DO FUNCIONÁRIO (KM INICIAL / FINAL) ---
     const formCheckinConfirm = document.getElementById('formCheckinConfirm');
     if (formCheckinConfirm) {
         formCheckinConfirm.addEventListener('submit', (e) => {
@@ -880,9 +862,7 @@ function setupFormHandlers() {
             if (!window.CURRENT_USER) return alert("ERRO DE SESSÃO. FAÇA LOGIN NOVAMENTE.");
 
             const opId = Number(document.getElementById('checkinOpId').value);
-            const kmRodado = Number(document.getElementById('checkinKmRodado').value) || 0;
-            const valorAbastecido = Number(document.getElementById('checkinValorAbastecido').value) || 0;
-            const precoLitro = Number(document.getElementById('checkinPrecoLitroConfirm').value) || 0;
+            const step = document.getElementById('checkinStep').value; // 'start' ou 'end'
             
             let arr = loadData(DB_KEYS.OPERACOES).slice();
             const idx = arr.findIndex(o => o.id === opId);
@@ -890,23 +870,40 @@ function setupFormHandlers() {
             if (idx >= 0) {
                 const op = arr[idx];
                 if (!op.checkins) op.checkins = { motorista: false, ajudantes: [] };
+                let isMotorista = window.CURRENT_USER.role === 'motorista';
                 let confirmouAlguem = false;
 
-                // Identifica se é Motorista (Vínculo por ID ou Email)
-                if (window.CURRENT_USER.role === 'motorista') {
+                if (isMotorista) {
                     const motoristaCad = getMotorista(op.motoristaId);
                     const souEu = (motoristaCad && (motoristaCad.uid === window.CURRENT_USER.uid || motoristaCad.email === window.CURRENT_USER.email));
+                    
                     if (souEu) {
-                        op.checkins.motorista = true;
-                        op.kmRodado = kmRodado;
-                        op.combustivel = valorAbastecido;
-                        op.precoLitro = precoLitro;
-                        confirmouAlguem = true;
+                        if (step === 'start') {
+                            const kmIni = Number(document.getElementById('checkinKmInicial').value);
+                            if(!kmIni || kmIni <= 0) return alert("INFORME O KM INICIAL VÁLIDO.");
+                            
+                            op.kmInicial = kmIni;
+                            op.status = 'EM_ANDAMENTO'; // Muda status para em andamento
+                            op.checkins.motorista = true; // Marca presença
+                            confirmouAlguem = true;
+                            alert("VIAGEM INICIADA! BOA ROTA.");
+                        } else if (step === 'end') {
+                            const kmFim = Number(document.getElementById('checkinKmFinal').value);
+                            if(!kmFim || kmFim <= op.kmInicial) return alert("O KM FINAL DEVE SER MAIOR QUE O INICIAL.");
+                            
+                            op.kmFinal = kmFim;
+                            op.kmRodado = kmFim - (op.kmInicial || 0); // CÁLCULO AUTOMÁTICO
+                            op.combustivel = Number(document.getElementById('checkinValorAbastecido').value) || 0;
+                            op.precoLitro = Number(document.getElementById('checkinPrecoLitroConfirm').value) || 0;
+                            
+                            op.status = 'CONFIRMADA'; // FINALIZA A ROTA
+                            confirmouAlguem = true;
+                            alert(`VIAGEM FINALIZADA!\nTOTAL RODADO: ${op.kmRodado} KM`);
+                        }
                     }
-                }
-                
-                // Identifica se é Ajudante (Vínculo por ID ou Email)
-                if (window.CURRENT_USER.role === 'ajudante') {
+                } 
+                // Ajudantes (Apenas Confirmam Presença)
+                else if (window.CURRENT_USER.role === 'ajudante') {
                     const ajudanteCad = loadData(DB_KEYS.AJUDANTES).find(a => a.uid === window.CURRENT_USER.uid || a.email === window.CURRENT_USER.email);
                     if (ajudanteCad) {
                         const estaNaOp = (op.ajudantes || []).some(a => a.id === ajudanteCad.id);
@@ -915,25 +912,13 @@ function setupFormHandlers() {
                                 op.checkins.ajudantes.push(ajudanteCad.id);
                             }
                             confirmouAlguem = true;
+                            alert("PRESENÇA CONFIRMADA!");
                         }
                     }
                 }
 
                 if (confirmouAlguem) {
-                    // === LÓGICA DE INÍCIO AUTOMÁTICO ===
-                    const totalAjudantes = (op.ajudantes || []).length;
-                    const confirmadosAjudantes = (op.checkins.ajudantes || []).length;
-                    const motoristaOk = op.checkins.motorista;
-
-                    if (motoristaOk && confirmadosAjudantes >= totalAjudantes) {
-                        op.status = 'CONFIRMADA'; // Inicia automaticamente
-                        saveData(DB_KEYS.OPERACOES, arr);
-                        alert('TODOS CONFIRMARAM! A ROTA FOI INICIADA AUTOMATICAMENTE.');
-                    } else {
-                        saveData(DB_KEYS.OPERACOES, arr);
-                        alert('CHECK-IN REALIZADO! AGUARDANDO OS DEMAIS MEMBROS DA EQUIPE.');
-                    }
-                    
+                    saveData(DB_KEYS.OPERACOES, arr);
                     closeCheckinConfirmModal();
                     renderCheckinsTable(); 
                 } else {
@@ -975,13 +960,12 @@ function renderOperacaoTable() {
         const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
         
         // Status Badge
-        const isAgendada = op.status === 'AGENDADA';
-        const statusBadge = isAgendada 
-            ? '<span style="background:orange; color:white; padding:2px 6px; border-radius:4px; font-size:0.7rem;">AGENDADA</span>' 
-            : '<span style="background:green; color:white; padding:2px 6px; border-radius:4px; font-size:0.7rem;">CONFIRMADA</span>';
+        let statusBadge = '';
+        if (op.status === 'AGENDADA') statusBadge = '<span style="background:orange; color:white; padding:2px 6px; border-radius:4px; font-size:0.7rem;">AGENDADA</span>';
+        else if (op.status === 'EM_ANDAMENTO') statusBadge = '<span style="background:#0288d1; color:white; padding:2px 6px; border-radius:4px; font-size:0.7rem;">EM ANDAMENTO</span>';
+        else statusBadge = '<span style="background:green; color:white; padding:2px 6px; border-radius:4px; font-size:0.7rem;">CONFIRMADA</span>';
 
-        // Se agendada, faturamento pode ser 0 ou estimado
-        const faturamentoDisplay = isAgendada && (!op.faturamento) ? '(PENDENTE)' : formatCurrency(op.faturamento);
+        const faturamentoDisplay = op.status === 'CONFIRMADA' ? formatCurrency(op.faturamento) : '(PENDENTE)';
 
         let btns = `<button class="btn-action view-btn" onclick="viewOperacaoDetails(${op.id})"><i class="fas fa-eye"></i></button>`;
         if (!window.IS_READ_ONLY) {
@@ -1003,12 +987,11 @@ function viewOperacaoDetails(id) {
     const op = loadData(DB_KEYS.OPERACOES).find(o => o.id === id);
     if (!op) return alert('OPERAÇÃO NÃO ENCONTRADA.');
     
-    const isAgendada = op.status === 'AGENDADA';
+    const isAgendada = op.status !== 'CONFIRMADA';
     const motorista = getMotorista(op.motoristaId)?.nome || 'N/A';
     const contratante = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
     const atividade = getAtividade(op.atividadeId)?.nome || 'N/A';
     
-    // Ajudantes
     const ajudantesHtml = (op.ajudantes || []).map(a => {
         const aj = getAjudante(a.id) || {};
         return `<li>${aj.nome || 'ID:'+a.id} — DIÁRIA: ${formatCurrency(Number(a.diaria)||0)}</li>`;
@@ -1019,8 +1002,9 @@ function viewOperacaoDetails(id) {
     if (isAgendada) {
         detailsHtml = `
             <div style="background:#fff3e0; padding:10px; border-radius:4px; border-left:4px solid orange; margin-bottom:15px;">
-                <h4 style="color:#e65100; margin-bottom:5px;">OPERAÇÃO AGENDADA</h4>
-                <p>Esta operação aguarda confirmação (check-in) pelo motorista ou ajudante.</p>
+                <h4 style="color:#e65100; margin-bottom:5px;">STATUS: ${op.status}</h4>
+                <p>Esta operação ainda não foi finalizada.</p>
+                ${op.kmInicial ? `<p><strong>KM INICIAL REGISTRADO:</strong> ${op.kmInicial}</p>` : ''}
             </div>
             <p><strong>MOTORISTA:</strong> ${motorista}</p>
             <p><strong>VEÍCULO:</strong> ${op.veiculoPlaca}</p>
@@ -1050,8 +1034,7 @@ function viewOperacaoDetails(id) {
             <p><strong>MOTORISTA:</strong> ${motorista}</p>
             <p><strong>VEÍCULO:</strong> ${op.veiculoPlaca}</p>
             <p><strong>CONTRATANTE:</strong> ${contratante}</p>
-            <p><strong>ATIVIDADE:</strong> ${atividade}</p>
-            <p style="font-size:1.1rem; color:var(--primary-color);"><strong>KM RODADO:</strong> ${op.kmRodado || 0} KM</p> 
+            <p style="font-size:1.1rem; color:var(--primary-color);"><strong>KM RODADO:</strong> ${op.kmRodado || 0} KM (Inicial: ${op.kmInicial || 0} - Final: ${op.kmFinal || 0})</p> 
             <p><strong>FATURAMENTO:</strong> ${formatCurrency(op.faturamento)}</p>
             <p><strong>ADIANTAMENTO:</strong> ${formatCurrency(adiantamento)}</p>
             <p style="font-weight:700;">SALDO A RECEBER: ${formatCurrency(saldoReceber)}</p>
@@ -1063,7 +1046,6 @@ function viewOperacaoDetails(id) {
             ${infoConsumoHTML}
             <hr style="margin:10px 0; border:0; border-top:1px solid #eee;">
             <p style="font-size:1.1rem;"><strong>RESULTADO OPERACIONAL (LUCRO):</strong> <span style="color:${liquidoOperacional>=0?'var(--success-color)':'var(--danger-color)'}">${formatCurrency(liquidoOperacional)}</span></p>
-            <div style="margin-top:10px;"><strong>AJUDANTES:</strong><ul style="margin-top:6px;">${ajudantesHtml}</ul></div>
         `;
     }
     openOperationDetails('DETALHES DA OPERAÇÃO', detailsHtml);
@@ -1131,131 +1113,123 @@ function editDespesaItem(id) {
 }
 
 // =============================================================================
-// 12. SISTEMA DE CHECK-INS E AGENDAMENTOS
+// 12. SISTEMA DE CHECK-INS E AGENDAMENTOS (VISUALIZAÇÃO)
 // =============================================================================
 
 function renderCheckinsTable() {
     const ops = loadData(DB_KEYS.OPERACOES);
-    const agendadas = ops.filter(o => o.status === 'AGENDADA').sort((a,b) => new Date(a.data) - new Date(b.data));
+    // Filtra tudo que não está finalizado (Agendada ou Em Andamento)
+    const pendentes = ops.filter(o => o.status !== 'CONFIRMADA').sort((a,b) => new Date(a.data) - new Date(b.data));
 
-    // A. LÓGICA DO ADMIN (VISÃO DETALHADA COM BOTÃO INICIAR)
+    // A. LÓGICA DO ADMIN
     const tabelaAdmin = document.getElementById('tabelaCheckinsPendentes');
     if (tabelaAdmin && !window.IS_READ_ONLY) { 
         let rows = '';
-        if (!agendadas.length) {
-            rows = '<tr><td colspan="6" style="text-align:center; padding:20px;">NENHUMA ROTA AGUARDANDO INÍCIO.</td></tr>';
+        if (!pendentes.length) {
+            rows = '<tr><td colspan="6" style="text-align:center; padding:20px;">NENHUMA ROTA ATIVA OU PENDENTE.</td></tr>';
         } else {
-            agendadas.forEach(op => {
+            pendentes.forEach(op => {
                 const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
                 const checkins = op.checkins || { motorista: false, ajudantes: [] };
                 
-                // Status Motorista
-                const motNome = getMotorista(op.motoristaId)?.nome || 'MOTORISTA Ñ LOCALIZADO';
-                const motStatusIcon = checkins.motorista 
-                    ? `<i class="fas fa-check-circle" style="color:var(--success-color);" title="Check-in Realizado"></i>` 
-                    : `<i class="far fa-clock" style="color:var(--warning-color);" title="Aguardando..."></i>`;
+                const motNome = getMotorista(op.motoristaId)?.nome || '...';
                 
-                // Status Ajudantes
-                let ajudantesStatusHtml = '';
-                if (op.ajudantes && op.ajudantes.length > 0) {
-                    ajudantesStatusHtml = op.ajudantes.map(a => {
-                        const ajData = getAjudante(a.id);
-                        const nome = ajData ? ajData.nome.split(' ')[0] : `ID:${a.id}`;
-                        const confirmou = checkins.ajudantes && checkins.ajudantes.includes(a.id);
-                        const icon = confirmou 
-                            ? `<i class="fas fa-check-circle" style="color:var(--success-color);"></i>` 
-                            : `<i class="far fa-clock" style="color:var(--warning-color);"></i>`;
-                        return `<div style="font-size:0.8rem;">${icon} ${nome}</div>`;
-                    }).join('');
-                } else {
-                    ajudantesStatusHtml = '<span style="color:#ccc; font-size:0.8rem;">SEM AJUDANTES</span>';
-                }
+                let statusLabel = '';
+                if (op.status === 'AGENDADA') statusLabel = '<span style="color:orange;">AGUARDANDO INÍCIO</span>';
+                if (op.status === 'EM_ANDAMENTO') statusLabel = '<span style="color:#0288d1; font-weight:bold;">EM ANDAMENTO</span>';
 
-                // Verifica se TODOS confirmaram para destacar o botão (Visual apenas)
-                const motOk = checkins.motorista;
-                const totalAjudantes = (op.ajudantes || []).length;
-                const confirmadosAjudantes = (checkins.ajudantes || []).length;
-                const todosOk = motOk && (confirmadosAjudantes >= totalAjudantes);
-
-                const btnClass = todosOk ? 'btn-success' : 'btn-primary';
-                const btnIcon = todosOk ? 'fa-check-double' : 'fa-play';
-                const btnText = todosOk ? 'INICIAR (TODOS PRONTOS)' : 'LIBERAR ROTA';
+                // Status visual
+                const motStatusIcon = checkins.motorista 
+                    ? `<i class="fas fa-check-circle" style="color:green;" title="Check-in/Iniciou"></i>` 
+                    : `<i class="far fa-clock" style="color:orange;" title="Pendente"></i>`;
+                
+                let ajudantesStatusHtml = (op.ajudantes || []).map(a => {
+                    const confirmou = checkins.ajudantes && checkins.ajudantes.includes(a.id);
+                    const icon = confirmou ? `<i class="fas fa-check-circle" style="color:green;"></i>` : `<i class="far fa-clock" style="color:orange;"></i>`;
+                    return icon;
+                }).join(' ');
 
                 rows += `<tr>
                     <td>${dataFmt}</td>
                     <td>${op.veiculoPlaca}</td>
-                    <td><div style="font-weight:bold;">${motStatusIcon} ${motNome}</div></td>
-                    <td>${ajudantesStatusHtml}</td>
-                    <td><button class="${btnClass} btn-action" style="padding:6px 12px;" onclick="iniciarRotaManual(${op.id})"><i class="fas ${btnIcon}"></i> ${btnText}</button></td>
+                    <td>${motStatusIcon} ${motNome}</td>
+                    <td>${ajudantesStatusHtml || '-'}</td>
+                    <td>${statusLabel}</td>
                     <td>
-                        <button class="btn-action edit-btn" title="EDITAR" onclick="editOperacaoItem(${op.id})"><i class="fas fa-edit"></i></button>
-                        <button class="btn-action delete-btn" title="CANCELAR" onclick="deleteItem('${DB_KEYS.OPERACOES}', ${op.id})"><i class="fas fa-trash"></i></button>
+                        <button class="btn-action edit-btn" onclick="editOperacaoItem(${op.id})"><i class="fas fa-edit"></i></button>
+                        <button class="btn-action delete-btn" onclick="deleteItem('${DB_KEYS.OPERACOES}', ${op.id})"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>`;
             });
         }
         
         const theadElem = tabelaAdmin.querySelector('thead');
-        if(theadElem) theadElem.innerHTML = `<tr><th>DATA</th><th>VEÍCULO</th><th>MOTORISTA</th><th>AJUDANTES</th><th>AÇÃO</th><th>GERENCIAR</th></tr>`;
+        if(theadElem) theadElem.innerHTML = `<tr><th>DATA</th><th>VEÍCULO</th><th>MOTORISTA</th><th>AJUDANTES</th><th>STATUS</th><th>AÇÃO</th></tr>`;
         tabelaAdmin.querySelector('tbody').innerHTML = rows;
         
         const badge = document.getElementById('badgeCheckins');
         if (badge) {
-            badge.textContent = agendadas.length;
-            badge.style.display = agendadas.length > 0 ? 'inline-block' : 'none';
+            badge.textContent = pendentes.length;
+            badge.style.display = pendentes.length > 0 ? 'inline-block' : 'none';
         }
     }
 
-    // B. LÓGICA DO FUNCIONÁRIO (AGENDAMENTOS + HISTÓRICO)
-    const listaFunc = document.getElementById('listaServicosAgendados');
+    // B. LÓGICA DO FUNCIONÁRIO (PAINEL + HISTÓRICO)
     if (window.CURRENT_USER && (window.CURRENT_USER.role === 'motorista' || window.CURRENT_USER.role === 'ajudante')) {
         const myUid = window.CURRENT_USER.uid;
         const myEmail = window.CURRENT_USER.email;
-
-        // 1. Identificar Perfil
         let myProfileId = null;
-        let myKey = window.CURRENT_USER.role === 'motorista' ? DB_KEYS.MOTORISTAS : DB_KEYS.AJUDANTES;
+        let isMotorista = (window.CURRENT_USER.role === 'motorista');
+        let myKey = isMotorista ? DB_KEYS.MOTORISTAS : DB_KEYS.AJUDANTES;
         const myProfile = loadData(myKey).find(p => p.uid === myUid || (p.email && p.email === myEmail));
         if (myProfile) myProfileId = myProfile.id;
 
         if (!myProfileId) {
-            if (listaFunc) listaFunc.innerHTML = '<p style="text-align:center; color:red;">PERFIL NÃO VINCULADO. CONTATE O ADMIN.</p>';
+            const el = document.getElementById('listaServicosAgendados');
+            if(el) el.innerHTML = '<p style="text-align:center; color:red;">PERFIL NÃO VINCULADO.</p>';
             return;
         }
 
-        // 2. Preencher Agendamentos (Pendentes)
+        // 1. LISTA DE SERVIÇOS ATIVOS (AGENDADA OU EM ANDAMENTO)
+        const listaFunc = document.getElementById('listaServicosAgendados');
         if (listaFunc) {
-            const myAgendas = agendadas.filter(op => {
-                if (window.CURRENT_USER.role === 'motorista') return op.motoristaId === myProfileId;
+            const myPendentes = pendentes.filter(op => {
+                if (isMotorista) return op.motoristaId === myProfileId;
                 else return (op.ajudantes || []).some(a => a.id === myProfileId);
             });
 
-            if (!myAgendas.length) {
-                listaFunc.innerHTML = '<p style="text-align:center; color:#666;">NENHUM SERVIÇO AGENDADO.</p>';
+            if (!myPendentes.length) {
+                listaFunc.innerHTML = '<p style="text-align:center; color:#666;">NENHUMA VIAGEM ATIVA.</p>';
             } else {
                 let html = '';
-                myAgendas.forEach(op => {
-                    const checkins = op.checkins || { motorista: false, ajudantes: [] };
-                    let jaConfirmei = false;
-                    if (window.CURRENT_USER.role === 'motorista') jaConfirmei = checkins.motorista;
-                    else jaConfirmei = checkins.ajudantes && checkins.ajudantes.includes(myProfileId);
-
+                myPendentes.forEach(op => {
                     const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
                     const contratante = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
                     
                     let btnHtml = '';
-                    if (jaConfirmei) {
-                        btnHtml = `<button class="btn-success" disabled style="opacity:0.7; cursor:default;"><i class="fas fa-check-double"></i> AGUARDANDO INÍCIO</button>`;
+                    if (isMotorista) {
+                        if (op.status === 'AGENDADA') {
+                            btnHtml = `<button class="btn-primary" onclick="openCheckinConfirmModal(${op.id})"><i class="fas fa-play"></i> INICIAR VIAGEM</button>`;
+                        } else if (op.status === 'EM_ANDAMENTO') {
+                            btnHtml = `<button class="btn-danger" onclick="openCheckinConfirmModal(${op.id})"><i class="fas fa-flag-checkered"></i> FINALIZAR VIAGEM</button>`;
+                        }
                     } else {
-                        btnHtml = `<button class="btn-primary" onclick="openCheckinConfirmModal(${op.id})"><i class="fas fa-check-circle"></i> REALIZAR CHECK-IN</button>`;
+                        // Ajudante
+                        const checkins = op.checkins || { ajudantes: [] };
+                        const jaConfirmei = checkins.ajudantes && checkins.ajudantes.includes(myProfileId);
+                        if (jaConfirmei) {
+                            btnHtml = `<button class="btn-success" disabled style="opacity:0.7;"><i class="fas fa-check"></i> CONFIRMADO</button>`;
+                        } else {
+                            btnHtml = `<button class="btn-primary" onclick="openCheckinConfirmModal(${op.id})"><i class="fas fa-user-check"></i> MARCAR PRESENÇA</button>`;
+                        }
                     }
 
-                    html += `<div class="card" style="border-left: 5px solid ${jaConfirmei ? 'var(--success-color)' : 'var(--primary-color)'};">
+                    html += `<div class="card" style="border-left: 5px solid var(--primary-color);">
                         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                             <div>
-                                <h4 style="color:${jaConfirmei ? 'var(--success-color)' : 'var(--primary-color)'}; margin-bottom:5px;">${dataFmt} - ${op.veiculoPlaca}</h4>
+                                <h4 style="color:var(--primary-color); margin-bottom:5px;">${dataFmt} - ${op.veiculoPlaca}</h4>
                                 <p><strong>CLIENTE:</strong> ${contratante}</p>
-                                ${jaConfirmei ? '<small style="color:green; font-weight:bold;">VOCÊ JÁ CONFIRMOU PRESENÇA</small>' : ''}
+                                <p>STATUS: <strong>${op.status.replace('_',' ')}</strong></p>
                             </div>
                             ${btnHtml}
                         </div>
@@ -1265,29 +1239,28 @@ function renderCheckinsTable() {
             }
         }
 
-        // 3. Preencher Histórico (Tabela 'Meus Últimos Serviços')
-        // === NOVA LÓGICA DE HISTÓRICO AQUI ===
+        // 2. LISTA DE HISTÓRICO (CONFIRMADAS)
         const tabelaHistorico = document.getElementById('tabelaMeusServicos');
         if (tabelaHistorico) {
-            // Filtra operações CONFIRMADAS onde o usuário participou
             const historico = ops.filter(op => {
                 if (op.status !== 'CONFIRMADA') return false;
-                if (window.CURRENT_USER.role === 'motorista') return op.motoristaId === myProfileId;
+                if (isMotorista) return op.motoristaId === myProfileId;
                 else return (op.ajudantes || []).some(a => a.id === myProfileId);
-            }).sort((a,b) => new Date(b.data) - new Date(a.data));
+            }).sort((a,b) => new Date(b.data) - new Date(a.data)); // Mais recentes primeiro
 
             if (historico.length === 0) {
-                tabelaHistorico.querySelector('tbody').innerHTML = '<tr><td colspan="4" style="text-align:center;">NENHUM SERVIÇO REALIZADO.</td></tr>';
+                tabelaHistorico.querySelector('tbody').innerHTML = '<tr><td colspan="4" style="text-align:center;">NENHUM SERVIÇO NO HISTÓRICO.</td></tr>';
             } else {
                 let rowsHist = '';
                 historico.forEach(op => {
                     const d = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
                     const c = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
+                    const kmInfo = op.kmRodado ? `${op.kmRodado} KM` : '-';
                     rowsHist += `<tr>
                         <td>${d}</td>
                         <td>${op.veiculoPlaca}</td>
                         <td>${c}</td>
-                        <td><span style="color:green; font-weight:bold;">REALIZADO</span></td>
+                        <td>${kmInfo}</td>
                     </tr>`;
                 });
                 tabelaHistorico.querySelector('tbody').innerHTML = rowsHist;
@@ -1296,25 +1269,52 @@ function renderCheckinsTable() {
     }
 }
 
+// === FUNÇÃO DO MODAL ATUALIZADA (SELECIONA CAMPOS DINAMICAMENTE) ===
 window.openCheckinConfirmModal = function(opId) {
     const op = loadData(DB_KEYS.OPERACOES).find(o => o.id === opId);
     if (!op) return;
 
+    // Preenche dados estáticos
     document.getElementById('checkinDisplayData').textContent = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
     document.getElementById('checkinDisplayContratante').textContent = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
     document.getElementById('checkinDisplayVeiculo').textContent = op.veiculoPlaca;
-    document.getElementById('checkinDisplayAtividade').textContent = getAtividade(op.atividadeId)?.nome || '-';
-    
-    if (window.CURRENT_USER && window.CURRENT_USER.role === 'motorista') {
-        const nomesAjudantes = (op.ajudantes || []).map(a => getAjudante(a.id)?.nome).join(', ');
-        document.getElementById('checkinDisplayEquipeInfo').textContent = `AJUDANTES: ${nomesAjudantes || 'NENHUM'}`;
-        document.getElementById('checkinDriverFields').style.display = 'block';
-    } else {
-        const nomeMotorista = getMotorista(op.motoristaId)?.nome;
-        document.getElementById('checkinDisplayEquipeInfo').textContent = `MOTORISTA: ${nomeMotorista}`;
-        document.getElementById('checkinDriverFields').style.display = 'none';
-    }
     document.getElementById('checkinOpId').value = op.id;
+
+    // Configura campos baseado na Role e Status
+    const isMotorista = window.CURRENT_USER && window.CURRENT_USER.role === 'motorista';
+    const divDriver = document.getElementById('checkinDriverFields');
+    const divKmIni = document.getElementById('divKmInicial');
+    const divKmFim = document.getElementById('divKmFinal');
+    const stepInput = document.getElementById('checkinStep');
+    const modalTitle = document.getElementById('checkinModalTitle');
+    const btnConfirm = document.getElementById('btnConfirmCheckin');
+
+    if (isMotorista) {
+        divDriver.style.display = 'block';
+        if (op.status === 'AGENDADA') {
+            // Passo 1: Iniciar
+            stepInput.value = 'start';
+            modalTitle.textContent = "INICIAR VIAGEM";
+            divKmIni.style.display = 'block';
+            divKmFim.style.display = 'none';
+            btnConfirm.innerHTML = '<i class="fas fa-play"></i> INICIAR';
+            document.getElementById('checkinKmInicial').value = '';
+        } else if (op.status === 'EM_ANDAMENTO') {
+            // Passo 2: Finalizar
+            stepInput.value = 'end';
+            modalTitle.textContent = "FINALIZAR VIAGEM";
+            divKmIni.style.display = 'none';
+            divKmFim.style.display = 'block';
+            document.getElementById('checkinKmInicialReadonly').value = op.kmInicial || 0;
+            btnConfirm.innerHTML = '<i class="fas fa-flag-checkered"></i> FINALIZAR';
+        }
+    } else {
+        // Ajudante: Apenas confirmação simples
+        divDriver.style.display = 'none';
+        modalTitle.textContent = "CONFIRMAR PRESENÇA";
+        btnConfirm.innerHTML = '<i class="fas fa-check"></i> CONFIRMAR';
+    }
+
     document.getElementById('modalCheckinConfirm').style.display = 'block';
 };
 
@@ -1731,7 +1731,7 @@ function updateUI() {
         renderCalendar(currentDate);
     }
     
-    renderCheckinsTable(); // Atualiza painel e histórico
+    renderCheckinsTable(); 
     
     if (window.IS_READ_ONLY && window.enableReadOnlyMode) {
         window.enableReadOnlyMode();
@@ -1809,9 +1809,10 @@ function setupReciboListeners() {
         const contratanteRecibo = document.getElementById('selectContratanteRecibo').value;
         const ops = loadData(DB_KEYS.OPERACOES);
         
-        // CORREÇÃO: Filtrar apenas CONFIRMADAS para recibo
         const filtered = ops.filter(op => {
-            if (op.status !== 'CONFIRMADA') return false; 
+            // RECIBO SOMENTE DE CONFIRMADAS
+            if (op.status !== 'CONFIRMADA') return false;
+            
             const d = new Date(op.data + 'T00:00:00');
             const di = new Date(inicio + 'T00:00:00');
             const df = new Date(fim + 'T23:59:59');
@@ -1829,7 +1830,7 @@ function setupReciboListeners() {
         }).sort((a, b) => new Date(a.data) - new Date(b.data));
 
         if (!filtered.length) {
-            document.getElementById('reciboContent').innerHTML = `<p style="text-align:center;color:var(--danger-color)">NENHUMA OPERAÇÃO CONFIRMADA ENCONTRADA.</p>`;
+            document.getElementById('reciboContent').innerHTML = `<p style="text-align:center;color:var(--danger-color)">NENHUMA OPERAÇÃO CONFIRMADA NESTE PERÍODO.</p>`;
             document.getElementById('reciboTitle').style.display = 'none';
             btnBaixar.style.display = 'none';
             if (btnZapRecibo) btnZapRecibo.style.display = 'none';
@@ -2655,15 +2656,15 @@ window.iniciarRotaManual = function(opId) {
     if (pendencias.length > 0) {
         const msg = "ATENÇÃO: OS SEGUINTES MEMBROS NÃO FIZERAM CHECK-IN:\n\n" + 
                     pendencias.join("\n") + 
-                    "\n\nDESEJA INICIAR A ROTA MESMO ASSIM? (Isso confirmará a operação)";
+                    "\n\nDESEJA FORÇAR O INÍCIO DA ROTA MESMO ASSIM? (A Rota ficará 'EM ANDAMENTO' para ser finalizada pelo motorista)";
         
         if (!confirm(msg)) return; // Cancela se o admin disser não
     } else {
         if(!confirm("TODOS FIZERAM CHECK-IN. INICIAR ROTA AGORA?")) return;
     }
 
-    // CONFIRMA A OPERAÇÃO
-    op.status = 'CONFIRMADA';
+    // ALTERA STATUS PARA "EM ANDAMENTO" (Permite ao motorista finalizar depois)
+    op.status = 'EM_ANDAMENTO';
     saveData(DB_KEYS.OPERACOES, arr);
     alert("ROTA INICIADA COM SUCESSO!");
     renderCheckinsTable(); // Atualiza tabelas
