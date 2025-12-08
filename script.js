@@ -11,7 +11,8 @@ const DB_KEYS = {
     DESPESAS_GERAIS: 'db_despesas_gerais',
     AJUDANTES: 'db_ajudantes',
     ATIVIDADES: 'db_atividades',
-    CHECKINS: 'db_checkins'
+    CHECKINS: 'db_checkins',
+    PROFILE_REQUESTS: 'db_profile_requests'
 };
 
 // CACHE GLOBAL DA APLICAÇÃO
@@ -24,7 +25,8 @@ const APP_CACHE = {
     [DB_KEYS.DESPESAS_GERAIS]: [],
     [DB_KEYS.AJUDANTES]: [],
     [DB_KEYS.ATIVIDADES]: [],
-    [DB_KEYS.CHECKINS]: []
+    [DB_KEYS.CHECKINS]: [],
+    [DB_KEYS.PROFILE_REQUESTS]: []
 };
 
 // --- VARIÁVEIS GLOBAIS DE CONTROLE DE ACESSO ---
@@ -39,8 +41,10 @@ function loadData(key) {
 // Salva dados no Firebase (Nuvem)
 async function saveData(key, value) {
     // Bloqueio de segurança para perfil de leitura
-    // Exceção: Checkins (Operações) podem ser atualizados pelo funcionário ao confirmar
-    if (window.IS_READ_ONLY && key !== DB_KEYS.OPERACOES) {
+    // Exceção: Checkins, Operações e Requisições de Perfil podem ser gravados por func.
+    if (window.IS_READ_ONLY && 
+        key !== DB_KEYS.OPERACOES && 
+        key !== DB_KEYS.PROFILE_REQUESTS) {
        // Apenas operações podem ser escritas por funcionários
     }
 
@@ -821,6 +825,65 @@ function setupFormHandlers() {
         formDespesa.addEventListener('reset', () => {
             document.getElementById('despesaGeralId').value = '';
             setTimeout(toggleDespesaParcelas, 50);
+        });
+    }
+    
+    // --- [NOVO] SOLICITAÇÃO DE ALTERAÇÃO DE PERFIL (FUNCIONÁRIO) ---
+    const formReq = document.getElementById('formRequestProfileChange');
+    if (formReq) {
+        formReq.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            if (!window.CURRENT_USER) return;
+            const role = window.CURRENT_USER.role;
+            
+            // Dados originais
+            let dbKey = role === 'motorista' ? DB_KEYS.MOTORISTAS : DB_KEYS.AJUDANTES;
+            let originalUser = loadData(dbKey).find(u => u.uid === window.CURRENT_USER.uid || u.email === window.CURRENT_USER.email);
+            
+            if (!originalUser) return alert("Erro: Seu perfil não foi encontrado.");
+
+            // Captura dados novos
+            const newPhone = document.getElementById('reqEmpTelefone').value;
+            const newPix = document.getElementById('reqEmpPix').value;
+            const newCnh = document.getElementById('reqEmpCNH').value;
+            const newValidade = document.getElementById('reqEmpValidadeCNH').value;
+
+            // Cria lista de alterações
+            let requests = loadData(DB_KEYS.PROFILE_REQUESTS) || [];
+            let changes = [];
+
+            // Compara e adiciona se mudou
+            if (newPhone && newPhone !== originalUser.telefone) changes.push({ field: 'telefone', label: 'TELEFONE', old: originalUser.telefone, new: newPhone });
+            if (newPix && newPix !== originalUser.pix) changes.push({ field: 'pix', label: 'CHAVE PIX', old: originalUser.pix, new: newPix });
+            
+            if (role === 'motorista') {
+                if (newCnh && newCnh !== originalUser.cnh) changes.push({ field: 'cnh', label: 'CNH', old: originalUser.cnh, new: newCnh });
+                if (newValidade && newValidade !== originalUser.validadeCNH) changes.push({ field: 'validadeCNH', label: 'VALIDADE CNH', old: originalUser.validadeCNH, new: newValidade });
+            }
+
+            if (changes.length === 0) return alert("Nenhuma alteração detectada em relação aos dados atuais.");
+
+            changes.forEach(change => {
+                requests.push({
+                    id: Date.now() + Math.random(), // ID único
+                    userId: originalUser.id,
+                    userUid: window.CURRENT_USER.uid,
+                    userName: originalUser.nome,
+                    userRole: role,
+                    field: change.field,
+                    fieldLabel: change.label,
+                    oldValue: change.old,
+                    newValue: change.new,
+                    status: 'PENDING',
+                    requestDate: new Date().toISOString()
+                });
+            });
+
+            saveData(DB_KEYS.PROFILE_REQUESTS, requests);
+            
+            document.getElementById('modalRequestProfileChange').style.display = 'none';
+            alert("SOLICITAÇÃO ENVIADA COM SUCESSO!\n\nO Administrador analisará suas alterações.");
         });
     }
 
@@ -1729,6 +1792,190 @@ function fullSystemReset() {
     }
 }
 window.fullSystemReset = fullSystemReset;
+
+// =============================================================================
+// [NOVO] FUNÇÕES DE VISUALIZAÇÃO DE PERFIL E GESTÃO DE REQUISIÇÕES
+// =============================================================================
+
+// RENDERIZA PERFIL COMO FICHA (SEM INPUTS)
+function renderEmployeeProfileView() {
+    const container = document.getElementById('employeeProfileView');
+    if (!container || !window.CURRENT_USER) return;
+
+    const role = window.CURRENT_USER.role;
+    let data = null;
+    let typeLabel = '';
+
+    if (role === 'motorista') {
+        data = loadData(DB_KEYS.MOTORISTAS).find(m => m.email === window.CURRENT_USER.email || m.uid === window.CURRENT_USER.uid);
+        typeLabel = 'MOTORISTA PROFISSIONAL';
+    } else if (role === 'ajudante') {
+        data = loadData(DB_KEYS.AJUDANTES).find(a => a.email === window.CURRENT_USER.email || a.uid === window.CURRENT_USER.uid);
+        typeLabel = 'AJUDANTE OPERACIONAL';
+    }
+
+    if (!data) {
+        container.innerHTML = '<div class="card" style="text-align:center; color:red;">SEU PERFIL NÃO ESTÁ VINCULADO A UM CADASTRO OFICIAL. CONTATE O ADMIN.</div>';
+        const alertBox = document.getElementById('profileIncompleteAlert');
+        if(alertBox) alertBox.style.display = 'block';
+        return;
+    }
+
+    const alertBox = document.getElementById('profileIncompleteAlert');
+    if(alertBox) alertBox.style.display = 'none';
+
+    const cnhValidade = data.validadeCNH ? new Date(data.validadeCNH + 'T00:00:00').toLocaleDateString('pt-BR') : 'NÃO POSSUI';
+    const iniciais = data.nome ? data.nome.substring(0, 2).toUpperCase() : 'FX';
+
+    let htmlGrid = `
+        <div class="data-item"><label>Nome Completo</label><span>${data.nome}</span></div>
+        <div class="data-item"><label>Documento (CPF/RG)</label><span>${data.documento}</span></div>
+        <div class="data-item"><label>Telefone / WhatsApp</label><span>${formatPhoneBr(data.telefone || 'NÃO INFORMADO')}</span></div>
+        <div class="data-item"><label>Chave PIX</label><span>${data.pix || 'NÃO CADASTRADA'}</span></div>
+    `;
+
+    if (role === 'motorista') {
+        htmlGrid += `
+            <div class="data-item"><label>Registro CNH</label><span>${data.cnh || '--'}</span></div>
+            <div class="data-item"><label>Categoria</label><span>${data.categoriaCNH || '--'}</span></div>
+            <div class="data-item"><label>Validade CNH</label><span>${cnhValidade}</span></div>
+            <div class="data-item"><label>Cursos Especiais</label><span>${data.temCurso ? (data.cursoDescricao || 'SIM') : 'NÃO'}</span></div>
+        `;
+    } else {
+        htmlGrid += `
+            <div class="data-item"><label>Endereço</label><span>${data.endereco || 'NÃO INFORMADO'}</span></div>
+        `;
+    }
+
+    const htmlFinal = `
+        <div class="profile-view-container">
+            <div class="profile-header">
+                <div class="profile-avatar-placeholder">${iniciais}</div>
+                <div class="profile-info-main">
+                    <h2>${data.nome}</h2>
+                    <p>${typeLabel}</p>
+                    <span class="status-badge active">CADASTRO ATIVO</span>
+                </div>
+            </div>
+            <div class="profile-data-grid">
+                ${htmlGrid}
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = htmlFinal;
+}
+
+// ABRE MODAL DE SOLICITAÇÃO (PREENCHE DADOS)
+function openRequestProfileChangeModal() {
+    if (window.IS_READ_ONLY && !window.CURRENT_USER) return;
+    
+    const role = window.CURRENT_USER.role;
+    let data = null;
+    if (role === 'motorista') data = loadData(DB_KEYS.MOTORISTAS).find(m => m.email === window.CURRENT_USER.email || m.uid === window.CURRENT_USER.uid);
+    else data = loadData(DB_KEYS.AJUDANTES).find(a => a.email === window.CURRENT_USER.email || a.uid === window.CURRENT_USER.uid);
+
+    if (data) {
+        document.getElementById('reqEmpTelefone').value = data.telefone || '';
+        document.getElementById('reqEmpPix').value = data.pix || '';
+        
+        const driverFields = document.getElementById('reqDriverFields');
+        if (role === 'motorista') {
+            driverFields.style.display = 'flex';
+            document.getElementById('reqEmpCNH').value = data.cnh || '';
+            document.getElementById('reqEmpValidadeCNH').value = data.validadeCNH || '';
+        } else {
+            driverFields.style.display = 'none';
+        }
+    }
+
+    document.getElementById('modalRequestProfileChange').style.display = 'block';
+}
+
+// ADMIN: RENDERIZA TABELA DE SOLICITAÇÕES
+function renderProfileRequestsTable() {
+    const table = document.getElementById('tabelaProfileRequests');
+    if (!table) return;
+
+    const allRequests = loadData(DB_KEYS.PROFILE_REQUESTS) || [];
+    const pendingRequests = allRequests.filter(r => r.status === 'PENDING').sort((a,b) => new Date(b.requestDate) - new Date(a.requestDate));
+
+    const badge = document.getElementById('badgeAccess');
+    if (badge) {
+        badge.style.display = pendingRequests.length > 0 ? 'inline-block' : 'none';
+        badge.textContent = pendingRequests.length > 0 ? pendingRequests.length : '!';
+    }
+
+    const cardContainer = document.getElementById('cardSolicitacoesPerfil');
+    if (pendingRequests.length === 0) {
+        if (cardContainer) cardContainer.style.display = 'none';
+        return;
+    } else {
+        if (cardContainer) cardContainer.style.display = 'block';
+    }
+
+    let rows = '';
+    pendingRequests.forEach(req => {
+        const dataFmt = new Date(req.requestDate).toLocaleDateString('pt-BR');
+        
+        rows += `
+            <tr>
+                <td>${dataFmt}</td>
+                <td>
+                    <strong>${req.userName}</strong><br>
+                    <small>${req.userRole.toUpperCase()}</small>
+                </td>
+                <td>${req.fieldLabel}</td>
+                <td>
+                    <div style="font-size:0.85rem; color:#888;">DE: ${req.oldValue || '(VAZIO)'}</div>
+                    <div style="font-weight:bold; color:var(--primary-color);">PARA: ${req.newValue}</div>
+                </td>
+                <td>
+                    <button class="btn-success btn-mini" onclick="processProfileRequest('${req.id}', true)" title="APROVAR"><i class="fas fa-check"></i></button>
+                    <button class="btn-danger btn-mini" onclick="processProfileRequest('${req.id}', false)" title="REJEITAR"><i class="fas fa-times"></i></button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    table.querySelector('tbody').innerHTML = rows;
+}
+
+// ADMIN: PROCESSA (APROVA/REJEITA) SOLICITAÇÃO
+window.processProfileRequest = function(reqId, approved) {
+    if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA.");
+    
+    let requests = loadData(DB_KEYS.PROFILE_REQUESTS).slice();
+    const reqIndex = requests.findIndex(r => String(r.id) === String(reqId));
+    
+    if (reqIndex < 0) return alert("Requisição não encontrada.");
+    const req = requests[reqIndex];
+
+    if (approved) {
+        const dbKey = req.userRole === 'motorista' ? DB_KEYS.MOTORISTAS : DB_KEYS.AJUDANTES;
+        let usersList = loadData(dbKey).slice();
+        const userIndex = usersList.findIndex(u => u.id === req.userId);
+
+        if (userIndex >= 0) {
+            usersList[userIndex][req.field] = req.newValue;
+            saveData(dbKey, usersList);
+            alert(`DADO ATUALIZADO COM SUCESSO!\n${req.fieldLabel} alterado para ${req.newValue}.`);
+        } else {
+            alert("Erro: Usuário original não encontrado no banco de dados.");
+            return;
+        }
+    } else {
+        if(!confirm("Tem certeza que deseja REJEITAR esta alteração?")) return;
+    }
+
+    requests[reqIndex].status = approved ? 'APPROVED' : 'REJECTED';
+    requests[reqIndex].processedDate = new Date().toISOString();
+    
+    saveData(DB_KEYS.PROFILE_REQUESTS, requests);
+    renderProfileRequestsTable();
+};
+
+
 // =============================================================================
 // 16. INICIALIZAÇÃO E SINCRONIZAÇÃO (REALTIME & OTIMIZAÇÃO)
 // =============================================================================
@@ -1765,15 +2012,14 @@ function updateUI() {
     // === OTIMIZAÇÃO CRÍTICA DE PERFORMANCE ===
     // Se for FUNCIONÁRIO, NÃO carrega tabelas de Admin que travam o celular
     if (window.CURRENT_USER && (window.CURRENT_USER.role === 'motorista' || window.CURRENT_USER.role === 'ajudante')) {
-        renderCheckinsTable(); // Apenas o necessário: Painel de Check-in e Histórico Resumido
+        renderCheckinsTable(); 
+        renderEmployeeProfileView(); // [NOVO] Ficha Cadastral
     } else {
         // Se for ADMIN, carrega tudo
         populateAllSelects();
         renderOperacaoTable();
         renderDespesasTable();
         
-        // --- CORREÇÃO DO BUG DO CALENDÁRIO ---
-        // Estas duas funções garantem que o calendário e os cards (Faturamento) apareçam
         updateDashboardStats();
         if (typeof renderCalendar === 'function') renderCalendar(currentDate);
         
@@ -1781,6 +2027,7 @@ function updateUI() {
         checkAndShowReminders();
         renderMinhaEmpresaInfo();
         renderCheckinsTable();
+        renderProfileRequestsTable(); // [NOVO] Tabela de Aprovação
     }
     
     if (window.IS_READ_ONLY && window.enableReadOnlyMode) {
@@ -1794,7 +2041,7 @@ function setupInputFormattingListeners() {
         const el = document.getElementById(id);
         if (el) el.addEventListener('blur', e => e.target.value = formatCPF_CNPJ(e.target.value));
     });
-    const phones = ['minhaEmpresaTelefone', 'contratanteTelefone', 'motoristaTelefone', 'ajudanteTelefone', 'empTelefone'];
+    const phones = ['minhaEmpresaTelefone', 'contratanteTelefone', 'motoristaTelefone', 'ajudanteTelefone', 'reqEmpTelefone'];
     phones.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', e => e.target.value = formatPhoneBr(e.target.value));
