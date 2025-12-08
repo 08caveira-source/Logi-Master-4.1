@@ -795,65 +795,9 @@ button.btn-mini:not(.btn-primary):not(.btn-secondary):not(.btn-danger):not(.btn-
     font-size: 0.9rem;
 }
 
-/* --- ESTILOS DA BARRA DE FILTRO COMPACTA (NOVO) --- */
-.filter-container {
-    display: flex;
-    align-items: flex-end; /* Alinha tudo pela base */
-    gap: 10px;
-    flex-wrap: wrap;
-    background-color: #f8f9fa;
-    padding: 15px;
-    border-radius: 6px;
-    border: 1px solid #e0e0e0;
-}
-
-.filter-group {
-    display: flex;
-    flex-direction: column;
-}
-
-.filter-group label {
-    font-size: 0.75rem;
-    font-weight: 700;
-    margin-bottom: 4px;
-    color: var(--secondary-color);
-}
-
-.input-compact {
-    padding: 6px 10px; /* Menor preenchimento */
-    font-size: 0.9rem;
-    height: 38px; /* Altura fixa controlada */
-    border: 1px solid #ccc;
-    border-radius: 4px;
-}
-
-.btn-compact {
-    padding: 0 15px;
-    height: 38px; /* Mesma altura dos inputs */
-    font-size: 0.85rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: background 0.2s;
-}
-
-/* Responsividade para mobile */
-@media (max-width: 600px) {
-    .filter-container {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    .input-compact, .btn-compact {
-        width: 100%;
-    
 /* =========================================
-ESTILOS DO FILTRO ORGANIZADO (FUNCIONÁRIO)
-========================================= */
+   ESTILOS DO FILTRO ORGANIZADO (FUNCIONÁRIO)
+   ========================================= */
 
 .employee-filter-container {
     background-color: #f8f9fa;
