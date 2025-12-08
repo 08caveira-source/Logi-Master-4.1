@@ -850,5 +850,73 @@ button.btn-mini:not(.btn-primary):not(.btn-secondary):not(.btn-danger):not(.btn-
     }
     .input-compact, .btn-compact {
         width: 100%;
+    
+/* =========================================
+ESTILOS DO FILTRO ORGANIZADO (FUNCIONÁRIO)
+========================================= */
+
+.employee-filter-container {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    gap: 15px; /* Distância entre a linha de datas e a linha de botões */
+}
+
+/* Linhas (Rows) do Grid */
+.ef-row {
+    display: flex;
+    gap: 20px; /* Espaço lateral entre os itens */
+    width: 100%;
+}
+
+/* Colunas (Inputs e Botões) */
+.ef-col {
+    display: flex;
+    flex-direction: column;
+    flex: 1; /* Faz cada item ocupar 50% da largura */
+}
+
+.ef-col label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #546e7a; /* Cor secundária */
+    margin-bottom: 5px;
+    text-transform: uppercase;
+}
+
+/* Estilo específico para os inputs de data */
+.ef-input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    height: 40px;
+}
+
+/* Estilo específico para os botões do filtro */
+.ef-btn {
+    flex: 1; /* Botões esticam igualmente */
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-transform: uppercase;
+}
+
+/* Responsividade: No celular, empilha tudo */
+@media (max-width: 600px) {
+    .ef-row {
+        flex-direction: column;
+        gap: 10px;
     }
 }
