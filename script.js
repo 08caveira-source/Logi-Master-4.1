@@ -579,21 +579,18 @@ function setupFormHandlers() {
             const idHidden = document.getElementById('motoristaId').value;
             const nomeInput = document.getElementById('motoristaNome').value.toUpperCase();
 
-            // Se for novo cadastro, solicita criação de usuário
             if (!idHidden) {
                 const companyDomain = window.CURRENT_USER ? window.CURRENT_USER.company : 'logimaster.com';
-                const userLogin = prompt(`CRIAÇÃO DE ACESSO PARA ${nomeInput}:\n\nDefina o nome de usuário (ex: joao.silva) para que este motorista possa acessar o sistema.\nO domínio será @${companyDomain}.`);
+                const userLogin = prompt(`CRIAÇÃO DE ACESSO PARA ${nomeInput}:\n\nDefina o nome de usuário (ex: joao.silva).\nO domínio será @${companyDomain}.`);
                 
                 if (!userLogin) {
                     alert("CADASTRO CANCELADO. É NECESSÁRIO DEFINIR UM USUÁRIO.");
                     return;
                 }
-                // Remove espaços e acentos simples
                 const cleanLogin = userLogin.trim().toLowerCase().replace(/\s+/g, '.');
                 emailGerado = `${cleanLogin}@${companyDomain}`;
             }
 
-            // Recupera objeto existente se for edição para manter o email antigo
             let existingEmail = null;
             if (idHidden) {
                 const existing = arr.find(a => String(a.id) === String(idHidden));
@@ -611,7 +608,7 @@ function setupFormHandlers() {
                 temCurso: document.getElementById('motoristaTemCurso').value === 'sim',
                 cursoDescricao: document.getElementById('motoristaCursoDescricao').value.toUpperCase() || '',
                 pix: document.getElementById('motoristaPix').value || '',
-                email: emailGerado || existingEmail || '' // Salva o email gerado ou mantém o existente
+                email: emailGerado || existingEmail || ''
             };
             
             const idx = arr.findIndex(a => a.id === obj.id);
@@ -625,7 +622,7 @@ function setupFormHandlers() {
             document.getElementById('motoristaId').value = '';
             
             if (emailGerado) {
-                alert(`MOTORISTA SALVO!\n\nUSUÁRIO CRIADO: ${emailGerado}\nINFORME ESTE E-MAIL AO MOTORISTA PARA O PRIMEIRO ACESSO (CRIAR SENHA).`);
+                alert(`MOTORISTA SALVO!\n\nUSUÁRIO CRIADO: ${emailGerado}\nINFORME ESTE E-MAIL PARA O PRIMEIRO ACESSO.`);
             } else {
                 alert('MOTORISTA ATUALIZADO.');
             }
@@ -642,10 +639,9 @@ function setupFormHandlers() {
             const idHidden = document.getElementById('ajudanteId').value;
             const nomeInput = document.getElementById('ajudanteNome').value.toUpperCase();
 
-            // Se for novo cadastro, solicita criação de usuário
             if (!idHidden) {
                 const companyDomain = window.CURRENT_USER ? window.CURRENT_USER.company : 'logimaster.com';
-                const userLogin = prompt(`CRIAÇÃO DE ACESSO PARA ${nomeInput}:\n\nDefina o nome de usuário (ex: pedro.souza) para que este ajudante possa acessar o sistema.\nO domínio será @${companyDomain}.`);
+                const userLogin = prompt(`CRIAÇÃO DE ACESSO PARA ${nomeInput}:\n\nDefina o nome de usuário (ex: pedro.souza).\nO domínio será @${companyDomain}.`);
                 
                 if (!userLogin) {
                     alert("CADASTRO CANCELADO. É NECESSÁRIO DEFINIR UM USUÁRIO.");
@@ -680,7 +676,7 @@ function setupFormHandlers() {
             document.getElementById('ajudanteId').value = '';
             
             if (emailGerado) {
-                alert(`AJUDANTE SALVO!\n\nUSUÁRIO CRIADO: ${emailGerado}\nINFORME ESTE E-MAIL AO AJUDANTE PARA O PRIMEIRO ACESSO (CRIAR SENHA).`);
+                alert(`AJUDANTE SALVO!\n\nUSUÁRIO CRIADO: ${emailGerado}\nINFORME ESTE E-MAIL PARA O PRIMEIRO ACESSO.`);
             } else {
                 alert('AJUDANTE ATUALIZADO.');
             }
@@ -766,7 +762,6 @@ function setupFormHandlers() {
         });
     }
 
-    // DESPESA GERAL
     const formDespesa = document.getElementById('formDespesaGeral');
     if (formDespesa) {
         formDespesa.addEventListener('submit', (e) => {
@@ -787,51 +782,33 @@ function setupFormHandlers() {
                 const veiculoPlaca = document.getElementById('selectVeiculoDespesaGeral').value || null;
                 const descricaoBase = document.getElementById('despesaGeralDescricao').value.toUpperCase();
                 const valorTotal = Number(document.getElementById('despesaGeralValor').value) || 0;
-                
                 const modoPagamento = document.getElementById('despesaModoPagamento').value;
                 const formaPagamento = document.getElementById('despesaFormaPagamento').value; 
-                
                 let numParcelas = 1;
                 let intervaloDias = 30;
                 let parcelasJaPagas = 0;
-                
                 if (modoPagamento === 'parcelado') {
                     numParcelas = parseInt(document.getElementById('despesaParcelas').value) || 2; 
                     intervaloDias = parseInt(document.getElementById('despesaIntervaloDias').value) || 30;
                     const inputPagas = document.getElementById('despesaParcelasPagas');
                     if (inputPagas) parcelasJaPagas = parseInt(inputPagas.value) || 0;
                 }
-
                 const valorParcela = valorTotal / numParcelas;
                 const [y_ini, m_ini, d_ini] = dataBaseStr.split('-').map(Number);
                 const dataBase = new Date(y_ini, m_ini - 1, d_ini);
-
                 for (let i = 0; i < numParcelas; i++) {
                     const id = arr.length ? Math.max(...arr.map(d => d.id)) + 1 : 1;
                     const dataObj = new Date(dataBase);
                     dataObj.setDate(dataBase.getDate() + (i * intervaloDias));
-                    
                     const y = dataObj.getFullYear();
                     const m = String(dataObj.getMonth() + 1).padStart(2, '0');
                     const d = String(dataObj.getDate()).padStart(2, '0');
                     const dataParcela = `${y}-${m}-${d}`;
-                    
                     const descFinal = numParcelas > 1 ? `${descricaoBase} (${i+1}/${numParcelas})` : descricaoBase;
                     const estaPaga = i < parcelasJaPagas;
-
-                    arr.push({
-                        id,
-                        data: dataParcela,
-                        veiculoPlaca,
-                        descricao: descFinal,
-                        valor: Number(valorParcela.toFixed(2)),
-                        modoPagamento,
-                        formaPagamento,
-                        pago: estaPaga
-                    });
+                    arr.push({ id, data: dataParcela, veiculoPlaca, descricao: descFinal, valor: Number(valorParcela.toFixed(2)), modoPagamento, formaPagamento, pago: estaPaga });
                 }
             }
-
             saveData(DB_KEYS.DESPESAS_GERAIS, arr);
             formDespesa.reset();
             document.getElementById('despesaGeralId').value = '';
@@ -845,35 +822,26 @@ function setupFormHandlers() {
         });
     }
 
-    // OPERAÇÕES (Atualizado para Agendamento)
     const formOperacao = document.getElementById('formOperacao');
     if (formOperacao) {
         formOperacao.addEventListener('submit', (e) => {
             e.preventDefault(); 
-            
             const motId = document.getElementById('selectMotoristaOperacao').value;
             const isAgendamento = document.getElementById('operacaoIsAgendamento').checked;
-
             if (motId) verificarValidadeCNH(motId);
-
             let arr = loadData(DB_KEYS.OPERACOES).slice();
             const idHidden = document.getElementById('operacaoId').value;
             const ajudantesVisual = window._operacaoAjudantesTempList || [];
-
-            // Define status
-            // Se for novo e marcado como agendamento -> AGENDADA
-            // Se for edição, mantém o status ou atualiza se o checkbox mudou (mas prioriza o checkbox)
+            // Status: Se for agendamento -> AGENDADA, se não -> CONFIRMADA
             const statusFinal = isAgendamento ? 'AGENDADA' : 'CONFIRMADA';
-
             const obj = {
                 id: idHidden ? Number(idHidden) : (arr.length ? Math.max(...arr.map(o => o.id)) + 1 : 1),
-                status: statusFinal, // NOVO CAMPO DE STATUS
+                status: statusFinal,
                 data: document.getElementById('operacaoData').value,
                 motoristaId: Number(motId) || null,
                 veiculoPlaca: document.getElementById('selectVeiculoOperacao').value || '',
                 contratanteCNPJ: document.getElementById('selectContratanteOperacao').value || '',
                 atividadeId: Number(document.getElementById('selectAtividadeOperacao').value) || null,
-                // Se for agendamento, campos financeiros podem ser 0
                 faturamento: Number(document.getElementById('operacaoFaturamento').value) || 0,
                 adiantamento: Number(document.getElementById('operacaoAdiantamento').value) || 0,
                 comissao: document.getElementById('operacaoComissao').value ? Number(document.getElementById('operacaoComissao').value) : 0,
@@ -883,19 +851,15 @@ function setupFormHandlers() {
                 kmRodado: Number(document.getElementById('operacaoKmRodado').value) || 0, 
                 ajudantes: ajudantesVisual.slice()
             };
-
             const idx = arr.findIndex(o => o.id === obj.id);
             if (idx >= 0) arr[idx] = obj;
             else arr.push(obj);
-            
             saveData(DB_KEYS.OPERACOES, arr);
-            
             window._operacaoAjudantesTempList = [];
             document.getElementById('listaAjudantesAdicionados').innerHTML = '';
             formOperacao.reset();
             document.getElementById('operacaoId').value = '';
-            document.getElementById('operacaoIsAgendamento').checked = false; // Reset checkbox
-            
+            document.getElementById('operacaoIsAgendamento').checked = false;
             alert(isAgendamento ? 'OPERAÇÃO AGENDADA! DISPONÍVEL PARA CHECK-IN.' : 'OPERAÇÃO SALVA E CONFIRMADA!');
         });
         
@@ -907,7 +871,7 @@ function setupFormHandlers() {
         });
     }
     
-    // Check-in de Confirmação (Funcionário) - MODIFICADO PARA APENAS REGISTRAR PRESENÇA
+    // --- LÓGICA DE CHECK-IN DO FUNCIONÁRIO (COM AUTO-INÍCIO) ---
     const formCheckinConfirm = document.getElementById('formCheckinConfirm');
     if (formCheckinConfirm) {
         formCheckinConfirm.addEventListener('submit', (e) => {
@@ -925,21 +889,15 @@ function setupFormHandlers() {
             
             if (idx >= 0) {
                 const op = arr[idx];
-                
-                // Inicializa objeto de checkins individuais se não existir
                 if (!op.checkins) op.checkins = { motorista: false, ajudantes: [] };
-                
                 let confirmouAlguem = false;
 
-                // Lógica para Motorista
+                // Identifica se é Motorista
                 if (window.CURRENT_USER.role === 'motorista') {
-                    // Verifica se o usuário é realmente o motorista da operação
                     const motoristaCad = getMotorista(op.motoristaId);
                     const souEu = (motoristaCad && (motoristaCad.uid === window.CURRENT_USER.uid || motoristaCad.email === window.CURRENT_USER.email));
-                    
                     if (souEu) {
                         op.checkins.motorista = true;
-                        // Salva dados parciais que o motorista inseriu
                         op.kmRodado = kmRodado;
                         op.combustivel = valorAbastecido;
                         op.precoLitro = precoLitro;
@@ -947,14 +905,12 @@ function setupFormHandlers() {
                     }
                 }
                 
-                // Lógica para Ajudante
+                // Identifica se é Ajudante
                 if (window.CURRENT_USER.role === 'ajudante') {
                     const ajudanteCad = loadData(DB_KEYS.AJUDANTES).find(a => a.uid === window.CURRENT_USER.uid || a.email === window.CURRENT_USER.email);
                     if (ajudanteCad) {
-                        // Verifica se este ajudante está na lista da operação
                         const estaNaOp = (op.ajudantes || []).some(a => a.id === ajudanteCad.id);
                         if (estaNaOp) {
-                            // Adiciona ID à lista de confirmados (evitando duplicatas)
                             if (!op.checkins.ajudantes.includes(ajudanteCad.id)) {
                                 op.checkins.ajudantes.push(ajudanteCad.id);
                             }
@@ -964,8 +920,20 @@ function setupFormHandlers() {
                 }
 
                 if (confirmouAlguem) {
-                    saveData(DB_KEYS.OPERACOES, arr);
-                    alert('CHECK-IN REALIZADO COM SUCESSO! AGUARDE A LIBERAÇÃO DO GESTOR.');
+                    // === LÓGICA DE INÍCIO AUTOMÁTICO ===
+                    const totalAjudantes = (op.ajudantes || []).length;
+                    const confirmadosAjudantes = (op.checkins.ajudantes || []).length;
+                    const motoristaOk = op.checkins.motorista;
+
+                    if (motoristaOk && confirmadosAjudantes >= totalAjudantes) {
+                        op.status = 'CONFIRMADA'; // Inicia automaticamente
+                        saveData(DB_KEYS.OPERACOES, arr);
+                        alert('TODOS CONFIRMARAM! A ROTA FOI INICIADA AUTOMATICAMENTE.');
+                    } else {
+                        saveData(DB_KEYS.OPERACOES, arr);
+                        alert('CHECK-IN REALIZADO! AGUARDANDO OS DEMAIS MEMBROS DA EQUIPE.');
+                    }
+                    
                     closeCheckinConfirmModal();
                     renderCheckinsTable(); 
                 } else {
