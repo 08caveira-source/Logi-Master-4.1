@@ -640,25 +640,57 @@
         </section>
 
         <section id="employee-profile" class="page">
-            <h2>MEUS DADOS</h2>
+            <h2>MEUS DADOS CADASTRAIS</h2>
             <div class="card">
-                <form id="formEmployeeProfile">
+                <div style="background:#e3f2fd; padding:10px; border-left:4px solid #2196f3; margin-bottom:15px;">
+                    <p style="font-size:0.9rem; color:#0d47a1;">
+                        <i class="fas fa-info-circle"></i> ESTES SÃO SEUS DADOS ATUAIS NO SISTEMA DA EMPRESA.
+                        PARA ALTERAR, CLIQUE NO BOTÃO ABAIXO E ENVIE UMA SOLICITAÇÃO AO GESTOR.
+                    </p>
+                </div>
+                <form id="formEmployeeProfileReadonly">
                     <div class="form-grid">
-                        <div class="form-group"><label>NOME:</label><input type="text" id="empNome" readonly></div>
-                        <div class="form-group"><label>EMAIL:</label><input type="text" id="empEmail" readonly></div>
-                        <div class="form-group"><label>TELEFONE:</label><input type="text" id="empTelefone"></div>
-                        <div class="form-group"><label>CHAVE PIX:</label><input type="text" id="empPix"></div>
-                        <div class="form-group only-driver"><label>CNH:</label><input type="text" id="empCNH"></div>
-                        <div class="form-group only-driver"><label>VALIDADE CNH:</label><input type="date" id="empValidadeCNH"></div>
+                        <div class="form-group"><label>NOME COMPLETO:</label><input type="text" id="viewEmpNome" readonly style="background:#eee; cursor:not-allowed;"></div>
+                        <div class="form-group"><label>DOCUMENTO (CPF):</label><input type="text" id="viewEmpDoc" readonly style="background:#eee; cursor:not-allowed;"></div>
+                        <div class="form-group"><label>TELEFONE:</label><input type="text" id="viewEmpTelefone" readonly style="background:#eee; cursor:not-allowed;"></div>
+                        <div class="form-group"><label>CHAVE PIX:</label><input type="text" id="viewEmpPix" readonly style="background:#eee; cursor:not-allowed;"></div>
+                        <div class="form-group"><label>ENDEREÇO:</label><input type="text" id="viewEmpEndereco" readonly style="background:#eee; cursor:not-allowed;"></div>
+                        <div class="form-group driver-only-view"><label>CNH:</label><input type="text" id="viewEmpCNH" readonly style="background:#eee; cursor:not-allowed;"></div>
+                        <div class="form-group driver-only-view"><label>VALIDADE CNH:</label><input type="text" id="viewEmpValidadeCNH" readonly style="background:#eee; cursor:not-allowed;"></div>
                     </div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn-primary">SALVAR DADOS</button>
+                    <div class="form-actions" style="margin-top:20px;">
+                        <button type="button" class="btn-primary" onclick="openSolicitacaoModal()">
+                            <i class="fas fa-edit"></i> SOLICITAR ALTERAÇÃO DE DADOS
+                        </button>
                     </div>
                 </form>
             </div>
         </section>
 
     </main>
+    <div id="modalSolicitarAlteracao" class="modal">
+        <div class="modal-content">
+            <h3>ATUALIZAR MEUS DADOS</h3>
+            <p style="font-size:0.85rem; color:#666; margin-bottom:15px;">
+                ALTERE APENAS O QUE FOR NECESSÁRIO. A MUDANÇA FICARÁ PENDENTE ATÉ O GESTOR APROVAR.
+            </p>
+            <form id="formSolicitacaoDados">
+                <div class="form-grid">
+                    <div class="form-group"><label>NOME:</label><input type="text" id="solicitaNome" required></div>
+                    <div class="form-group"><label>TELEFONE:</label><input type="text" id="solicitaTelefone"></div>
+                    <div class="form-group"><label>CHAVE PIX:</label><input type="text" id="solicitaPix"></div>
+                    <div class="form-group"><label>ENDEREÇO:</label><input type="text" id="solicitaEndereco"></div>
+                    
+                    <div class="form-group driver-only-edit"><label>CNH:</label><input type="text" id="solicitaCNH"></div>
+                    <div class="form-group driver-only-edit"><label>VALIDADE CNH:</label><input type="date" id="solicitaValidadeCNH"></div>
+                </div>
+                <div class="form-actions" style="margin-top:15px;">
+                    <button type="submit" class="btn-primary">ENVIAR SOLICITAÇÃO</button>
+                    <button type="button" class="btn-secondary" onclick="document.getElementById('modalSolicitarAlteracao').style.display='none'">CANCELAR</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <div id="operationDetailsModal" class="modal">
         <div class="modal-content">
