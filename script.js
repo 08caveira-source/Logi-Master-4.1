@@ -1325,6 +1325,28 @@ function renderCheckinsTable() {
                     const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
                     const contratante = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
                     
+                    // --- NOVA LÓGICA: MOSTRAR EQUIPE ---
+                    let infoEquipeHTML = '';
+                    if (isMotorista) {
+                        // Se sou Motorista, mostro quem são os Ajudantes
+                        const nomesAjudantes = (op.ajudantes || []).map(a => {
+                            const aj = getAjudante(a.id);
+                            return aj ? aj.nome.split(' ')[0] : 'ID:'+a.id; // Mostra primeiro nome
+                        }).join(', ');
+                        
+                        if(nomesAjudantes) {
+                            infoEquipeHTML = `<p style="font-size:0.85rem; color:#455a64; margin-top:4px;"><i class="fas fa-users" style="width:15px;"></i> <strong>EQUIPE:</strong> ${nomesAjudantes}</p>`;
+                        } else {
+                            infoEquipeHTML = `<p style="font-size:0.85rem; color:#999; margin-top:4px;"><i class="fas fa-users" style="width:15px;"></i> (SEM AJUDANTES)</p>`;
+                        }
+                    } else {
+                        // Se sou Ajudante, mostro quem é o Motorista
+                        const mot = getMotorista(op.motoristaId);
+                        const nomeMot = mot ? mot.nome : 'A DEFINIR';
+                        infoEquipeHTML = `<p style="font-size:0.85rem; color:#455a64; margin-top:4px;"><i class="fas fa-shipping-fast" style="width:15px;"></i> <strong>MOTORISTA:</strong> ${nomeMot}</p>`;
+                    }
+                    // -----------------------------------
+
                     let btnHtml = '';
                     if (isMotorista) {
                         if (op.status === 'AGENDADA') {
@@ -1345,12 +1367,15 @@ function renderCheckinsTable() {
 
                     html += `<div class="card" style="border-left: 5px solid var(--primary-color);">
                         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                            <div>
+                            <div style="flex: 1; min-width: 200px;">
                                 <h4 style="color:var(--primary-color); margin-bottom:5px;">${dataFmt} - ${op.veiculoPlaca}</h4>
-                                <p><strong>CLIENTE:</strong> ${contratante}</p>
-                                <p>STATUS: <strong>${op.status.replace('_',' ')}</strong></p>
+                                <p style="margin-bottom:2px;"><strong>CLIENTE:</strong> ${contratante}</p>
+                                ${infoEquipeHTML}
+                                <p style="margin-top:2px; font-size:0.85rem;">STATUS: <strong>${op.status.replace('_',' ')}</strong></p>
                             </div>
-                            ${btnHtml}
+                            <div style="text-align:right;">
+                                ${btnHtml}
+                            </div>
                         </div>
                     </div>`;
                 });
