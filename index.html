@@ -592,7 +592,7 @@
             
             <div class="card">
                 <h3><i class="fas fa-filter"></i> FILTRAR PERÍODO</h3>
-                <form id="formFiltroFuncionario" onsubmit="filtrarHistoricoFuncionario(event)">
+                <form id="formFiltroFuncionario">
                     <div class="form-grid">
                         <div class="form-group">
                             <label>DATA INICIAL:</label>
@@ -604,8 +604,8 @@
                         </div>
                     </div>
                     <div class="form-actions" style="margin-top: 15px;">
-                        <button type="submit" class="btn-primary" style="width:100%; justify-content:center; padding:12px;">
-                            <i class="fas fa-search"></i> FILTRAR / CALCULAR VALORES
+                        <button type="button" class="btn-primary" style="width:100%; justify-content:center; padding:12px;" onclick="filtrarHistoricoFuncionario(event)">
+                            <i class="fas fa-search"></i> FILTRAR / CALCULAR
                         </button>
                     </div>
                 </form>
@@ -631,7 +631,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td colspan="5" style="text-align:center;">USE O FILTRO ACIMA PARA CARREGAR OS DADOS.</td></tr>
+                            <tr><td colspan="5" style="text-align:center;">SELECIONE AS DATAS E CLIQUE EM FILTRAR.</td></tr>
                         </tbody>
                     </table>
                 </div>

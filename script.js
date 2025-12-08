@@ -568,6 +568,7 @@ function deleteItem(key, id) {
 // =============================================================================
 
 function setupFormHandlers() {
+    // --- MOTORISTA ---
     const formMotorista = document.getElementById('formMotorista');
     if (formMotorista) {
         formMotorista.addEventListener('submit', (e) => {
@@ -607,6 +608,7 @@ function setupFormHandlers() {
                 pix: document.getElementById('motoristaPix').value || '',
                 email: emailGerado || existingEmail || ''
             };
+            
             const idx = arr.findIndex(a => a.id === obj.id);
             if (idx >= 0) arr[idx] = obj; else arr.push(obj);
             saveData(DB_KEYS.MOTORISTAS, arr);
@@ -618,6 +620,7 @@ function setupFormHandlers() {
         });
     }
 
+    // --- AJUDANTE ---
     const formAjudante = document.getElementById('formAjudante');
     if (formAjudante) {
         formAjudante.addEventListener('submit', (e) => {
@@ -663,6 +666,7 @@ function setupFormHandlers() {
         });
     }
 
+    // --- VEÍCULO ---
     const formVeiculo = document.getElementById('formVeiculo');
     if (formVeiculo) {
         formVeiculo.addEventListener('submit', (e) => {
@@ -685,6 +689,7 @@ function setupFormHandlers() {
         formVeiculo.addEventListener('reset', () => document.getElementById('veiculoId').value = '');
     }
 
+    // --- CONTRATANTE ---
     const formContratante = document.getElementById('formContratante');
     if (formContratante) {
         formContratante.addEventListener('submit', (e) => {
@@ -705,6 +710,7 @@ function setupFormHandlers() {
         formContratante.addEventListener('reset', () => document.getElementById('contratanteId').value = '');
     }
 
+    // --- ATIVIDADE ---
     const formAtividade = document.getElementById('formAtividade');
     if (formAtividade) {
         formAtividade.addEventListener('submit', (e) => {
@@ -725,6 +731,7 @@ function setupFormHandlers() {
         formAtividade.addEventListener('reset', () => document.getElementById('atividadeId').value = '');
     }
 
+    // --- MINHA EMPRESA ---
     const formMinhaEmpresa = document.getElementById('formMinhaEmpresa');
     if (formMinhaEmpresa) {
         formMinhaEmpresa.addEventListener('submit', (e) => {
@@ -739,6 +746,7 @@ function setupFormHandlers() {
         });
     }
 
+    // --- DESPESA GERAL ---
     const formDespesa = document.getElementById('formDespesaGeral');
     if (formDespesa) {
         formDespesa.addEventListener('submit', (e) => {
@@ -799,6 +807,7 @@ function setupFormHandlers() {
         });
     }
 
+    // --- OPERAÇÃO (ADMIN) ---
     const formOperacao = document.getElementById('formOperacao');
     if (formOperacao) {
         formOperacao.addEventListener('submit', (e) => {
@@ -810,7 +819,7 @@ function setupFormHandlers() {
             const idHidden = document.getElementById('operacaoId').value;
             const ajudantesVisual = window._operacaoAjudantesTempList || [];
             
-            // Se marcado como agendamento, cria como AGENDADA. Se não, já cria como CONFIRMADA (uso do Admin)
+            // Se marcado como agendamento, cria como AGENDADA. Se não, já cria como CONFIRMADA.
             const statusFinal = isAgendamento ? 'AGENDADA' : 'CONFIRMADA';
             
             const obj = {
@@ -828,14 +837,12 @@ function setupFormHandlers() {
                 precoLitro: Number(document.getElementById('operacaoPrecoLitro').value) || 0,
                 despesas: Number(document.getElementById('operacaoDespesas').value) || 0,
                 kmRodado: Number(document.getElementById('operacaoKmRodado').value) || 0, 
-                // Novos campos para controle de Km
-                kmInicial: 0, 
+                kmInicial: 0,
                 kmFinal: 0,
                 ajudantes: ajudantesVisual.slice()
             };
             const idx = arr.findIndex(o => o.id === obj.id);
-            if (idx >= 0) arr[idx] = obj;
-            else arr.push(obj);
+            if (idx >= 0) arr[idx] = obj; else arr.push(obj);
             saveData(DB_KEYS.OPERACOES, arr);
             window._operacaoAjudantesTempList = [];
             document.getElementById('listaAjudantesAdicionados').innerHTML = '';
@@ -853,7 +860,7 @@ function setupFormHandlers() {
         });
     }
     
-    // --- LÓGICA DE CHECK-IN DO FUNCIONÁRIO (KM INICIAL / FINAL) ---
+    // --- CHECK-IN DO FUNCIONÁRIO (KM INICIAL / FINAL) ---
     const formCheckinConfirm = document.getElementById('formCheckinConfirm');
     if (formCheckinConfirm) {
         formCheckinConfirm.addEventListener('submit', (e) => {
@@ -884,7 +891,7 @@ function setupFormHandlers() {
                             
                             op.kmInicial = kmIni;
                             op.status = 'EM_ANDAMENTO'; // Muda status para em andamento
-                            op.checkins.motorista = true; // Marca presença
+                            op.checkins.motorista = true;
                             confirmouAlguem = true;
                             alert("VIAGEM INICIADA! BOA ROTA.");
                         } else if (step === 'end') {
@@ -892,17 +899,16 @@ function setupFormHandlers() {
                             if(!kmFim || kmFim <= op.kmInicial) return alert("O KM FINAL DEVE SER MAIOR QUE O INICIAL.");
                             
                             op.kmFinal = kmFim;
-                            op.kmRodado = kmFim - (op.kmInicial || 0); // CÁLCULO AUTOMÁTICO
+                            op.kmRodado = kmFim - (op.kmInicial || 0); // Cálculo Automático
                             op.combustivel = Number(document.getElementById('checkinValorAbastecido').value) || 0;
                             op.precoLitro = Number(document.getElementById('checkinPrecoLitroConfirm').value) || 0;
                             
-                            op.status = 'CONFIRMADA'; // FINALIZA A ROTA
+                            op.status = 'CONFIRMADA'; // Finaliza
                             confirmouAlguem = true;
                             alert(`VIAGEM FINALIZADA!\nTOTAL RODADO: ${op.kmRodado} KM`);
                         }
                     }
                 } 
-                // Ajudantes (Apenas Confirmam Presença)
                 else if (window.CURRENT_USER.role === 'ajudante') {
                     const ajudanteCad = loadData(DB_KEYS.AJUDANTES).find(a => a.uid === window.CURRENT_USER.uid || a.email === window.CURRENT_USER.email);
                     if (ajudanteCad) {
@@ -944,31 +950,32 @@ window.toggleDespesaParcelas = toggleDespesaParcelas;
 // 11. TABELA DE OPERAÇÕES E VISUALIZAÇÃO
 // =============================================================================
 
-let currentDate = new Date(); 
+let currentDate = new Date(); // Variável global para o calendário e dashboard
 
 function renderOperacaoTable() {
     const ops = loadData(DB_KEYS.OPERACOES).slice().sort((a, b) => new Date(b.data) - new Date(a.data));
     const tabela = document.getElementById('tabelaOperacoes');
     if (!tabela || !tabela.querySelector('tbody')) return;
     
-    // Limita a exibição inicial a 50 itens para não travar o Admin
-    const opsExibidas = ops.slice(0, 50); 
-    
+    // OTIMIZAÇÃO: Renderiza apenas os 50 últimos para não travar a tela
+    const opsExibidas = ops.slice(0, 50);
+
     if (!opsExibidas.length) {
-        tabela.querySelector('tbody').innerHTML = '<tr><td colspan="6" style="text-align:center;">NENHUMA OPERAÇÃO LANÇADA.</td></tr>';
+        tabela.querySelector('tbody').innerHTML = '<tr><td colspan="6" style="text-align:center;">NENHUMA OPERAÇÃO LANÇADA AINDA.</td></tr>';
         return;
     }
-    
     let rows = '';
     opsExibidas.forEach(op => {
         const motorista = getMotorista(op.motoristaId)?.nome || 'N/A';
         const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
         
+        // Status Badge
         let statusBadge = '';
         if (op.status === 'AGENDADA') statusBadge = '<span style="background:orange; color:white; padding:2px 6px; border-radius:4px; font-size:0.7rem;">AGENDADA</span>';
         else if (op.status === 'EM_ANDAMENTO') statusBadge = '<span style="background:#0288d1; color:white; padding:2px 6px; border-radius:4px; font-size:0.7rem;">EM ANDAMENTO</span>';
         else statusBadge = '<span style="background:green; color:white; padding:2px 6px; border-radius:4px; font-size:0.7rem;">CONFIRMADA</span>';
 
+        // Se confirmada mostra valor, senão mostra status
         const faturamentoDisplay = op.status === 'CONFIRMADA' ? formatCurrency(op.faturamento) : '(PENDENTE)';
 
         let btns = `<button class="btn-action view-btn" onclick="viewOperacaoDetails(${op.id})"><i class="fas fa-eye"></i></button>`;
@@ -976,7 +983,13 @@ function renderOperacaoTable() {
             btns += `<button class="btn-action edit-btn" onclick="editOperacaoItem(${op.id})"><i class="fas fa-edit"></i></button><button class="btn-action delete-btn" onclick="deleteItem('${DB_KEYS.OPERACOES}', ${op.id})"><i class="fas fa-trash"></i></button>`;
         }
 
-        rows += `<tr><td>${dataFmt}</td><td>${motorista}</td><td>${statusBadge}</td><td>${faturamentoDisplay}</td><td>${btns}</td></tr>`;
+        rows += `<tr>
+            <td>${dataFmt}</td>
+            <td>${motorista}</td>
+            <td>${statusBadge}</td>
+            <td>${faturamentoDisplay}</td>
+            <td>${btns}</td>
+        </tr>`;
     });
     tabela.querySelector('tbody').innerHTML = rows;
 }
@@ -985,7 +998,8 @@ function viewOperacaoDetails(id) {
     const op = loadData(DB_KEYS.OPERACOES).find(o => o.id === id);
     if (!op) return alert('OPERAÇÃO NÃO ENCONTRADA.');
     
-    const isAgendada = op.status !== 'CONFIRMADA';
+    // Define se está finalizada ou não
+    const isFinalizada = op.status === 'CONFIRMADA';
     const motorista = getMotorista(op.motoristaId)?.nome || 'N/A';
     const contratante = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
     const atividade = getAtividade(op.atividadeId)?.nome || 'N/A';
@@ -997,12 +1011,14 @@ function viewOperacaoDetails(id) {
 
     let detailsHtml = '';
 
-    if (isAgendada) {
+    if (!isFinalizada) {
+        // Detalhes parciais (Em Andamento ou Agendada)
+        let statusColor = op.status === 'EM_ANDAMENTO' ? '#0288d1' : 'orange';
         detailsHtml = `
-            <div style="background:#fff3e0; padding:10px; border-radius:4px; border-left:4px solid orange; margin-bottom:15px;">
-                <h4 style="color:#e65100; margin-bottom:5px;">STATUS: ${op.status}</h4>
-                <p>Esta operação ainda não foi finalizada.</p>
-                ${op.kmInicial ? `<p><strong>KM INICIAL REGISTRADO:</strong> ${op.kmInicial}</p>` : ''}
+            <div style="background:#fff3e0; padding:10px; border-radius:4px; border-left:4px solid ${statusColor}; margin-bottom:15px;">
+                <h4 style="color:${statusColor}; margin-bottom:5px;">STATUS: ${op.status.replace('_',' ')}</h4>
+                <p>Esta operação ainda não foi finalizada financeiramente.</p>
+                ${op.kmInicial ? `<p style="margin-top:5px;"><strong>KM INICIAL REGISTRADO:</strong> ${op.kmInicial}</p>` : ''}
             </div>
             <p><strong>MOTORISTA:</strong> ${motorista}</p>
             <p><strong>VEÍCULO:</strong> ${op.veiculoPlaca}</p>
@@ -1011,6 +1027,7 @@ function viewOperacaoDetails(id) {
             <div style="margin-top:10px;"><strong>EQUIPE (AJUDANTES):</strong><ul style="margin-top:6px;">${ajudantesHtml}</ul></div>
         `;
     } else {
+        // Detalhes Completos (Confirmada)
         const totalDiarias = (op.ajudantes || []).reduce((s, a) => s + (Number(a.diaria) || 0), 0);
         const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca) || 0;
         const custoDieselEstimado = calcularCustoConsumoViagem(op) || 0;
@@ -1032,7 +1049,10 @@ function viewOperacaoDetails(id) {
             <p><strong>MOTORISTA:</strong> ${motorista}</p>
             <p><strong>VEÍCULO:</strong> ${op.veiculoPlaca}</p>
             <p><strong>CONTRATANTE:</strong> ${contratante}</p>
-            <p style="font-size:1.1rem; color:var(--primary-color);"><strong>KM RODADO:</strong> ${op.kmRodado || 0} KM (Inicial: ${op.kmInicial || 0} - Final: ${op.kmFinal || 0})</p> 
+            <p style="font-size:1.1rem; color:var(--primary-color);">
+                <strong>KM RODADO:</strong> ${op.kmRodado || 0} KM 
+                <span style="font-size:0.8rem; color:#666;">(Ini: ${op.kmInicial || '?'} - Fim: ${op.kmFinal || '?'})</span>
+            </p> 
             <p><strong>FATURAMENTO:</strong> ${formatCurrency(op.faturamento)}</p>
             <p><strong>ADIANTAMENTO:</strong> ${formatCurrency(adiantamento)}</p>
             <p style="font-weight:700;">SALDO A RECEBER: ${formatCurrency(saldoReceber)}</p>
@@ -1054,8 +1074,7 @@ function renderDespesasTable() {
     const tabela = document.getElementById('tabelaDespesasGerais');
     if (!tabela || !tabela.querySelector('tbody')) return;
     
-    // Otimização: Exibe apenas as últimas 50 despesas para não travar
-    const dsExibidas = ds.slice(0, 50);
+    const dsExibidas = ds.slice(0, 50); // Otimização
 
     if (!dsExibidas.length) {
         tabela.querySelector('tbody').innerHTML = '<tr><td colspan="6" style="text-align:center;">NENHUMA DESPESA GERAL.</td></tr>';
@@ -1107,11 +1126,12 @@ function editDespesaItem(id) {
 }
 
 // =============================================================================
-// 12. SISTEMA DE CHECK-INS E AGENDAMENTOS (OTIMIZADO)
+// 12. SISTEMA DE CHECK-INS E AGENDAMENTOS (LÓGICA CENTRAL)
 // =============================================================================
 
 function renderCheckinsTable() {
     const ops = loadData(DB_KEYS.OPERACOES);
+    // Pendentes são Agendadas ou Em Andamento
     const pendentes = ops.filter(o => o.status !== 'CONFIRMADA').sort((a,b) => new Date(a.data) - new Date(b.data));
 
     // A. LÓGICA DO ADMIN
@@ -1119,7 +1139,7 @@ function renderCheckinsTable() {
     if (tabelaAdmin && !window.IS_READ_ONLY) { 
         let rows = '';
         if (!pendentes.length) {
-            rows = '<tr><td colspan="6" style="text-align:center; padding:20px;">NENHUMA ROTA ATIVA OU PENDENTE.</td></tr>';
+            rows = '<tr><td colspan="6" style="text-align:center; padding:20px;">NENHUMA ROTA ATIVA.</td></tr>';
         } else {
             pendentes.forEach(op => {
                 const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
@@ -1129,23 +1149,24 @@ function renderCheckinsTable() {
                 
                 let statusLabel = '';
                 if (op.status === 'AGENDADA') statusLabel = '<span style="color:orange;">AGUARDANDO INÍCIO</span>';
-                if (op.status === 'EM_ANDAMENTO') statusLabel = '<span style="color:#0288d1; font-weight:bold;">EM ANDAMENTO</span>';
+                else if (op.status === 'EM_ANDAMENTO') statusLabel = '<span style="color:#0288d1; font-weight:bold;">EM ANDAMENTO</span>';
 
                 const motStatusIcon = checkins.motorista 
-                    ? `<i class="fas fa-check-circle" style="color:green;" title="Check-in/Iniciou"></i>` 
+                    ? `<i class="fas fa-check-circle" style="color:green;" title="Confirmado"></i>` 
                     : `<i class="far fa-clock" style="color:orange;" title="Pendente"></i>`;
                 
                 let ajudantesStatusHtml = (op.ajudantes || []).map(a => {
                     const confirmou = checkins.ajudantes && checkins.ajudantes.includes(a.id);
-                    const icon = confirmou ? `<i class="fas fa-check-circle" style="color:green;"></i>` : `<i class="far fa-clock" style="color:orange;"></i>`;
-                    return icon;
+                    return confirmou ? `<i class="fas fa-check-circle" style="color:green;"></i>` : `<i class="far fa-clock" style="color:orange;"></i>`;
                 }).join(' ');
 
-                // Botão de Iniciar Rota (só aparece se não estiver confirmada e se for admin)
-                const todosOk = checkins.motorista && (checkins.ajudantes?.length >= (op.ajudantes?.length || 0));
-                const btnClass = todosOk ? 'btn-success' : 'btn-primary';
-                const btnIcon = todosOk ? 'fa-check-double' : 'fa-play';
-                const btnText = todosOk ? 'INICIAR (PRONTO)' : 'LIBERAR ROTA';
+                // Botão de Forçar Início (Só aparece se ainda não estiver EM ANDAMENTO)
+                let actionBtn = '';
+                if (op.status === 'AGENDADA') {
+                    actionBtn = `<button class="btn-primary btn-action" style="padding:6px 12px;" onclick="iniciarRotaManual(${op.id})"><i class="fas fa-play"></i> INICIAR ROTA</button>`;
+                } else {
+                    actionBtn = `<span style="color:#0288d1; font-size:0.8rem;">MOTORISTA INICIOU</span>`;
+                }
 
                 rows += `<tr>
                     <td>${dataFmt}</td>
@@ -1154,8 +1175,8 @@ function renderCheckinsTable() {
                     <td>${ajudantesStatusHtml || '-'}</td>
                     <td>${statusLabel}</td>
                     <td>
-                        <button class="${btnClass} btn-action" style="padding:6px 12px; margin-bottom:4px;" onclick="iniciarRotaManual(${op.id})"><i class="fas ${btnIcon}"></i> ${btnText}</button>
-                        <button class="btn-action edit-btn" onclick="editOperacaoItem(${op.id})"><i class="fas fa-edit"></i></button>
+                        ${actionBtn}
+                        <button class="btn-action edit-btn" style="margin-left:5px;" onclick="editOperacaoItem(${op.id})"><i class="fas fa-edit"></i></button>
                         <button class="btn-action delete-btn" onclick="deleteItem('${DB_KEYS.OPERACOES}', ${op.id})"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>`;
@@ -1173,23 +1194,24 @@ function renderCheckinsTable() {
         }
     }
 
-    // B. LÓGICA DO FUNCIONÁRIO (PAINEL + RESUMO)
+    // B. LÓGICA DO FUNCIONÁRIO
     if (window.CURRENT_USER && (window.CURRENT_USER.role === 'motorista' || window.CURRENT_USER.role === 'ajudante')) {
         const myUid = window.CURRENT_USER.uid;
         const myEmail = window.CURRENT_USER.email;
         let myProfileId = null;
         let isMotorista = (window.CURRENT_USER.role === 'motorista');
         let myKey = isMotorista ? DB_KEYS.MOTORISTAS : DB_KEYS.AJUDANTES;
+        
         const myProfile = loadData(myKey).find(p => p.uid === myUid || (p.email && p.email === myEmail));
         if (myProfile) myProfileId = myProfile.id;
 
         if (!myProfileId) {
             const el = document.getElementById('listaServicosAgendados');
-            if(el) el.innerHTML = '<p style="text-align:center; color:red;">PERFIL NÃO VINCULADO. CONTATE O ADMIN.</p>';
+            if(el) el.innerHTML = '<p style="text-align:center; color:red;">PERFIL NÃO VINCULADO.</p>';
             return;
         }
 
-        // 1. LISTA DE SERVIÇOS ATIVOS (AGENDADA OU EM ANDAMENTO)
+        // 1. LISTA DE PENDENTES (AGENDADAS OU EM ANDAMENTO)
         const listaFunc = document.getElementById('listaServicosAgendados');
         if (listaFunc) {
             const myPendentes = pendentes.filter(op => {
@@ -1198,7 +1220,7 @@ function renderCheckinsTable() {
             });
 
             if (!myPendentes.length) {
-                listaFunc.innerHTML = '<p style="text-align:center; color:#666;">NENHUMA VIAGEM ATIVA.</p>';
+                listaFunc.innerHTML = '<p style="text-align:center; color:#666;">NENHUMA VIAGEM ATIVA OU AGENDADA.</p>';
             } else {
                 let html = '';
                 myPendentes.forEach(op => {
@@ -1238,26 +1260,25 @@ function renderCheckinsTable() {
             }
         }
 
-        // 2. RESUMO DO HISTÓRICO (APENAS 5 ITENS PARA NÃO TRAVAR)
+        // 2. RESUMO DE HISTÓRICO (ÚLTIMOS 5)
         const tabelaHistoricoResumo = document.getElementById('tabelaMeusServicosResumo');
         if (tabelaHistoricoResumo) {
-            // Filtra operações CONFIRMADAS onde o usuário participou
             const historico = ops.filter(op => {
                 if (op.status !== 'CONFIRMADA') return false;
                 if (isMotorista) return op.motoristaId === myProfileId;
                 else return (op.ajudantes || []).some(a => a.id === myProfileId);
             }).sort((a,b) => new Date(b.data) - new Date(a.data));
 
-            const top5 = historico.slice(0, 5); // Otimização: Apenas 5
+            const top5 = historico.slice(0, 5);
 
             if (top5.length === 0) {
-                tabelaHistoricoResumo.querySelector('tbody').innerHTML = '<tr><td colspan="4" style="text-align:center;">NENHUM SERVIÇO RECENTE.</td></tr>';
+                tabelaHistoricoResumo.querySelector('tbody').innerHTML = '<tr><td colspan="4" style="text-align:center;">NENHUM SERVIÇO REALIZADO AINDA.</td></tr>';
             } else {
                 let rowsHist = '';
                 top5.forEach(op => {
                     const d = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
                     const c = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
-                    rowsHist += `<tr><td>${d}</td><td>${op.veiculoPlaca}</td><td>${c}</td><td><span style="color:green; font-weight:bold;">REALIZADO</span></td></tr>`;
+                    rowsHist += `<tr><td>${d}</td><td>${op.veiculoPlaca}</td><td>${c}</td><td><span style="color:green;">CONFIRMADA</span></td></tr>`;
                 });
                 tabelaHistoricoResumo.querySelector('tbody').innerHTML = rowsHist;
             }
@@ -1265,18 +1286,18 @@ function renderCheckinsTable() {
     }
 }
 
-// === FUNÇÃO DO MODAL ATUALIZADA (SELECIONA CAMPOS DINAMICAMENTE) ===
+// === FUNÇÃO DO MODAL ATUALIZADA (DINÂMICA) ===
 window.openCheckinConfirmModal = function(opId) {
     const op = loadData(DB_KEYS.OPERACOES).find(o => o.id === opId);
     if (!op) return;
 
-    // Preenche dados estáticos
+    // Dados Estáticos
     document.getElementById('checkinDisplayData').textContent = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
     document.getElementById('checkinDisplayContratante').textContent = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
     document.getElementById('checkinDisplayVeiculo').textContent = op.veiculoPlaca;
     document.getElementById('checkinOpId').value = op.id;
 
-    // Configura campos baseado na Role e Status
+    // Configuração Dinâmica
     const isMotorista = window.CURRENT_USER && window.CURRENT_USER.role === 'motorista';
     const divDriver = document.getElementById('checkinDriverFields');
     const divKmIni = document.getElementById('divKmInicial');
@@ -1288,7 +1309,7 @@ window.openCheckinConfirmModal = function(opId) {
     if (isMotorista) {
         divDriver.style.display = 'block';
         if (op.status === 'AGENDADA') {
-            // Passo 1: Iniciar
+            // INICIAR
             stepInput.value = 'start';
             modalTitle.textContent = "INICIAR VIAGEM";
             divKmIni.style.display = 'block';
@@ -1296,7 +1317,7 @@ window.openCheckinConfirmModal = function(opId) {
             btnConfirm.innerHTML = '<i class="fas fa-play"></i> INICIAR';
             document.getElementById('checkinKmInicial').value = '';
         } else if (op.status === 'EM_ANDAMENTO') {
-            // Passo 2: Finalizar
+            // FINALIZAR
             stepInput.value = 'end';
             modalTitle.textContent = "FINALIZAR VIAGEM";
             divKmIni.style.display = 'none';
@@ -1305,7 +1326,7 @@ window.openCheckinConfirmModal = function(opId) {
             btnConfirm.innerHTML = '<i class="fas fa-flag-checkered"></i> FINALIZAR';
         }
     } else {
-        // Ajudante: Apenas confirmação simples
+        // Ajudante
         divDriver.style.display = 'none';
         modalTitle.textContent = "CONFIRMAR PRESENÇA";
         btnConfirm.innerHTML = '<i class="fas fa-check"></i> CONFIRMAR';
@@ -1317,104 +1338,6 @@ window.openCheckinConfirmModal = function(opId) {
 window.closeCheckinConfirmModal = function() {
     document.getElementById('modalCheckinConfirm').style.display = 'none';
 };
-// =============================================================================
-// 13. DASHBOARD E CALENDÁRIO
-// =============================================================================
-
-function updateDashboardStats() {
-    const now = currentDate; 
-    const mes = now.getMonth();
-    const ano = now.getFullYear();
-
-    const ops = loadData(DB_KEYS.OPERACOES).filter(o => {
-        const d = new Date(o.data + 'T00:00:00');
-        return d.getMonth() === mes && d.getFullYear() === ano;
-    });
-
-    const despesasGerais = loadData(DB_KEYS.DESPESAS_GERAIS).filter(d => {
-        const dt = new Date(d.data + 'T00:00:00');
-        return dt.getMonth() === mes && dt.getFullYear() === ano;
-    });
-
-    let totalFaturamento = 0;
-    let totalCustos = 0;
-
-    ops.forEach(op => {
-        totalFaturamento += (op.faturamento || 0);
-        const diarias = (op.ajudantes || []).reduce((acc, a) => acc + (Number(a.diaria) || 0), 0);
-        const custoDiesel = calcularCustoConsumoViagem(op) || 0;
-        totalCustos += (op.comissao || 0) + diarias + (op.despesas || 0) + custoDiesel;
-    });
-
-    totalCustos += despesasGerais.reduce((acc, d) => acc + (d.valor || 0), 0);
-    const receitaLiquida = totalFaturamento - totalCustos;
-
-    const elFaturamento = document.getElementById('faturamentoMes');
-    const elDespesas = document.getElementById('despesasMes');
-    const elReceita = document.getElementById('receitaMes');
-
-    if (elFaturamento) elFaturamento.textContent = formatCurrency(totalFaturamento);
-    if (elDespesas) elDespesas.textContent = formatCurrency(totalCustos);
-    if (elReceita) {
-        elReceita.textContent = formatCurrency(receitaLiquida);
-        elReceita.style.color = receitaLiquida >= 0 ? 'var(--success-color)' : 'var(--danger-color)';
-    }
-}
-
-function renderCalendar(date) {
-    const grid = document.getElementById('calendarGrid');
-    const label = document.getElementById('currentMonthYear');
-    if (!grid || !label) return;
-
-    grid.innerHTML = '';
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const monthNames = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
-    label.textContent = `${monthNames[month]} ${year}`;
-
-    const daysOfWeek = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
-    daysOfWeek.forEach(day => {
-        const div = document.createElement('div');
-        div.className = 'day-label';
-        div.textContent = day;
-        grid.appendChild(div);
-    });
-
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-    for (let i = 0; i < firstDay; i++) {
-        const div = document.createElement('div');
-        div.className = 'day-cell empty';
-        grid.appendChild(div);
-    }
-
-    const ops = loadData(DB_KEYS.OPERACOES);
-    for (let day = 1; day <= daysInMonth; day++) {
-        const div = document.createElement('div');
-        div.className = 'day-cell';
-        div.textContent = day;
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const hasOp = ops.some(o => o.data === dateStr);
-        if (hasOp) {
-            div.classList.add('has-operation');
-            div.innerHTML += '<div class="event-dot"></div>';
-            div.title = "Clique para ver operações deste dia";
-            div.onclick = () => {
-                alert(`OPERAÇÕES DO DIA ${day}/${month + 1}:\n\nConsulte a tabela abaixo para detalhes.`);
-            };
-        }
-        grid.appendChild(div);
-    }
-}
-
-function changeMonth(direction) {
-    currentDate.setMonth(currentDate.getMonth() + direction);
-    renderCalendar(currentDate);
-    updateDashboardStats(); 
-}
-window.changeMonth = changeMonth; 
-window.renderCalendar = renderCalendar;
 // =============================================================================
 // 14. GRÁFICOS
 // =============================================================================
@@ -1762,16 +1685,165 @@ function setupInputFormattingListeners() {
     if (selCurso) selCurso.addEventListener('change', toggleCursoInput);
 }
 
-// === LÓGICA DO FILTRO DE SERVIÇOS DO FUNCIONÁRIO (CORRIGIDA E ATIVADA) ===
+// =============================================================================
+// 17. RECIBOS & RELATÓRIOS
+// =============================================================================
+
+function parseCompositeId(value) {
+    if (!value) return null;
+    const parts = value.split(':');
+    if (parts.length !== 2) return null;
+    return {
+        type: parts[0],
+        id: parts[1]
+    };
+}
+
+function getPersonByComposite(value) {
+    const p = parseCompositeId(value);
+    if (!p) return null;
+    if (p.type === 'motorista') return getMotorista(p.id);
+    if (p.type === 'ajudante') return getAjudante(p.id);
+    return null;
+}
+
+function setupReciboListeners() {
+    const btnGerar = document.getElementById('btnGerarRecibo');
+    const btnBaixar = document.getElementById('btnBaixarRecibo');
+    const btnZapRecibo = document.getElementById('btnWhatsappRecibo');
+
+    if (!btnGerar) return;
+    btnGerar.addEventListener('click', () => {
+        const comp = document.getElementById('selectMotoristaRecibo').value;
+        const inicio = document.getElementById('dataInicioRecibo').value;
+        const fim = document.getElementById('dataFimRecibo').value;
+        if (!comp) return alert('SELECIONE UM MOTORISTA OU AJUDANTE.');
+        if (!inicio || !fim) return alert('PREENCHA AS DATAS.');
+
+        const parsed = parseCompositeId(comp);
+        const person = getPersonByComposite(comp);
+        const empresa = getMinhaEmpresa();
+        const veiculoRecibo = document.getElementById('selectVeiculoRecibo').value;
+        const contratanteRecibo = document.getElementById('selectContratanteRecibo').value;
+        const ops = loadData(DB_KEYS.OPERACOES);
+        
+        const filtered = ops.filter(op => {
+            if (op.status !== 'CONFIRMADA') return false; 
+            const d = new Date(op.data + 'T00:00:00');
+            const di = new Date(inicio + 'T00:00:00');
+            const df = new Date(fim + 'T23:59:59');
+            
+            if (d < di || d > df) return false;
+            
+            let match = false;
+            if (parsed.type === 'motorista') match = String(op.motoristaId) === String(parsed.id);
+            if (parsed.type === 'ajudante') match = Array.isArray(op.ajudantes) && op.ajudantes.some(a => String(a.id) === String(parsed.id));
+            if (!match) return false;
+            
+            if (veiculoRecibo && op.veiculoPlaca !== veiculoRecibo) return false;
+            if (contratanteRecibo && op.contratanteCNPJ !== contratanteRecibo) return false;
+            return true;
+        }).sort((a, b) => new Date(a.data) - new Date(b.data));
+
+        if (!filtered.length) {
+            document.getElementById('reciboContent').innerHTML = `<p style="text-align:center;color:var(--danger-color)">NENHUMA OPERAÇÃO CONFIRMADA ENCONTRADA.</p>`;
+            document.getElementById('reciboTitle').style.display = 'none';
+            btnBaixar.style.display = 'none';
+            if (btnZapRecibo) btnZapRecibo.style.display = 'none';
+            return;
+        }
+
+        let totalValorRecibo = 0;
+        const linhas = filtered.map(op => {
+            const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
+            const contrat = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
+            let valorLinha = 0;
+            if (parsed.type === 'motorista') valorLinha = op.comissao || 0;
+            else if (parsed.type === 'ajudante') {
+                const ajudanteData = (op.ajudantes || []).find(a => String(a.id) === String(parsed.id));
+                valorLinha = ajudanteData ? (Number(ajudanteData.diaria) || 0) : 0;
+            }
+            totalValorRecibo += valorLinha;
+            return `<tr><td>${dataFmt}</td><td>${op.veiculoPlaca}</td><td>${contrat}</td><td style="text-align:right;">${formatCurrency(valorLinha)}</td></tr>`;
+        }).join('');
+
+        const totalExtenso = new ConverterMoeda(totalValorRecibo).getExtenso().toUpperCase();
+        const pessoaNome = person ? (person.nome || person.razaoSocial || 'RECEBEDOR') : 'RECEBEDOR';
+        const inicioFmt = new Date(inicio + 'T00:00:00').toLocaleDateString('pt-BR');
+        const fimFmt = new Date(fim + 'T00:00:00').toLocaleDateString('pt-BR');
+
+        if (btnZapRecibo) {
+            const msgRecibo = `OLÁ, SEGUE COMPROVANTE DE RECIBO DE PAGAMENTO.\nBENEFICIÁRIO: ${pessoaNome}\nPERÍODO: ${inicioFmt} A ${fimFmt}\nVALOR TOTAL: *${formatCurrency(totalValorRecibo)}*`;
+            btnZapRecibo.href = `https://wa.me/?text=${encodeURIComponent(msgRecibo)}`;
+            btnZapRecibo.style.display = 'inline-flex';
+        }
+
+        const html = `
+            <div class="recibo-template">
+                <div class="recibo-header"><h3>RECIBO DE PAGAMENTO</h3><p style="font-size:0.9rem;color:var(--secondary-color)">DOCUMENTO NÃO FISCAL</p></div>
+                <p>RECEBEMOS DE: <strong>${empresa.razaoSocial || 'EMPRESA'}</strong>${empresa.cnpj ? ` (CNPJ: ${formatCPF_CNPJ(empresa.cnpj)})` : ''}</p>
+                <div style="border:1px dashed #ccc;padding:10px;margin:10px 0;">
+                    <p><strong>${pessoaNome}</strong> (${parsed.type.toUpperCase()})</p>
+                    <p>PERÍODO: ${inicioFmt} A ${fimFmt}</p>
+                </div>
+                <table style="width:100%;border-collapse:collapse;">
+                    <thead><tr><th style="text-align:left">DATA</th><th style="text-align:left">VEÍCULO</th><th style="text-align:left">CONTRATANTE</th><th style="text-align:right">VALOR</th></tr></thead>
+                    <tbody>${linhas}</tbody>
+                </table>
+                <p class="recibo-total">TOTAL: ${formatCurrency(totalValorRecibo)} (${totalExtenso})</p>
+                <div style="margin: 20px 0; font-size: 0.85rem; text-align: justify; line-height: 1.4;">
+                    <p>DECLARO TER RECEBIDO A IMPORTÂNCIA SUPRAMENCIONADA, DANDO PLENA, RASA E GERAL QUITAÇÃO PELOS SERVIÇOS PRESTADOS NO PERÍODO INDICADO.</p>
+                    <p style="margin-top:8px;">
+                        <strong>FUNDAMENTAÇÃO LEGAL:</strong> DECLARAMOS QUE A PRESTAÇÃO DESTES SERVIÇOS OCORREU DE FORMA AUTÔNOMA E EVENTUAL, SEM SUBORDINAÇÃO JURÍDICA, NÃO CONFIGURANDO VÍNCULO EMPREGATÍCIO.
+                        ESTA RELAÇÃO REGE-SE PELO <strong>CÓDIGO CIVIL BRASILEIRO (ARTS. 593 A 609)</strong> E, NO CASO DE TRANSPORTE DE CARGAS, PELA <strong>LEI Nº 11.442/2007 (TRANSPORTADOR AUTÔNOMO DE CARGAS)</strong>.
+                    </p>
+                </div>
+                <div class="recibo-assinaturas" style="display:flex;gap:20px;margin-top:20px;">
+                    <div><p>_____________________________________</p><p>${pessoaNome}</p><p>RECEBEDOR</p></div>
+                    <div><p>_____________________________________</p><p>${empresa.razaoSocial || 'EMPRESA'}</p><p>${empresa.cnpj ? formatCPF_CNPJ(empresa.cnpj) : ''}</p><p>PAGADOR</p></div>
+                </div>
+            </div>
+        `;
+        document.getElementById('reciboContent').innerHTML = html;
+        document.getElementById('reciboTitle').style.display = 'block';
+        btnBaixar.style.display = 'inline-flex';
+        btnBaixar.onclick = function() {
+            const element = document.getElementById('reciboContent').querySelector('.recibo-template');
+            const nomeArq = `RECIBO_${pessoaNome.split(' ')[0]}_${inicio}.pdf`;
+            if (typeof html2pdf !== 'undefined') {
+                html2pdf().from(element).set({
+                    margin: 10,
+                    filename: nomeArq,
+                    image: {
+                        type: 'jpeg',
+                        quality: 0.98
+                    },
+                    html2canvas: {
+                        scale: 2,
+                        scrollY: 0
+                    },
+                    jsPDF: {
+                        unit: 'mm',
+                        format: 'a4',
+                        orientation: 'portrait'
+                    }
+                }).from(element).save();
+            } else alert('LIB HTML2PDF NÃO ENCONTRADA PARA GERAR PDF. INSTALE A LIB OU BAIXE MANUALMENTE.');
+        };
+    });
+}
+
+// === LÓGICA DE FILTRO DO FUNCIONÁRIO (AGORA CORRIGIDA E GLOBAL) ===
 window.filtrarHistoricoFuncionario = function(e) {
-    e.preventDefault();
+    if(e) e.preventDefault();
     if (!window.CURRENT_USER) return;
 
     const dataIniVal = document.getElementById('empDataInicio').value;
     const dataFimVal = document.getElementById('empDataFim').value;
     
-    if(!dataIniVal || !dataFimVal) return alert("SELECIONE AS DATAS.");
+    if(!dataIniVal || !dataFimVal) return alert("POR FAVOR, SELECIONE AS DATAS INICIAL E FINAL.");
 
+    // Ajuste de fuso horário para garantir comparação correta
     const di = new Date(dataIniVal + 'T00:00:00');
     const df = new Date(dataFimVal + 'T23:59:59');
 
@@ -1782,7 +1854,7 @@ window.filtrarHistoricoFuncionario = function(e) {
     const myProfile = loadData(myKey).find(p => p.uid === window.CURRENT_USER.uid || (p.email && p.email === window.CURRENT_USER.email));
     
     if (myProfile) myProfileId = myProfile.id;
-    if (!myProfileId) return alert("PERFIL NÃO VINCULADO.");
+    if (!myProfileId) return alert("PERFIL NÃO VINCULADO AO SEU USUÁRIO.");
 
     const ops = loadData(DB_KEYS.OPERACOES);
     
@@ -1819,10 +1891,13 @@ window.filtrarHistoricoFuncionario = function(e) {
     }).sort((a,b) => new Date(a.data) - new Date(b.data));
 
     // Renderiza
-    document.getElementById('empTotalReceber').textContent = formatCurrency(totalReceber);
-    document.getElementById('resultadoFinanceiroFuncionario').style.display = 'block';
-
+    const displayTotal = document.getElementById('empTotalReceber');
+    const divResult = document.getElementById('resultadoFinanceiroFuncionario');
     const tbody = document.getElementById('tabelaHistoricoCompleto').querySelector('tbody');
+
+    if(displayTotal) displayTotal.textContent = formatCurrency(totalReceber);
+    if(divResult) divResult.style.display = 'block';
+
     if (resultado.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">NENHUM REGISTRO NESTE PERÍODO.</td></tr>';
     } else {
