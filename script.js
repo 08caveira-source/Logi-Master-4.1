@@ -41,7 +41,7 @@ async function saveData(key, value) {
     // Bloqueio de segurança para perfil de leitura
     // Exceção: Checkins (Operações) podem ser atualizados pelo funcionário ao confirmar
     if (window.IS_READ_ONLY && key !== DB_KEYS.OPERACOES) {
-       // Apenas operações podem ser escritas por funcionários (update de status)
+       // Apenas operações podem ser escritas por funcionários (update de status parcial)
     }
 
     // 1. Atualiza cache local imediatamente
@@ -167,7 +167,6 @@ function calcularCustoConsumoViagem(op) {
     const litrosConsumidos = kmRodado / mediaKmL;
     return litrosConsumidos * precoParaCalculo;
 }
-
 // =============================================================================
 // 4. FORMATADORES
 // =============================================================================
@@ -343,6 +342,7 @@ function removeAjudanteFromOperation(id) {
     window._operacaoAjudantesTempList = (window._operacaoAjudantesTempList || []).filter(a => Number(a.id) !== Number(id));
     renderAjudantesAdicionadosList();
 }
+
 // =============================================================================
 // 7. POPULATE SELECTS (PREENCHER DROPDOWNS)
 // =============================================================================
@@ -892,7 +892,7 @@ function setupFormHandlers() {
                 if (!op.checkins) op.checkins = { motorista: false, ajudantes: [] };
                 let confirmouAlguem = false;
 
-                // Identifica se é Motorista
+                // Identifica se é Motorista (Vínculo por ID ou Email)
                 if (window.CURRENT_USER.role === 'motorista') {
                     const motoristaCad = getMotorista(op.motoristaId);
                     const souEu = (motoristaCad && (motoristaCad.uid === window.CURRENT_USER.uid || motoristaCad.email === window.CURRENT_USER.email));
@@ -905,7 +905,7 @@ function setupFormHandlers() {
                     }
                 }
                 
-                // Identifica se é Ajudante
+                // Identifica se é Ajudante (Vínculo por ID ou Email)
                 if (window.CURRENT_USER.role === 'ajudante') {
                     const ajudanteCad = loadData(DB_KEYS.AJUDANTES).find(a => a.uid === window.CURRENT_USER.uid || a.email === window.CURRENT_USER.email);
                     if (ajudanteCad) {
@@ -1131,14 +1131,14 @@ function editDespesaItem(id) {
 }
 
 // =============================================================================
-// 12. SISTEMA DE CHECK-INS E AGENDAMENTOS (VISUALIZAÇÃO DETALHADA E CONTROLE)
+// 12. SISTEMA DE CHECK-INS E AGENDAMENTOS
 // =============================================================================
 
 function renderCheckinsTable() {
     const ops = loadData(DB_KEYS.OPERACOES);
     const agendadas = ops.filter(o => o.status === 'AGENDADA').sort((a,b) => new Date(a.data) - new Date(b.data));
 
-    // A. LÓGICA DO ADMIN (VISÃO DETALHADA COM CONTROLE DE INÍCIO)
+    // A. LÓGICA DO ADMIN (VISÃO DETALHADA COM BOTÃO INICIAR)
     const tabelaAdmin = document.getElementById('tabelaCheckinsPendentes');
     if (tabelaAdmin && !window.IS_READ_ONLY) { 
         let rows = '';
@@ -1149,13 +1149,13 @@ function renderCheckinsTable() {
                 const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
                 const checkins = op.checkins || { motorista: false, ajudantes: [] };
                 
-                // 1. Status Motorista
+                // Status Motorista
                 const motNome = getMotorista(op.motoristaId)?.nome || 'MOTORISTA Ñ LOCALIZADO';
                 const motStatusIcon = checkins.motorista 
                     ? `<i class="fas fa-check-circle" style="color:var(--success-color);" title="Check-in Realizado"></i>` 
                     : `<i class="far fa-clock" style="color:var(--warning-color);" title="Aguardando..."></i>`;
                 
-                // 2. Status Ajudantes
+                // Status Ajudantes
                 let ajudantesStatusHtml = '';
                 if (op.ajudantes && op.ajudantes.length > 0) {
                     ajudantesStatusHtml = op.ajudantes.map(a => {
@@ -1171,7 +1171,7 @@ function renderCheckinsTable() {
                     ajudantesStatusHtml = '<span style="color:#ccc; font-size:0.8rem;">SEM AJUDANTES</span>';
                 }
 
-                // Verifica se TODOS confirmaram para destacar o botão
+                // Verifica se TODOS confirmaram para destacar o botão (Visual apenas)
                 const motOk = checkins.motorista;
                 const totalAjudantes = (op.ajudantes || []).length;
                 const confirmadosAjudantes = (checkins.ajudantes || []).length;
@@ -1184,38 +1184,21 @@ function renderCheckinsTable() {
                 rows += `<tr>
                     <td>${dataFmt}</td>
                     <td>${op.veiculoPlaca}</td>
-                    <td>
-                        <div style="font-weight:bold;">${motStatusIcon} ${motNome}</div>
-                    </td>
+                    <td><div style="font-weight:bold;">${motStatusIcon} ${motNome}</div></td>
                     <td>${ajudantesStatusHtml}</td>
+                    <td><button class="${btnClass} btn-action" style="padding:6px 12px;" onclick="iniciarRotaManual(${op.id})"><i class="fas ${btnIcon}"></i> ${btnText}</button></td>
                     <td>
-                        <button class="${btnClass} btn-action" style="padding:6px 12px;" onclick="iniciarRotaManual(${op.id})">
-                            <i class="fas ${btnIcon}"></i> ${btnText}
-                        </button>
-                    </td>
-                    <td>
-                        <button class="btn-action edit-btn" title="EDITAR EQUIPE" onclick="editOperacaoItem(${op.id})"><i class="fas fa-edit"></i></button>
+                        <button class="btn-action edit-btn" title="EDITAR" onclick="editOperacaoItem(${op.id})"><i class="fas fa-edit"></i></button>
                         <button class="btn-action delete-btn" title="CANCELAR" onclick="deleteItem('${DB_KEYS.OPERACOES}', ${op.id})"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>`;
             });
         }
         
-        // Cabeçalho atualizado para a nova tabela
-        const thead = `<tr>
-            <th>DATA</th>
-            <th>VEÍCULO</th>
-            <th>MOTORISTA</th>
-            <th>AJUDANTES</th>
-            <th>AÇÃO PRINCIPAL</th>
-            <th>GERENCIAR</th>
-        </tr>`;
-        
         const theadElem = tabelaAdmin.querySelector('thead');
-        if(theadElem) theadElem.innerHTML = thead;
+        if(theadElem) theadElem.innerHTML = `<tr><th>DATA</th><th>VEÍCULO</th><th>MOTORISTA</th><th>AJUDANTES</th><th>AÇÃO</th><th>GERENCIAR</th></tr>`;
         tabelaAdmin.querySelector('tbody').innerHTML = rows;
         
-        // Atualiza Badge do Menu
         const badge = document.getElementById('badgeCheckins');
         if (badge) {
             badge.textContent = agendadas.length;
@@ -1223,67 +1206,92 @@ function renderCheckinsTable() {
         }
     }
 
-    // B. LÓGICA DO FUNCIONÁRIO (COM VÍNCULO CORRIGIDO POR EMAIL)
+    // B. LÓGICA DO FUNCIONÁRIO (AGENDAMENTOS + HISTÓRICO)
     const listaFunc = document.getElementById('listaServicosAgendados');
-    if (listaFunc && window.CURRENT_USER && (window.CURRENT_USER.role === 'motorista' || window.CURRENT_USER.role === 'ajudante')) {
+    if (window.CURRENT_USER && (window.CURRENT_USER.role === 'motorista' || window.CURRENT_USER.role === 'ajudante')) {
         const myUid = window.CURRENT_USER.uid;
         const myEmail = window.CURRENT_USER.email;
 
-        // Descobre ID do perfil (Busca por UID ou EMAIL)
+        // 1. Identificar Perfil
         let myProfileId = null;
         let myKey = window.CURRENT_USER.role === 'motorista' ? DB_KEYS.MOTORISTAS : DB_KEYS.AJUDANTES;
         const myProfile = loadData(myKey).find(p => p.uid === myUid || (p.email && p.email === myEmail));
         if (myProfile) myProfileId = myProfile.id;
 
         if (!myProfileId) {
-            listaFunc.innerHTML = '<p style="text-align:center; color:red;">PERFIL NÃO VINCULADO. CONTATE O ADMIN.</p>';
+            if (listaFunc) listaFunc.innerHTML = '<p style="text-align:center; color:red;">PERFIL NÃO VINCULADO. CONTATE O ADMIN.</p>';
             return;
         }
 
-        const myAgendas = agendadas.filter(op => {
-            if (window.CURRENT_USER.role === 'motorista') return op.motoristaId === myProfileId;
-            else return (op.ajudantes || []).some(a => a.id === myProfileId);
-        });
-
-        if (!myAgendas.length) {
-            listaFunc.innerHTML = '<p style="text-align:center; color:#666;">NENHUM SERVIÇO AGENDADO.</p>';
-        } else {
-            let html = '';
-            myAgendas.forEach(op => {
-                const checkins = op.checkins || { motorista: false, ajudantes: [] };
-                let jaConfirmei = false;
-                
-                if (window.CURRENT_USER.role === 'motorista') jaConfirmei = checkins.motorista;
-                else jaConfirmei = checkins.ajudantes && checkins.ajudantes.includes(myProfileId);
-
-                const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
-                const contratante = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
-                
-                // Botão muda se já confirmou
-                let btnHtml = '';
-                if (jaConfirmei) {
-                    btnHtml = `<button class="btn-success" disabled style="opacity:0.7; cursor:default;">
-                        <i class="fas fa-check-double"></i> AGUARDANDO INÍCIO
-                    </button>`;
-                } else {
-                    btnHtml = `<button class="btn-primary" onclick="openCheckinConfirmModal(${op.id})">
-                        <i class="fas fa-check-circle"></i> REALIZAR CHECK-IN
-                    </button>`;
-                }
-
-                html += `
-                <div class="card" style="border-left: 5px solid ${jaConfirmei ? 'var(--success-color)' : 'var(--primary-color)'};">
-                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                        <div>
-                            <h4 style="color:${jaConfirmei ? 'var(--success-color)' : 'var(--primary-color)'}; margin-bottom:5px;">${dataFmt} - ${op.veiculoPlaca}</h4>
-                            <p><strong>CLIENTE:</strong> ${contratante}</p>
-                            ${jaConfirmei ? '<small style="color:green; font-weight:bold;">VOCÊ JÁ CONFIRMOU PRESENÇA</small>' : ''}
-                        </div>
-                        ${btnHtml}
-                    </div>
-                </div>`;
+        // 2. Preencher Agendamentos (Pendentes)
+        if (listaFunc) {
+            const myAgendas = agendadas.filter(op => {
+                if (window.CURRENT_USER.role === 'motorista') return op.motoristaId === myProfileId;
+                else return (op.ajudantes || []).some(a => a.id === myProfileId);
             });
-            listaFunc.innerHTML = html;
+
+            if (!myAgendas.length) {
+                listaFunc.innerHTML = '<p style="text-align:center; color:#666;">NENHUM SERVIÇO AGENDADO.</p>';
+            } else {
+                let html = '';
+                myAgendas.forEach(op => {
+                    const checkins = op.checkins || { motorista: false, ajudantes: [] };
+                    let jaConfirmei = false;
+                    if (window.CURRENT_USER.role === 'motorista') jaConfirmei = checkins.motorista;
+                    else jaConfirmei = checkins.ajudantes && checkins.ajudantes.includes(myProfileId);
+
+                    const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
+                    const contratante = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
+                    
+                    let btnHtml = '';
+                    if (jaConfirmei) {
+                        btnHtml = `<button class="btn-success" disabled style="opacity:0.7; cursor:default;"><i class="fas fa-check-double"></i> AGUARDANDO INÍCIO</button>`;
+                    } else {
+                        btnHtml = `<button class="btn-primary" onclick="openCheckinConfirmModal(${op.id})"><i class="fas fa-check-circle"></i> REALIZAR CHECK-IN</button>`;
+                    }
+
+                    html += `<div class="card" style="border-left: 5px solid ${jaConfirmei ? 'var(--success-color)' : 'var(--primary-color)'};">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                            <div>
+                                <h4 style="color:${jaConfirmei ? 'var(--success-color)' : 'var(--primary-color)'}; margin-bottom:5px;">${dataFmt} - ${op.veiculoPlaca}</h4>
+                                <p><strong>CLIENTE:</strong> ${contratante}</p>
+                                ${jaConfirmei ? '<small style="color:green; font-weight:bold;">VOCÊ JÁ CONFIRMOU PRESENÇA</small>' : ''}
+                            </div>
+                            ${btnHtml}
+                        </div>
+                    </div>`;
+                });
+                listaFunc.innerHTML = html;
+            }
+        }
+
+        // 3. Preencher Histórico (Tabela 'Meus Últimos Serviços')
+        // === NOVA LÓGICA DE HISTÓRICO AQUI ===
+        const tabelaHistorico = document.getElementById('tabelaMeusServicos');
+        if (tabelaHistorico) {
+            // Filtra operações CONFIRMADAS onde o usuário participou
+            const historico = ops.filter(op => {
+                if (op.status !== 'CONFIRMADA') return false;
+                if (window.CURRENT_USER.role === 'motorista') return op.motoristaId === myProfileId;
+                else return (op.ajudantes || []).some(a => a.id === myProfileId);
+            }).sort((a,b) => new Date(b.data) - new Date(a.data));
+
+            if (historico.length === 0) {
+                tabelaHistorico.querySelector('tbody').innerHTML = '<tr><td colspan="4" style="text-align:center;">NENHUM SERVIÇO REALIZADO.</td></tr>';
+            } else {
+                let rowsHist = '';
+                historico.forEach(op => {
+                    const d = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
+                    const c = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
+                    rowsHist += `<tr>
+                        <td>${d}</td>
+                        <td>${op.veiculoPlaca}</td>
+                        <td>${c}</td>
+                        <td><span style="color:green; font-weight:bold;">REALIZADO</span></td>
+                    </tr>`;
+                });
+                tabelaHistorico.querySelector('tbody').innerHTML = rowsHist;
+            }
         }
     }
 }
@@ -1319,8 +1327,7 @@ window.closeCheckinConfirmModal = function() {
 // =============================================================================
 
 function updateDashboardStats() {
-    // Calcula totais do mês atual
-    const now = currentDate; // Usa data do calendário
+    const now = currentDate; 
     const mes = now.getMonth();
     const ano = now.getFullYear();
 
@@ -1339,20 +1346,14 @@ function updateDashboardStats() {
 
     ops.forEach(op => {
         totalFaturamento += (op.faturamento || 0);
-        
-        // Custos operacionais
         const diarias = (op.ajudantes || []).reduce((acc, a) => acc + (Number(a.diaria) || 0), 0);
         const custoDiesel = calcularCustoConsumoViagem(op) || 0;
-        
         totalCustos += (op.comissao || 0) + diarias + (op.despesas || 0) + custoDiesel;
     });
 
-    // Soma despesas gerais
     totalCustos += despesasGerais.reduce((acc, d) => acc + (d.valor || 0), 0);
-
     const receitaLiquida = totalFaturamento - totalCustos;
 
-    // Atualiza DOM
     const elFaturamento = document.getElementById('faturamentoMes');
     const elDespesas = document.getElementById('despesasMes');
     const elReceita = document.getElementById('receitaMes');
@@ -1373,11 +1374,9 @@ function renderCalendar(date) {
     grid.innerHTML = '';
     const year = date.getFullYear();
     const month = date.getMonth();
-
     const monthNames = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
     label.textContent = `${monthNames[month]} ${year}`;
 
-    // Cabeçalho Dias da Semana
     const daysOfWeek = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
     daysOfWeek.forEach(day => {
         const div = document.createElement('div');
@@ -1389,26 +1388,19 @@ function renderCalendar(date) {
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    // Células vazias antes do dia 1
     for (let i = 0; i < firstDay; i++) {
         const div = document.createElement('div');
         div.className = 'day-cell empty';
         grid.appendChild(div);
     }
 
-    // Busca operações deste mês para marcar no calendário
     const ops = loadData(DB_KEYS.OPERACOES);
-    
-    // Dias do mês
     for (let day = 1; day <= daysInMonth; day++) {
         const div = document.createElement('div');
         div.className = 'day-cell';
         div.textContent = day;
-
-        // Verifica se tem operação neste dia
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         const hasOp = ops.some(o => o.data === dateStr);
-
         if (hasOp) {
             div.classList.add('has-operation');
             div.innerHTML += '<div class="event-dot"></div>';
@@ -1417,7 +1409,6 @@ function renderCalendar(date) {
                 alert(`OPERAÇÕES DO DIA ${day}/${month + 1}:\n\nConsulte a tabela abaixo para detalhes.`);
             };
         }
-
         grid.appendChild(div);
     }
 }
@@ -1425,7 +1416,7 @@ function renderCalendar(date) {
 function changeMonth(direction) {
     currentDate.setMonth(currentDate.getMonth() + direction);
     renderCalendar(currentDate);
-    updateDashboardStats(); // Atualiza os cards de faturamento quando muda o mês
+    updateDashboardStats(); 
 }
 window.changeMonth = changeMonth; 
 window.renderCalendar = renderCalendar;
@@ -1449,7 +1440,8 @@ function renderCharts() {
 
     let totalReceitaHistorica = 0;
     ops.forEach(o => totalReceitaHistorica += (o.faturamento || 0));
-    document.getElementById('receitaTotalHistorico').textContent = formatCurrency(totalReceitaHistorica);
+    const elHist = document.getElementById('receitaTotalHistorico');
+    if(elHist) elHist.textContent = formatCurrency(totalReceitaHistorica);
 
     for (let i = 5; i >= 0; i--) {
         const d = new Date();
@@ -1693,6 +1685,7 @@ function fullSystemReset() {
     }
 }
 window.fullSystemReset = fullSystemReset;
+
 // =============================================================================
 // 16. INICIALIZAÇÃO E SINCRONIZAÇÃO (REALTIME)
 // =============================================================================
@@ -1734,18 +1727,12 @@ function updateUI() {
     checkAndShowReminders();
     renderMinhaEmpresaInfo();
     
-    // CORREÇÃO: Chama o calendário garantindo que a função existe
     if (typeof renderCalendar === 'function') {
         renderCalendar(currentDate);
     }
     
-    renderCheckinsTable(); 
+    renderCheckinsTable(); // Atualiza painel e histórico
     
-    // Atualiza apenas se for funcionário
-    if (window.CURRENT_USER && (window.CURRENT_USER.role === 'motorista' || window.CURRENT_USER.role === 'ajudante')) {
-         // Se houver lógica específica de UI para funcionário, entra aqui
-    }
-
     if (window.IS_READ_ONLY && window.enableReadOnlyMode) {
         window.enableReadOnlyMode();
     }
@@ -1821,23 +1808,28 @@ function setupReciboListeners() {
         const veiculoRecibo = document.getElementById('selectVeiculoRecibo').value;
         const contratanteRecibo = document.getElementById('selectContratanteRecibo').value;
         const ops = loadData(DB_KEYS.OPERACOES);
-        const di = new Date(inicio + 'T00:00:00');
-        const df = new Date(fim + 'T23:59:59');
-
+        
+        // CORREÇÃO: Filtrar apenas CONFIRMADAS para recibo
         const filtered = ops.filter(op => {
+            if (op.status !== 'CONFIRMADA') return false; 
             const d = new Date(op.data + 'T00:00:00');
+            const di = new Date(inicio + 'T00:00:00');
+            const df = new Date(fim + 'T23:59:59');
+            
             if (d < di || d > df) return false;
+            
             let match = false;
             if (parsed.type === 'motorista') match = String(op.motoristaId) === String(parsed.id);
             if (parsed.type === 'ajudante') match = Array.isArray(op.ajudantes) && op.ajudantes.some(a => String(a.id) === String(parsed.id));
             if (!match) return false;
+            
             if (veiculoRecibo && op.veiculoPlaca !== veiculoRecibo) return false;
             if (contratanteRecibo && op.contratanteCNPJ !== contratanteRecibo) return false;
             return true;
         }).sort((a, b) => new Date(a.data) - new Date(b.data));
 
         if (!filtered.length) {
-            document.getElementById('reciboContent').innerHTML = `<p style="text-align:center;color:var(--danger-color)">NENHUMA OPERAÇÃO ENCONTRADA PARA ESTE PERÍODO/PESSOA.</p>`;
+            document.getElementById('reciboContent').innerHTML = `<p style="text-align:center;color:var(--danger-color)">NENHUMA OPERAÇÃO CONFIRMADA ENCONTRADA.</p>`;
             document.getElementById('reciboTitle').style.display = 'none';
             btnBaixar.style.display = 'none';
             if (btnZapRecibo) btnZapRecibo.style.display = 'none';
