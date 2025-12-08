@@ -90,7 +90,7 @@
         </form>
 
         <div style="text-align:center; margin-top:20px; font-size:0.8rem; color:#777;">
-            &copy; LOGIMASTER 2025 - V2.4 (BIND FIX)
+            &copy; LOGIMASTER 2025 - V2.5
         </div>
     </div>
 
@@ -139,8 +139,6 @@
                             });
                             window.location.href = "index.html";
                         } else {
-                            // Se o usuário autenticou mas não tem documento no Firestore
-                            // (Raro, mas acontece se a criação do doc falhar na hora do registro)
                             console.error("Perfil não encontrado no banco.");
                             alert("ERRO: Perfil não encontrado. Tente cadastrar novamente.");
                             await signOut(auth);
@@ -172,7 +170,7 @@
         // --- LOGIN ---
         document.getElementById('formLogin').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const email = document.getElementById('email').value.trim(); // Trim adicionado
+            const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
             const errorDiv = document.getElementById('loginError');
             const btn = document.getElementById('btnLogin');
@@ -214,7 +212,7 @@
 
                 // 1. Verifica se já existe pré-cadastro na empresa
                 let isPreApproved = false;
-                let linkedProfileType = null; // 'db_motoristas' ou 'db_ajudantes'
+                let linkedProfileType = null;
                 let linkedProfileId = null;
                 
                 // Super Admin
@@ -231,10 +229,9 @@
                             const foundByEmail = motoristas.find(m => m.email === email);
                             if (foundByEmail) {
                                 isPreApproved = true;
-                                role = 'motorista'; // Força o cargo correto
+                                role = 'motorista';
                                 linkedProfileType = 'db_motoristas';
                                 linkedProfileId = foundByEmail.id;
-                                console.log("Motorista encontrado por email:", foundByEmail.nome);
                             }
                         }
                     } catch(err) { console.log("Sem tabela de motoristas ou erro de leitura", err); }
@@ -248,10 +245,9 @@
                                 const foundByEmail = ajudantes.find(a => a.email === email);
                                 if (foundByEmail) {
                                     isPreApproved = true;
-                                    role = 'ajudante'; // Força o cargo correto
+                                    role = 'ajudante';
                                     linkedProfileType = 'db_ajudantes';
                                     linkedProfileId = foundByEmail.id;
-                                    console.log("Ajudante encontrado por email:", foundByEmail.nome);
                                 }
                             }
                         } catch(err) { console.log("Sem tabela de ajudantes ou erro de leitura"); }
@@ -275,14 +271,13 @@
                     email: email,
                     role: role,
                     company: domain,
-                    approved: isPreApproved, // Aprova direto se achou na lista
+                    approved: isPreApproved, 
                     createdAt: new Date().toISOString(),
                     lastUpdate: new Date().toISOString(),
-                    password: password // Salva senha (apenas para gestão simplificada do admin)
+                    password: password 
                 });
 
                 // 4. Se foi pré-aprovado, atualiza o cadastro original com o UID
-                // Isso mantém a retrocompatibilidade se algum dia precisarmos buscar por UID
                 if (isPreApproved && linkedProfileType && linkedProfileId) {
                     const docRef = doc(db, 'companies', domain, 'data', linkedProfileType);
                     const docSnap = await getDoc(docRef);
@@ -291,9 +286,8 @@
                         const index = items.findIndex(i => i.id === linkedProfileId);
                         if (index >= 0) {
                             items[index].uid = user.uid; // Vincula UID
-                            items[index].nome = name; // Atualiza nome para o que a pessoa digitou (opcional)
+                            items[index].nome = name; // Atualiza nome
                             await setDoc(docRef, { items: items });
-                            console.log("Vínculo de UID atualizado no banco da empresa.");
                         }
                     }
                 }

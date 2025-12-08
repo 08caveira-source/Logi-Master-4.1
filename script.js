@@ -907,7 +907,7 @@ function setupFormHandlers() {
         });
     }
     
-// Check-in de Confirmação (Funcionário)
+    // Check-in de Confirmação (Funcionário) - MODIFICADO PARA APENAS REGISTRAR PRESENÇA
     const formCheckinConfirm = document.getElementById('formCheckinConfirm');
     if (formCheckinConfirm) {
         formCheckinConfirm.addEventListener('submit', (e) => {
@@ -934,7 +934,6 @@ function setupFormHandlers() {
                 // Lógica para Motorista
                 if (window.CURRENT_USER.role === 'motorista') {
                     // Verifica se o usuário é realmente o motorista da operação
-                    // (Pode ser por ID ou Email, conforme nossa lógica de vínculo anterior)
                     const motoristaCad = getMotorista(op.motoristaId);
                     const souEu = (motoristaCad && (motoristaCad.uid === window.CURRENT_USER.uid || motoristaCad.email === window.CURRENT_USER.email));
                     
@@ -975,6 +974,7 @@ function setupFormHandlers() {
             }
         });
     }
+}
 
 function toggleDespesaParcelas() {
     const modo = document.getElementById('despesaModoPagamento').value;
@@ -1163,14 +1163,14 @@ function editDespesaItem(id) {
 }
 
 // =============================================================================
-// 12. SISTEMA DE CHECK-INS E AGENDAMENTOS (VISUALIZAÇÃO DETALHADA)
+// 12. SISTEMA DE CHECK-INS E AGENDAMENTOS (VISUALIZAÇÃO DETALHADA E CONTROLE)
 // =============================================================================
 
 function renderCheckinsTable() {
     const ops = loadData(DB_KEYS.OPERACOES);
     const agendadas = ops.filter(o => o.status === 'AGENDADA').sort((a,b) => new Date(a.data) - new Date(b.data));
 
-    // A. LÓGICA DO ADMIN (VISÃO DETALHADA)
+    // A. LÓGICA DO ADMIN (VISÃO DETALHADA COM CONTROLE DE INÍCIO)
     const tabelaAdmin = document.getElementById('tabelaCheckinsPendentes');
     if (tabelaAdmin && !window.IS_READ_ONLY) { 
         let rows = '';
@@ -1243,7 +1243,8 @@ function renderCheckinsTable() {
             <th>GERENCIAR</th>
         </tr>`;
         
-        tabelaAdmin.querySelector('thead').innerHTML = thead;
+        const theadElem = tabelaAdmin.querySelector('thead');
+        if(theadElem) theadElem.innerHTML = thead;
         tabelaAdmin.querySelector('tbody').innerHTML = rows;
         
         // Atualiza Badge do Menu
@@ -1254,14 +1255,13 @@ function renderCheckinsTable() {
         }
     }
 
-    // B. LÓGICA DO FUNCIONÁRIO (MANTIDA IGUAL, APENAS O CHECK VISUAL PODE MUDAR)
-    // Se o funcionário já confirmou, mostra aviso.
+    // B. LÓGICA DO FUNCIONÁRIO (COM VÍNCULO CORRIGIDO POR EMAIL)
     const listaFunc = document.getElementById('listaServicosAgendados');
     if (listaFunc && window.CURRENT_USER && (window.CURRENT_USER.role === 'motorista' || window.CURRENT_USER.role === 'ajudante')) {
         const myUid = window.CURRENT_USER.uid;
         const myEmail = window.CURRENT_USER.email;
 
-        // Descobre ID do perfil
+        // Descobre ID do perfil (Busca por UID ou EMAIL)
         let myProfileId = null;
         let myKey = window.CURRENT_USER.role === 'motorista' ? DB_KEYS.MOTORISTAS : DB_KEYS.AJUDANTES;
         const myProfile = loadData(myKey).find(p => p.uid === myUid || (p.email && p.email === myEmail));
@@ -1319,54 +1319,6 @@ function renderCheckinsTable() {
         }
     }
 }
-
-window.iniciarRotaManual = function(opId) {
-    if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA.");
-
-    let arr = loadData(DB_KEYS.OPERACOES).slice();
-    const idx = arr.findIndex(o => o.id === opId);
-    if (idx < 0) return;
-
-    const op = arr[idx];
-    const checkins = op.checkins || { motorista: false, ajudantes: [] };
-    
-    // VERIFICAÇÃO DE PENDÊNCIAS
-    const pendencias = [];
-    
-    // 1. Verifica Motorista
-    if (!checkins.motorista) {
-        const m = getMotorista(op.motoristaId);
-        pendencias.push(`MOTORISTA: ${m ? m.nome : 'DESCONHECIDO'}`);
-    }
-
-    // 2. Verifica Ajudantes
-    if (op.ajudantes && op.ajudantes.length > 0) {
-        op.ajudantes.forEach(a => {
-            if (!checkins.ajudantes || !checkins.ajudantes.includes(a.id)) {
-                const aj = getAjudante(a.id);
-                pendencias.push(`AJUDANTE: ${aj ? aj.nome : 'ID '+a.id}`);
-            }
-        });
-    }
-
-    // DECISÃO DO ADMIN
-    if (pendencias.length > 0) {
-        const msg = "ATENÇÃO: OS SEGUINTES MEMBROS NÃO FIZERAM CHECK-IN:\n\n" + 
-                    pendencias.join("\n") + 
-                    "\n\nDESEJA INICIAR A ROTA MESMO ASSIM? (Isso confirmará a operação)";
-        
-        if (!confirm(msg)) return; // Cancela se o admin disser não
-    } else {
-        if(!confirm("TODOS FIZERAM CHECK-IN. INICIAR ROTA AGORA?")) return;
-    }
-
-    // CONFIRMA A OPERAÇÃO
-    op.status = 'CONFIRMADA';
-    saveData(DB_KEYS.OPERACOES, arr);
-    alert("ROTA INICIADA COM SUCESSO!");
-    renderCheckinsTable(); // Atualiza tabelas
-    renderOperacaoTable();
-};
 
 window.openCheckinConfirmModal = function(opId) {
     const op = loadData(DB_KEYS.OPERACOES).find(o => o.id === opId);
@@ -2705,3 +2657,55 @@ function renderSuperAdminDashboard(users) {
         }).join('') || '<tr><td colspan="5">Nenhuma empresa ativa.</td></tr>';
     }
 }
+
+// =============================================================================
+// 25. FUNÇÃO DE INÍCIO MANUAL DA ROTA (NOVA)
+// =============================================================================
+
+window.iniciarRotaManual = function(opId) {
+    if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA.");
+
+    let arr = loadData(DB_KEYS.OPERACOES).slice();
+    const idx = arr.findIndex(o => o.id === opId);
+    if (idx < 0) return;
+
+    const op = arr[idx];
+    const checkins = op.checkins || { motorista: false, ajudantes: [] };
+    
+    // VERIFICAÇÃO DE PENDÊNCIAS
+    const pendencias = [];
+    
+    // 1. Verifica Motorista
+    if (!checkins.motorista) {
+        const m = getMotorista(op.motoristaId);
+        pendencias.push(`MOTORISTA: ${m ? m.nome : 'DESCONHECIDO'}`);
+    }
+
+    // 2. Verifica Ajudantes
+    if (op.ajudantes && op.ajudantes.length > 0) {
+        op.ajudantes.forEach(a => {
+            if (!checkins.ajudantes || !checkins.ajudantes.includes(a.id)) {
+                const aj = getAjudante(a.id);
+                pendencias.push(`AJUDANTE: ${aj ? aj.nome : 'ID '+a.id}`);
+            }
+        });
+    }
+
+    // DECISÃO DO ADMIN
+    if (pendencias.length > 0) {
+        const msg = "ATENÇÃO: OS SEGUINTES MEMBROS NÃO FIZERAM CHECK-IN:\n\n" + 
+                    pendencias.join("\n") + 
+                    "\n\nDESEJA INICIAR A ROTA MESMO ASSIM? (Isso confirmará a operação)";
+        
+        if (!confirm(msg)) return; // Cancela se o admin disser não
+    } else {
+        if(!confirm("TODOS FIZERAM CHECK-IN. INICIAR ROTA AGORA?")) return;
+    }
+
+    // CONFIRMA A OPERAÇÃO
+    op.status = 'CONFIRMADA';
+    saveData(DB_KEYS.OPERACOES, arr);
+    alert("ROTA INICIADA COM SUCESSO!");
+    renderCheckinsTable(); // Atualiza tabelas
+    renderOperacaoTable();
+};
