@@ -1,5 +1,5 @@
 // =============================================================================
-// ARQUIVO: script.js (COMPLETO - PARTE 1/5)
+// ARQUIVO: script.js (VERSÃO COMPLETA E ROBUSTA)
 // =============================================================================
 
 // 1. CONFIGURAÇÕES E BANCO DE DADOS
@@ -16,7 +16,7 @@ const DB_KEYS = {
     SOLICITACOES_DADOS: 'db_solicitacoes_dados'
 };
 
-// Cache para evitar leituras repetitivas e travamentos
+// Cache Global
 const APP_CACHE = {
     [DB_KEYS.MOTORISTAS]: [],
     [DB_KEYS.VEICULOS]: [],
@@ -30,99 +30,56 @@ const APP_CACHE = {
     [DB_KEYS.SOLICITACOES_DADOS]: []
 };
 
-// Variáveis de Controle de Sessão
 window.IS_READ_ONLY = false;
 window.CURRENT_USER = null;
-let currentDate = new Date(); // Para o calendário
+let currentDate = new Date(); 
 
-// --- FUNÇÕES DE ACESSO A DADOS (DATA LAYER) ---
+// --- ACESSO A DADOS ---
 
-// Carrega dados do Cache (Síncrono)
 function loadData(key) {
     return APP_CACHE[key] || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
 }
 
-// Salva dados no Firebase e atualiza Cache
 async function saveData(key, value) {
-    // Atualiza cache local imediatamente
     APP_CACHE[key] = value;
-    
-    // Se estiver conectado ao Firebase, salva na nuvem
     if (window.dbRef && window.CURRENT_USER) {
         const { db, doc, setDoc } = window.dbRef;
         const companyDomain = window.CURRENT_USER.company; 
-
         try {
             await setDoc(doc(db, 'companies', companyDomain, 'data', key), { items: value });
-        } catch (e) {
-            console.error(`Erro ao salvar ${key}:`, e);
-            // Não alertamos erro em toda falha para não interromper o fluxo, apenas logamos
-        }
+        } catch (e) { console.error(e); }
     } else {
-        // Fallback para LocalStorage se não houver internet/firebase (Modo Offline básico)
         localStorage.setItem(key, JSON.stringify(value));
         return Promise.resolve();
     }
 }
 
-// --- GETTERS (Buscar itens específicos por ID/Chave) ---
+// --- GETTERS ---
+function getMotorista(id) { return loadData(DB_KEYS.MOTORISTAS).find(m => String(m.id) === String(id)); }
+function getVeiculo(placa) { return loadData(DB_KEYS.VEICULOS).find(v => v.placa === placa); }
+function getContratante(cnpj) { return loadData(DB_KEYS.CONTRATANTES).find(c => c.cnpj === cnpj); }
+function getAjudante(id) { return loadData(DB_KEYS.AJUDANTES).find(a => String(a.id) === String(id)); }
+function getAtividade(id) { return loadData(DB_KEYS.ATIVIDADES).find(a => String(a.id) === String(id)); }
+function getMinhaEmpresa() { return loadData(DB_KEYS.MINHA_EMPRESA); }
 
-function getMotorista(id) {
-    const lista = loadData(DB_KEYS.MOTORISTAS);
-    return lista.find(m => String(m.id) === String(id));
-}
-
-function getVeiculo(placa) {
-    const lista = loadData(DB_KEYS.VEICULOS);
-    return lista.find(v => v.placa === placa);
-}
-
-function getContratante(cnpj) {
-    const lista = loadData(DB_KEYS.CONTRATANTES);
-    return lista.find(c => c.cnpj === cnpj);
-}
-
-function getAjudante(id) {
-    const lista = loadData(DB_KEYS.AJUDANTES);
-    return lista.find(a => String(a.id) === String(id));
-}
-
-function getAtividade(id) {
-    const lista = loadData(DB_KEYS.ATIVIDADES);
-    return lista.find(a => String(a.id) === String(id));
-}
-
-function getMinhaEmpresa() {
-    return loadData(DB_KEYS.MINHA_EMPRESA);
-}
-
-// --- FORMATADORES E UTILITÁRIOS GERAIS ---
-
+// --- FORMATADORES ---
 const onlyDigits = (v) => (v || '').toString().replace(/\D/g, '');
-
 const formatCurrency = (value) => {
     if (typeof value !== 'number' || isNaN(value)) value = 0;
-    return new Intl.NumberFormat('pt-BR', {
-        style: 'currency',
-        currency: 'BRL'
-    }).format(value);
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
-
 function formatCPF_CNPJ(value) {
     const digits = onlyDigits(value);
     if (digits.length <= 11) {
         return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, (m, a, b, c, d) => {
-            if (!d) return `${a}.${b}.${c}`;
-            return `${a}.${b}.${c}-${d}`;
+            if (!d) return `${a}.${b}.${c}`; return `${a}.${b}.${c}-${d}`;
         });
     } else {
         return digits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})/, (m, a, b, c, d, e) => {
-            if (!e) return `${a}.${b}.${c}/${d}`;
-            return `${a}.${b}.${c}/${d}-${e}`;
+            if (!e) return `${a}.${b}.${c}/${d}`; return `${a}.${b}.${c}/${d}-${e}`;
         });
     }
 }
-
 function formatPhoneBr(value) {
     const d = onlyDigits(value);
     if (d.length <= 2) return d;
@@ -130,103 +87,57 @@ function formatPhoneBr(value) {
     if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
     return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7, 11)}`;
 }
-
 function detectPixType(key) {
-    if (!key) return '';
-    const v = key.trim();
-    const d = onlyDigits(v);
+    if (!key) return ''; const v = key.trim(); const d = onlyDigits(v);
     if (v.includes('@')) return 'EMAIL';
     if (/^\+?\d+$/.test(v) && (d.length >= 10 && d.length <= 13)) return 'TELEFONE';
     if (/^\d{11}$/.test(d)) return 'CPF';
     if (/^\d{14}$/.test(d)) return 'CNPJ';
     return 'ALEATÓRIA';
 }
-
-function copyToClipboard(text, silent = false) {
-    if (!text) return alert('NADA PARA COPIAR.');
-    navigator.clipboard.writeText(text).then(() => {
-        if (!silent) alert('COPIADO PARA A ÁREA DE TRANSFERÊNCIA!');
-    }, () => alert('FALHA AO COPIAR.'));
+function copyToClipboard(text) {
+    if (!text) return; navigator.clipboard.writeText(text).then(() => alert('Copiado!'));
 }
 
-// =============================================================================
-// 3. INTELIGÊNCIA DE FROTA E CÁLCULOS
-// =============================================================================
+// --- CÁLCULOS E VALIDAÇÕES DE FROTA ---
 
-// Retorna o maior KM Final registrado para um veículo (para validação)
+// Busca o MAIOR Km registrado para um veículo (Segurança)
 function obterUltimoKmFinal(placa) {
     if (!placa) return 0;
-    const todasOps = loadData(DB_KEYS.OPERACOES) || [];
-    
-    // Filtra operações que têm KM Final (já concluídas ou em andamento avançado)
-    const opsVeiculo = todasOps.filter(op => 
-        op.veiculoPlaca === placa && op.kmFinal && Number(op.kmFinal) > 0
-    );
-    
+    const todasOps = loadData(DB_KEYS.OPERACOES);
+    const opsVeiculo = todasOps.filter(op => op.veiculoPlaca === placa && op.kmFinal && Number(op.kmFinal) > 0);
     if (opsVeiculo.length === 0) return 0;
-    
-    // Encontra o maior valor
-    const maxKm = Math.max(...opsVeiculo.map(o => Number(o.kmFinal)));
-    return maxKm;
+    // Retorna o maior valor encontrado no histórico
+    return Math.max(...opsVeiculo.map(o => Number(o.kmFinal)));
 }
 
 function obterUltimoPrecoCombustivel(placa) {
     if (!placa) return 0;
-    const todasOps = loadData(DB_KEYS.OPERACOES) || [];
-    const opsComPreco = todasOps.filter(op => 
-        op && op.veiculoPlaca === placa && op.precoLitro && Number(op.precoLitro) > 0
-    );
-    
-    if (opsComPreco.length === 0) return 0;
-    
-    opsComPreco.sort((a, b) => new Date(b.data || '1970-01-01') - new Date(a.data || '1970-01-01'));
-    
-    return Number(opsComPreco[0].precoLitro) || 0;
+    const ops = loadData(DB_KEYS.OPERACOES).filter(op => op.veiculoPlaca === placa && op.precoLitro > 0);
+    if (!ops.length) return 0;
+    ops.sort((a, b) => new Date(b.data) - new Date(a.data));
+    return Number(ops[0].precoLitro);
 }
 
 function calcularMediaHistoricaVeiculo(placa) {
     if (!placa) return 0;
-    const todasOps = loadData(DB_KEYS.OPERACOES) || [];
-    // Só usa operações CONFIRMADAS para média confiável
-    const opsVeiculo = todasOps.filter(op => op && op.veiculoPlaca === placa && op.status === 'CONFIRMADA');
-    
-    let totalKmAcumulado = 0;
-    let totalLitrosAbastecidos = 0;
-
-    opsVeiculo.forEach(op => {
-        if(op.kmRodado) totalKmAcumulado += Number(op.kmRodado);
-        
-        const vlrCombustivel = Number(op.combustivel) || 0;
-        const vlrPreco = Number(op.precoLitro) || 0;
-        
-        if (vlrCombustivel > 0 && vlrPreco > 0) {
-            totalLitrosAbastecidos += (vlrCombustivel / vlrPreco);
-        }
+    const ops = loadData(DB_KEYS.OPERACOES).filter(op => op.veiculoPlaca === placa && op.status === 'CONFIRMADA');
+    let km = 0, lit = 0;
+    ops.forEach(o => {
+        if(o.kmRodado) km += Number(o.kmRodado);
+        const vlr = Number(o.combustivel), prc = Number(o.precoLitro);
+        if (vlr > 0 && prc > 0) lit += (vlr / prc);
     });
-
-    if (totalLitrosAbastecidos <= 0) return 0;
-    return totalKmAcumulado / totalLitrosAbastecidos; 
+    return lit > 0 ? km / lit : 0;
 }
 
 function calcularCustoConsumoViagem(op) {
-    if (!op || !op.veiculoPlaca) return 0;
-    // Se não estiver confirmada, o cálculo é apenas estimativa ou zero
-    if (op.status !== 'CONFIRMADA') return 0;
-    
-    const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca);
-    const kmRodado = Number(op.kmRodado) || 0;
-    
-    if (mediaKmL <= 0 || kmRodado <= 0) return 0;
-
-    let precoParaCalculo = Number(op.precoLitro) || 0;
-    if (precoParaCalculo <= 0) {
-        precoParaCalculo = obterUltimoPrecoCombustivel(op.veiculoPlaca);
-    }
-
-    if (precoParaCalculo <= 0) return 0; 
-
-    const litrosConsumidos = kmRodado / mediaKmL;
-    return litrosConsumidos * precoParaCalculo;
+    if (!op || op.status !== 'CONFIRMADA') return 0;
+    const media = calcularMediaHistoricaVeiculo(op.veiculoPlaca);
+    const km = Number(op.kmRodado) || 0;
+    if (media <= 0 || km <= 0) return 0;
+    let preco = Number(op.precoLitro) || obterUltimoPrecoCombustivel(op.veiculoPlaca);
+    return preco > 0 ? (km / media) * preco : 0;
 }
 // =============================================================================
 // 4. FORMATADORES E UTILITÁRIOS DE UI
@@ -468,7 +379,7 @@ function populateAllSelects() {
     populateSelect('checkinVeiculo', veiculos, 'placa', 'placa', 'SELECIONE O VEÍCULO...');
     populateSelect('checkinContratante', contratantes, 'cnpj', 'razaoSocial', 'SELECIONE A CONTRATANTE...');
     
-    // Renderiza as tabelas de cadastro se estiverem na tela
+    // Renderiza as tabelas de cadastro se estiverem na tela (Essa parte faltava)
     renderCadastroTable(DB_KEYS.MOTORISTAS);
     renderCadastroTable(DB_KEYS.AJUDANTES);
     renderCadastroTable(DB_KEYS.VEICULOS);
@@ -649,6 +560,7 @@ function setupFormHandlers() {
             const idHidden = document.getElementById('motoristaId').value;
             const nomeInput = document.getElementById('motoristaNome').value.toUpperCase();
 
+            // Lógica de criação de usuário automático
             if (!idHidden) {
                 const companyDomain = window.CURRENT_USER ? window.CURRENT_USER.company : 'logimaster.com';
                 const userLogin = prompt(`CRIAÇÃO DE ACESSO PARA ${nomeInput}:\n\nDefina o nome de usuário (ex: joao.silva).\nO domínio será @${companyDomain}.`);
@@ -959,13 +871,14 @@ function setupFormHandlers() {
                         if (step === 'start') {
                             const kmIni = Number(document.getElementById('checkinKmInicial').value);
                             
-                            // VALIDAÇÃO DE KM
+                            // VALIDAÇÃO DE KM INTELIGENTE
                             const ultimoKmRegistrado = obterUltimoKmFinal(op.veiculoPlaca);
                             
                             if(!kmIni || kmIni <= 0) return alert("INFORME O KM INICIAL VÁLIDO.");
                             
+                            // Regra de bloqueio: KM não pode ser menor
                             if (kmIni < ultimoKmRegistrado) {
-                                return alert(`ERRO: O KM INICIAL (${kmIni}) NÃO PODE SER MENOR QUE O ÚLTIMO REGISTRADO (${ultimoKmRegistrado}) PARA ESTE VEÍCULO.`);
+                                return alert(`ERRO: O KM INICIAL (${kmIni}) NÃO PODE SER MENOR QUE O ÚLTIMO REGISTRADO (${ultimoKmRegistrado}).`);
                             }
                             
                             op.kmInicial = kmIni;
@@ -975,6 +888,8 @@ function setupFormHandlers() {
                             alert("VIAGEM INICIADA! BOA ROTA.");
                         } else if (step === 'end') {
                             const kmFim = Number(document.getElementById('checkinKmFinal').value);
+                            
+                            // Validação Básica
                             if(!kmFim || kmFim <= op.kmInicial) return alert("O KM FINAL DEVE SER MAIOR QUE O INICIAL.");
                             
                             op.kmFinal = kmFim;
@@ -1087,7 +1002,7 @@ function viewOperacaoDetails(id) {
         const checkins = op.checkins || { ajudantes: [] };
         const presente = checkins.ajudantes && checkins.ajudantes.includes(a.id);
         
-        // Se a rota já acabou, mostra quem faltou
+        // Se finalizada, mostra se faltou ou veio. Se não, não mostra nada.
         let statusPresenca = '';
         if (isFinalizada) {
             statusPresenca = presente 
@@ -1161,7 +1076,7 @@ function viewOperacaoDetails(id) {
             ${infoConsumoHTML}
             <hr style="margin:10px 0; border:0; border-top:1px solid #eee;">
             <p style="font-size:1.1rem;"><strong>RESULTADO OPERACIONAL (LUCRO):</strong> <span style="color:${liquidoOperacional>=0?'var(--success-color)':'var(--danger-color)'}">${formatCurrency(liquidoOperacional)}</span></p>
-            <div style="margin-top:10px;"><strong>LISTA DE PRESENÇA:</strong><ul style="margin-top:6px;">${ajudantesHtml}</ul></div>
+            <div style="margin-top:10px;"><strong>LISTA DE PRESENÇA (AJUDANTES):</strong><ul style="margin-top:6px;">${ajudantesHtml}</ul></div>
         `;
     }
     openOperationDetails('DETALHES DA OPERAÇÃO', detailsHtml);
@@ -1309,7 +1224,7 @@ function renderCheckinsTable() {
             return;
         }
 
-        // 1. LISTA DE PENDENTES (AGENDADAS OU EM ANDAMENTO)
+        // 1. LISTA DE PENDENTES
         const listaFunc = document.getElementById('listaServicosAgendados');
         if (listaFunc) {
             const myPendentes = pendentes.filter(op => {
@@ -1435,7 +1350,7 @@ window.closeCheckinConfirmModal = function() {
     document.getElementById('modalCheckinConfirm').style.display = 'none';
 };
 // =============================================================================
-// 14. GRÁFICOS
+// 14. GRÁFICOS (VISÃO DO ADMIN)
 // =============================================================================
 
 let chartInstance = null;
@@ -1527,7 +1442,7 @@ function renderCharts() {
 }
 
 // =============================================================================
-// 15. SISTEMA DE LEMBRETES
+// 15. SISTEMA DE LEMBRETES E PAGAMENTOS
 // =============================================================================
 
 function checkAndShowReminders() {
@@ -1591,7 +1506,7 @@ function setupRealtimeListeners() {
     if (window.CURRENT_USER && window.CURRENT_USER.company) {
         const domain = window.CURRENT_USER.company;
         
-        // Carrega dados. Se for funcionário, a UI só vai desenhar o necessário depois.
+        // Carrega dados.
         Object.values(DB_KEYS).forEach(key => {
             onSnapshot(doc(db, 'companies', domain, 'data', key), (s) => {
                 if (s.exists()) APP_CACHE[key] = s.data().items || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
@@ -1605,12 +1520,12 @@ function setupRealtimeListeners() {
 function updateUI() {
     if (!window.CURRENT_USER) return;
     
-    // === SEPARAÇÃO DE PERFIS (CORREÇÃO DE MISTURA DE TELAS) ===
+    // === SEPARAÇÃO DE PERFIS (CORREÇÃO DE PERFORMANCE) ===
     const isFuncionario = (window.CURRENT_USER.role === 'motorista' || window.CURRENT_USER.role === 'ajudante');
 
     if (isFuncionario) {
-        // Se for funcionário, renderiza APENAS as tabelas dele
-        // Isso evita que o calendário e tabelas de admin carreguem e travem o celular
+        // Se for funcionário, renderiza APENAS o essencial.
+        // Não renderiza gráficos, despesas ou selects administrativos pesados.
         renderCheckinsTable(); 
     } else {
         // Se for ADMIN, renderiza tudo
@@ -1629,11 +1544,11 @@ function updateUI() {
 }
 
 // =============================================================================
-// 17. FILTRO FINANCEIRO DO FUNCIONÁRIO (GLOBAL E CORRIGIDO)
+// 17. FILTRO FINANCEIRO DO FUNCIONÁRIO (COM REGRA DE FALTAS)
 // =============================================================================
 
 window.filtrarHistoricoFuncionario = function(e) {
-    if(e) e.preventDefault(); // Evita recarregar a página
+    if(e) e.preventDefault();
     if (!window.CURRENT_USER) return;
 
     const dataIniVal = document.getElementById('empDataInicio').value;
@@ -1667,6 +1582,8 @@ window.filtrarHistoricoFuncionario = function(e) {
         let valorOp = 0;
         let statusPresenca = "CONFIRMADA";
 
+        const checkins = op.checkins || { motorista: false, ajudantes: [] };
+
         if (isMotorista) {
             if (op.motoristaId === myProfileId) {
                 // Motorista: recebe comissão se a rota foi confirmada
@@ -1674,13 +1591,13 @@ window.filtrarHistoricoFuncionario = function(e) {
                 valorOp = op.comissao || 0;
             }
         } else {
-            // AJUDANTE: Lógica de Falta
-            const checkins = op.checkins || { ajudantes: [] };
+            // AJUDANTE: Regra de Falta
+            // Verifica se o ID estava escalado na operação
             const estavaNaLista = (op.ajudantes || []).some(a => a.id === myProfileId);
             
             if (estavaNaLista) {
                 participou = true;
-                // Só paga se fez check-in (ID está na lista de confirmados)
+                // SÓ PAGA SE FEZ CHECK-IN (ID está na lista de confirmados)
                 if (checkins.ajudantes && checkins.ajudantes.includes(myProfileId)) {
                     const ajData = op.ajudantes.find(a => a.id === myProfileId);
                     valorOp = Number(ajData.diaria) || 0;
@@ -1717,7 +1634,7 @@ window.filtrarHistoricoFuncionario = function(e) {
             const d = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
             const c = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
             
-            // Destaca se foi falta (vermelho) ou pago (verde)
+            // Cor vermelha se for Falta
             const colorClass = op._statusTemp === 'FALTA' ? 'color:red' : 'color:green';
             const valStr = op._statusTemp === 'FALTA' ? 'R$ 0,00' : formatCurrency(op._valorTemp);
 

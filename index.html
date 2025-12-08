@@ -603,10 +603,9 @@
                             <input type="date" id="empDataFim" required>
                         </div>
                     </div>
-                    
-                    <div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid #eee;">
-                        <button type="button" class="btn-primary" style="width:100%; justify-content:center; padding: 15px; font-size: 1rem;" onclick="filtrarHistoricoFuncionario(event)">
-                            <i class="fas fa-search"></i> FILTRAR E CALCULAR
+                    <div style="margin-top: 15px; padding: 10px; border-top: 1px solid #eee;">
+                        <button type="button" class="btn-primary" style="width:100%; height:50px; font-size:1.1rem;" onclick="filtrarHistoricoFuncionario()">
+                            <i class="fas fa-search"></i> FILTRAR RELATÓRIO
                         </button>
                     </div>
                 </form>
@@ -615,11 +614,11 @@
             <div id="resultadoFinanceiroFuncionario" class="card" style="margin-top:20px; display:none; background:#e8f5e9; border:1px solid #c8e6c9;">
                 <h3 style="color:var(--success-color); text-align:center; margin-bottom:5px;">VALOR A RECEBER</h3>
                 <h1 style="color:var(--success-color); text-align:center; font-size:2.5rem;" id="empTotalReceber">R$ 0,00</h1>
-                <p style="text-align:center; color:#555; font-size:0.8rem;">TOTAL NO PERÍODO SELECIONADO</p>
+                <p style="text-align:center; color:#555; font-size:0.8rem;">TOTAL LÍQUIDO (DESCARTANDO FALTAS)</p>
             </div>
 
             <div class="card" style="margin-top:20px;">
-                <h3>RELATÓRIO DETALHADO</h3>
+                <h3>DETALHAMENTO</h3>
                 <div class="table-responsive">
                     <table class="data-table" id="tabelaHistoricoCompleto">
                         <thead>
@@ -632,7 +631,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td colspan="5" style="text-align:center;">SELECIONE AS DATAS ACIMA.</td></tr>
+                            <tr><td colspan="5" style="text-align:center;">CLIQUE EM FILTRAR PARA VER OS DADOS.</td></tr>
                         </tbody>
                     </table>
                 </div>
