@@ -1373,7 +1373,7 @@ window.closeCheckinConfirmModal = function() {
 };
 
 // =============================================================================
-// 13. CALENDÁRIO E DASHBOARD (FUNÇÕES QUE ESTAVAM FALTANDO)
+// 13. CALENDÁRIO E DASHBOARD
 // =============================================================================
 
 function changeMonth(offset) {
@@ -1918,28 +1918,53 @@ window.filtrarHistoricoFuncionario = function(e) {
     }
 };
 
-// --- NOVA FUNÇÃO: EXPORTAR PDF DO HISTÓRICO ---
+// --- FUNÇÃO CORRIGIDA: EXPORTAR PDF DO HISTÓRICO ---
 window.exportEmployeeHistoryToPDF = function() {
-    const element = document.getElementById('employeePrintArea');
-    const totalVal = document.getElementById('empTotalReceber').innerText;
-    
-    if (!element || element.offsetHeight < 20) {
-        return alert('POR FAVOR, GERE O RELATÓRIO PRIMEIRO (CLIQUE EM CONFIRMAR FILTRO).');
-    }
-    
+    // 1. Verifica se a biblioteca foi carregada no index.html
     if (typeof html2pdf === 'undefined') {
-        return alert("ERRO: BIBLIOTECA PDF NÃO CARREGADA. VERIFIQUE SUA CONEXÃO.");
+        return alert("ERRO TÉCNICO: A biblioteca de PDF não foi carregada. Verifique se o script 'html2pdf' está no cabeçalho do index.html.");
     }
 
+    const element = document.getElementById('employeePrintArea');
+    
+    // 2. Verifica se o usuário filtrou antes (se a tabela tem linhas de dados)
+    const tbody = document.getElementById('tabelaHistoricoCompleto').querySelector('tbody');
+    if (!tbody || tbody.innerText.includes('SELECIONE AS DATAS') || tbody.innerText.includes('NENHUM REGISTRO')) {
+        return alert('POR FAVOR, FILTRE AS DATAS PRIMEIRO PARA GERAR O RELATÓRIO.');
+    }
+
+    // 3. Configurações do PDF
     const opt = {
-        margin: 10,
-        filename: `meu_relatorio_${new Date().toISOString().slice(0,10)}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        margin:       10,
+        filename:     `meu_relatorio_${new Date().toISOString().slice(0,10)}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true }, 
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
-    html2pdf().set(opt).from(element).save();
+    // 4. Feedback visual
+    const btnPdf = event.target.closest('button'); 
+    let originalText = "";
+    if(btnPdf) {
+        originalText = btnPdf.innerHTML;
+        btnPdf.innerHTML = '<i class="fas fa-spinner fa-spin"></i> GERANDO...';
+        btnPdf.disabled = true;
+    }
+
+    // 5. Gera o PDF
+    html2pdf().set(opt).from(element).save().then(() => {
+        if(btnPdf) {
+            btnPdf.innerHTML = originalText;
+            btnPdf.disabled = false;
+        }
+    }).catch((err) => {
+        console.error(err);
+        alert("Ocorreu um erro ao gerar o PDF. Tente novamente.");
+        if(btnPdf) {
+            btnPdf.innerHTML = originalText;
+            btnPdf.disabled = false;
+        }
+    });
 };
 
 // =============================================================================

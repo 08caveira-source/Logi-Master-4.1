@@ -592,24 +592,22 @@
             
             <div class="card no-print">
                 <h3><i class="fas fa-filter"></i> FILTRAR PERÍODO</h3>
+                
                 <form id="formFiltroFuncionario">
-                    <div class="form-grid">
-                        <div class="form-group">
+                    <div class="filter-container">
+                        <div class="filter-group">
                             <label>DATA INICIAL:</label>
-                            <input type="date" id="empDataInicio" required>
+                            <input type="date" id="empDataInicio" class="input-compact" required>
                         </div>
-                        <div class="form-group">
+                        <div class="filter-group">
                             <label>DATA FINAL:</label>
-                            <input type="date" id="empDataFim" required>
+                            <input type="date" id="empDataFim" class="input-compact" required>
                         </div>
-                    </div>
-                    
-                    <div style="margin-top: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px; text-align: center; border: 1px solid #ddd; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
-                        <button type="button" class="btn-primary" style="flex:1; min-width:200px; padding: 15px;" onclick="filtrarHistoricoFuncionario(event)">
-                            <i class="fas fa-search"></i> CONFIRMAR FILTRO
+                        <button type="button" class="btn-primary btn-compact" onclick="filtrarHistoricoFuncionario(event)">
+                            <i class="fas fa-search"></i> FILTRAR
                         </button>
-                        <button type="button" class="btn-secondary" style="flex:1; min-width:200px; padding: 15px;" onclick="exportEmployeeHistoryToPDF()">
-                            <i class="fas fa-file-pdf"></i> BAIXAR PDF
+                        <button type="button" class="btn-secondary btn-compact" onclick="exportEmployeeHistoryToPDF()">
+                            <i class="fas fa-file-pdf"></i> PDF
                         </button>
                     </div>
                 </form>
@@ -636,7 +634,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td colspan="5" style="text-align:center; padding: 20px;">SELECIONE AS DATAS ACIMA E CLIQUE EM CONFIRMAR.</td></tr>
+                                <tr><td colspan="5" style="text-align:center; padding: 20px;">SELECIONE AS DATAS ACIMA E CLIQUE EM FILTRAR.</td></tr>
                             </tbody>
                         </table>
                     </div>
