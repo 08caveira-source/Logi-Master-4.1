@@ -603,18 +603,19 @@
                             <input type="date" id="empDataFim" required>
                         </div>
                     </div>
-                    <div class="form-actions" style="margin-top: 15px;">
-                        <button type="button" class="btn-primary" style="width:100%; justify-content:center; padding:12px;" onclick="filtrarHistoricoFuncionario(event)">
-                            <i class="fas fa-search"></i> FILTRAR / CALCULAR
+                    
+                    <div style="margin-top: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px; text-align: center; border: 1px solid #ddd;">
+                        <button type="button" class="btn-primary" style="width: 100%; font-size: 1.1rem; padding: 15px;" onclick="filtrarHistoricoFuncionario(event)">
+                            <i class="fas fa-search"></i> CONFIRMAR FILTRO
                         </button>
                     </div>
                 </form>
             </div>
 
             <div id="resultadoFinanceiroFuncionario" class="card" style="margin-top:20px; display:none; background:#e8f5e9; border:1px solid #c8e6c9;">
-                <h3 style="color:var(--success-color); text-align:center; margin-bottom:5px;">VALOR A RECEBER NO PERÍODO</h3>
+                <h3 style="color:var(--success-color); text-align:center; margin-bottom:5px;">VALOR A RECEBER</h3>
                 <h1 style="color:var(--success-color); text-align:center; font-size:2.5rem;" id="empTotalReceber">R$ 0,00</h1>
-                <p style="text-align:center; color:#555; font-size:0.8rem;">REFERENTE AOS SERVIÇOS LISTADOS ABAIXO.</p>
+                <p style="text-align:center; color:#555; font-size:0.8rem;">TOTAL NO PERÍODO SELECIONADO</p>
             </div>
 
             <div class="card" style="margin-top:20px;">
@@ -631,7 +632,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td colspan="5" style="text-align:center;">SELECIONE AS DATAS E CLIQUE EM FILTRAR.</td></tr>
+                            <tr><td colspan="5" style="text-align:center; padding: 20px;">SELECIONE AS DATAS ACIMA E CLIQUE EM CONFIRMAR.</td></tr>
                         </tbody>
                     </table>
                 </div>
