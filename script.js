@@ -1817,7 +1817,7 @@ function setupInputFormattingListeners() {
     if (selCurso) selCurso.addEventListener('change', toggleCursoInput);
 }
 
-// === LÓGICA DO FILTRO DE SERVIÇOS DO FUNCIONÁRIO (COM VALIDAÇÃO DE PRESENÇA) ===
+// === LÓGICA DO FILTRO DE SERVIÇOS DO FUNCIONÁRIO E PDF ===
 window.filtrarHistoricoFuncionario = function(e) {
     if(e) e.preventDefault();
     if (!window.CURRENT_USER) return;
@@ -1916,6 +1916,30 @@ window.filtrarHistoricoFuncionario = function(e) {
         });
         tbody.innerHTML = html;
     }
+};
+
+// --- NOVA FUNÇÃO: EXPORTAR PDF DO HISTÓRICO ---
+window.exportEmployeeHistoryToPDF = function() {
+    const element = document.getElementById('employeePrintArea');
+    const totalVal = document.getElementById('empTotalReceber').innerText;
+    
+    if (!element || element.offsetHeight < 20) {
+        return alert('POR FAVOR, GERE O RELATÓRIO PRIMEIRO (CLIQUE EM CONFIRMAR FILTRO).');
+    }
+    
+    if (typeof html2pdf === 'undefined') {
+        return alert("ERRO: BIBLIOTECA PDF NÃO CARREGADA. VERIFIQUE SUA CONEXÃO.");
+    }
+
+    const opt = {
+        margin: 10,
+        filename: `meu_relatorio_${new Date().toISOString().slice(0,10)}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    html2pdf().set(opt).from(element).save();
 };
 
 // =============================================================================
@@ -2047,7 +2071,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setupFormHandlers();
     setupInputFormattingListeners();
-    // setupReciboListeners(); // Removido se não existir a função, ou adicione placeholder se necessário
 });
 
 window.viewCadastro = viewCadastro;
@@ -2211,10 +2234,6 @@ function renderCompanyUserTables(users) {
 
 function setupSuperAdmin() {
     // Setup Super Admin (placeholder se necessário)
-}
-
-function renderSuperAdminDashboard(users) {
-    // Dashboard Super Admin (placeholder)
 }
 
 // === FUNÇÃO CRÍTICA DE INÍCIO MANUAL (ADMIN) ===
