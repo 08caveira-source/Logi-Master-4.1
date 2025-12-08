@@ -907,11 +907,14 @@ function setupFormHandlers() {
         });
     }
     
-    // Check-in de Confirmação (Funcionário)
+// Check-in de Confirmação (Funcionário)
     const formCheckinConfirm = document.getElementById('formCheckinConfirm');
     if (formCheckinConfirm) {
         formCheckinConfirm.addEventListener('submit', (e) => {
             e.preventDefault();
+            
+            if (!window.CURRENT_USER) return alert("ERRO DE SESSÃO. FAÇA LOGIN NOVAMENTE.");
+
             const opId = Number(document.getElementById('checkinOpId').value);
             const kmRodado = Number(document.getElementById('checkinKmRodado').value) || 0;
             const valorAbastecido = Number(document.getElementById('checkinValorAbastecido').value) || 0;
@@ -921,23 +924,57 @@ function setupFormHandlers() {
             const idx = arr.findIndex(o => o.id === opId);
             
             if (idx >= 0) {
-                // Atualiza a operação existente
-                arr[idx].status = 'CONFIRMADA';
-                // Atualiza apenas os campos que o motorista pode preencher na execução
-                if (window.CURRENT_USER && window.CURRENT_USER.role === 'motorista') {
-                    arr[idx].kmRodado = kmRodado;
-                    arr[idx].combustivel = valorAbastecido;
-                    arr[idx].precoLitro = precoLitro;
+                const op = arr[idx];
+                
+                // Inicializa objeto de checkins individuais se não existir
+                if (!op.checkins) op.checkins = { motorista: false, ajudantes: [] };
+                
+                let confirmouAlguem = false;
+
+                // Lógica para Motorista
+                if (window.CURRENT_USER.role === 'motorista') {
+                    // Verifica se o usuário é realmente o motorista da operação
+                    // (Pode ser por ID ou Email, conforme nossa lógica de vínculo anterior)
+                    const motoristaCad = getMotorista(op.motoristaId);
+                    const souEu = (motoristaCad && (motoristaCad.uid === window.CURRENT_USER.uid || motoristaCad.email === window.CURRENT_USER.email));
+                    
+                    if (souEu) {
+                        op.checkins.motorista = true;
+                        // Salva dados parciais que o motorista inseriu
+                        op.kmRodado = kmRodado;
+                        op.combustivel = valorAbastecido;
+                        op.precoLitro = precoLitro;
+                        confirmouAlguem = true;
+                    }
                 }
                 
-                saveData(DB_KEYS.OPERACOES, arr);
-                alert('CHECK-IN REALIZADO E SERVIÇO CONFIRMADO!');
-                closeCheckinConfirmModal();
-                renderCheckinsTable(); // Atualiza a lista
+                // Lógica para Ajudante
+                if (window.CURRENT_USER.role === 'ajudante') {
+                    const ajudanteCad = loadData(DB_KEYS.AJUDANTES).find(a => a.uid === window.CURRENT_USER.uid || a.email === window.CURRENT_USER.email);
+                    if (ajudanteCad) {
+                        // Verifica se este ajudante está na lista da operação
+                        const estaNaOp = (op.ajudantes || []).some(a => a.id === ajudanteCad.id);
+                        if (estaNaOp) {
+                            // Adiciona ID à lista de confirmados (evitando duplicatas)
+                            if (!op.checkins.ajudantes.includes(ajudanteCad.id)) {
+                                op.checkins.ajudantes.push(ajudanteCad.id);
+                            }
+                            confirmouAlguem = true;
+                        }
+                    }
+                }
+
+                if (confirmouAlguem) {
+                    saveData(DB_KEYS.OPERACOES, arr);
+                    alert('CHECK-IN REALIZADO COM SUCESSO! AGUARDE A LIBERAÇÃO DO GESTOR.');
+                    closeCheckinConfirmModal();
+                    renderCheckinsTable(); 
+                } else {
+                    alert('ERRO: VOCÊ NÃO PARECE ESTAR VINCULADO A ESTA OPERAÇÃO.');
+                }
             }
         });
     }
-}
 
 function toggleDespesaParcelas() {
     const modo = document.getElementById('despesaModoPagamento').value;
@@ -1126,35 +1163,87 @@ function editDespesaItem(id) {
 }
 
 // =============================================================================
-// 12. SISTEMA DE CHECK-INS E AGENDAMENTOS (CORRIGIDO)
+// 12. SISTEMA DE CHECK-INS E AGENDAMENTOS (VISUALIZAÇÃO DETALHADA)
 // =============================================================================
 
 function renderCheckinsTable() {
     const ops = loadData(DB_KEYS.OPERACOES);
     const agendadas = ops.filter(o => o.status === 'AGENDADA').sort((a,b) => new Date(a.data) - new Date(b.data));
 
-    // A. LÓGICA DO ADMIN
+    // A. LÓGICA DO ADMIN (VISÃO DETALHADA)
     const tabelaAdmin = document.getElementById('tabelaCheckinsPendentes');
     if (tabelaAdmin && !window.IS_READ_ONLY) { 
         let rows = '';
         if (!agendadas.length) {
-            rows = '<tr><td colspan="5" style="text-align:center;">NENHUM AGENDAMENTO PENDENTE.</td></tr>';
+            rows = '<tr><td colspan="6" style="text-align:center; padding:20px;">NENHUMA ROTA AGUARDANDO INÍCIO.</td></tr>';
         } else {
             agendadas.forEach(op => {
-                const motorista = getMotorista(op.motoristaId)?.nome || 'N/A';
                 const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
+                const checkins = op.checkins || { motorista: false, ajudantes: [] };
+                
+                // 1. Status Motorista
+                const motNome = getMotorista(op.motoristaId)?.nome || 'MOTORISTA Ñ LOCALIZADO';
+                const motStatusIcon = checkins.motorista 
+                    ? `<i class="fas fa-check-circle" style="color:var(--success-color);" title="Check-in Realizado"></i>` 
+                    : `<i class="far fa-clock" style="color:var(--warning-color);" title="Aguardando..."></i>`;
+                
+                // 2. Status Ajudantes
+                let ajudantesStatusHtml = '';
+                if (op.ajudantes && op.ajudantes.length > 0) {
+                    ajudantesStatusHtml = op.ajudantes.map(a => {
+                        const ajData = getAjudante(a.id);
+                        const nome = ajData ? ajData.nome.split(' ')[0] : `ID:${a.id}`;
+                        const confirmou = checkins.ajudantes && checkins.ajudantes.includes(a.id);
+                        const icon = confirmou 
+                            ? `<i class="fas fa-check-circle" style="color:var(--success-color);"></i>` 
+                            : `<i class="far fa-clock" style="color:var(--warning-color);"></i>`;
+                        return `<div style="font-size:0.8rem;">${icon} ${nome}</div>`;
+                    }).join('');
+                } else {
+                    ajudantesStatusHtml = '<span style="color:#ccc; font-size:0.8rem;">SEM AJUDANTES</span>';
+                }
+
+                // Verifica se TODOS confirmaram para destacar o botão
+                const motOk = checkins.motorista;
+                const totalAjudantes = (op.ajudantes || []).length;
+                const confirmadosAjudantes = (checkins.ajudantes || []).length;
+                const todosOk = motOk && (confirmadosAjudantes >= totalAjudantes);
+
+                const btnClass = todosOk ? 'btn-success' : 'btn-primary';
+                const btnIcon = todosOk ? 'fa-check-double' : 'fa-play';
+                const btnText = todosOk ? 'INICIAR (TODOS PRONTOS)' : 'LIBERAR ROTA';
+
                 rows += `<tr>
                     <td>${dataFmt}</td>
-                    <td>${motorista}</td>
                     <td>${op.veiculoPlaca}</td>
-                    <td><span style="color:orange;">AGUARDANDO</span></td>
                     <td>
-                        <button class="btn-action edit-btn" onclick="editOperacaoItem(${op.id})"><i class="fas fa-edit"></i></button>
-                        <button class="btn-action delete-btn" onclick="deleteItem('${DB_KEYS.OPERACOES}', ${op.id})"><i class="fas fa-trash"></i></button>
+                        <div style="font-weight:bold;">${motStatusIcon} ${motNome}</div>
+                    </td>
+                    <td>${ajudantesStatusHtml}</td>
+                    <td>
+                        <button class="${btnClass} btn-action" style="padding:6px 12px;" onclick="iniciarRotaManual(${op.id})">
+                            <i class="fas ${btnIcon}"></i> ${btnText}
+                        </button>
+                    </td>
+                    <td>
+                        <button class="btn-action edit-btn" title="EDITAR EQUIPE" onclick="editOperacaoItem(${op.id})"><i class="fas fa-edit"></i></button>
+                        <button class="btn-action delete-btn" title="CANCELAR" onclick="deleteItem('${DB_KEYS.OPERACOES}', ${op.id})"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>`;
             });
         }
+        
+        // Cabeçalho atualizado para a nova tabela
+        const thead = `<tr>
+            <th>DATA</th>
+            <th>VEÍCULO</th>
+            <th>MOTORISTA</th>
+            <th>AJUDANTES</th>
+            <th>AÇÃO PRINCIPAL</th>
+            <th>GERENCIAR</th>
+        </tr>`;
+        
+        tabelaAdmin.querySelector('thead').innerHTML = thead;
         tabelaAdmin.querySelector('tbody').innerHTML = rows;
         
         // Atualiza Badge do Menu
@@ -1165,19 +1254,17 @@ function renderCheckinsTable() {
         }
     }
 
-    // B. LÓGICA DO FUNCIONÁRIO (Agendamentos Pessoais) - CORREÇÃO DE VÍNCULO AQUI
+    // B. LÓGICA DO FUNCIONÁRIO (MANTIDA IGUAL, APENAS O CHECK VISUAL PODE MUDAR)
+    // Se o funcionário já confirmou, mostra aviso.
     const listaFunc = document.getElementById('listaServicosAgendados');
     if (listaFunc && window.CURRENT_USER && (window.CURRENT_USER.role === 'motorista' || window.CURRENT_USER.role === 'ajudante')) {
         const myUid = window.CURRENT_USER.uid;
-        const myEmail = window.CURRENT_USER.email; // NOVO: Pega o email para conferência
+        const myEmail = window.CURRENT_USER.email;
 
-        // Descobre o ID interno do perfil do usuário logado
+        // Descobre ID do perfil
         let myProfileId = null;
         let myKey = window.CURRENT_USER.role === 'motorista' ? DB_KEYS.MOTORISTAS : DB_KEYS.AJUDANTES;
-        
-        // PROCURA POR UID OU EMAIL (Correção de Vínculo)
         const myProfile = loadData(myKey).find(p => p.uid === myUid || (p.email && p.email === myEmail));
-        
         if (myProfile) myProfileId = myProfile.id;
 
         if (!myProfileId) {
@@ -1186,43 +1273,45 @@ function renderCheckinsTable() {
         }
 
         const myAgendas = agendadas.filter(op => {
-            if (window.CURRENT_USER.role === 'motorista') {
-                return op.motoristaId === myProfileId;
-            } else {
-                return (op.ajudantes || []).some(a => a.id === myProfileId);
-            }
+            if (window.CURRENT_USER.role === 'motorista') return op.motoristaId === myProfileId;
+            else return (op.ajudantes || []).some(a => a.id === myProfileId);
         });
 
         if (!myAgendas.length) {
-            listaFunc.innerHTML = '<p style="text-align:center; color:#666;">NENHUM SERVIÇO AGENDADO NO MOMENTO.</p>';
+            listaFunc.innerHTML = '<p style="text-align:center; color:#666;">NENHUM SERVIÇO AGENDADO.</p>';
         } else {
             let html = '';
             myAgendas.forEach(op => {
+                const checkins = op.checkins || { motorista: false, ajudantes: [] };
+                let jaConfirmei = false;
+                
+                if (window.CURRENT_USER.role === 'motorista') jaConfirmei = checkins.motorista;
+                else jaConfirmei = checkins.ajudantes && checkins.ajudantes.includes(myProfileId);
+
                 const dataFmt = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
                 const contratante = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
-                const atividade = getAtividade(op.atividadeId)?.nome || '-';
                 
-                let equipeInfo = '';
-                if (window.CURRENT_USER.role === 'motorista') {
-                    const nomesAjudantes = (op.ajudantes || []).map(a => getAjudante(a.id)?.nome || 'ID '+a.id).join(', ');
-                    equipeInfo = `<strong>AJUDANTES:</strong> ${nomesAjudantes || 'NENHUM'}`;
+                // Botão muda se já confirmou
+                let btnHtml = '';
+                if (jaConfirmei) {
+                    btnHtml = `<button class="btn-success" disabled style="opacity:0.7; cursor:default;">
+                        <i class="fas fa-check-double"></i> AGUARDANDO INÍCIO
+                    </button>`;
                 } else {
-                    const nomeMotorista = getMotorista(op.motoristaId)?.nome || 'N/A';
-                    equipeInfo = `<strong>MOTORISTA:</strong> ${nomeMotorista}`;
+                    btnHtml = `<button class="btn-primary" onclick="openCheckinConfirmModal(${op.id})">
+                        <i class="fas fa-check-circle"></i> REALIZAR CHECK-IN
+                    </button>`;
                 }
 
                 html += `
-                <div class="card" style="border-left: 5px solid var(--primary-color);">
-                    <div style="display:flex; justify-content:space-between; align-items:start;">
+                <div class="card" style="border-left: 5px solid ${jaConfirmei ? 'var(--success-color)' : 'var(--primary-color)'};">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                         <div>
-                            <h4 style="color:var(--primary-color); margin-bottom:5px;">${dataFmt} - ${op.veiculoPlaca}</h4>
+                            <h4 style="color:${jaConfirmei ? 'var(--success-color)' : 'var(--primary-color)'}; margin-bottom:5px;">${dataFmt} - ${op.veiculoPlaca}</h4>
                             <p><strong>CLIENTE:</strong> ${contratante}</p>
-                            <p><strong>ATIVIDADE:</strong> ${atividade}</p>
-                            <p style="margin-top:5px; font-size:0.9rem; color:#555;">${equipeInfo}</p>
+                            ${jaConfirmei ? '<small style="color:green; font-weight:bold;">VOCÊ JÁ CONFIRMOU PRESENÇA</small>' : ''}
                         </div>
-                        <button class="btn-primary" onclick="openCheckinConfirmModal(${op.id})">
-                            <i class="fas fa-check-circle"></i> CONFIRMAR
-                        </button>
+                        ${btnHtml}
                     </div>
                 </div>`;
             });
@@ -1230,6 +1319,54 @@ function renderCheckinsTable() {
         }
     }
 }
+
+window.iniciarRotaManual = function(opId) {
+    if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA.");
+
+    let arr = loadData(DB_KEYS.OPERACOES).slice();
+    const idx = arr.findIndex(o => o.id === opId);
+    if (idx < 0) return;
+
+    const op = arr[idx];
+    const checkins = op.checkins || { motorista: false, ajudantes: [] };
+    
+    // VERIFICAÇÃO DE PENDÊNCIAS
+    const pendencias = [];
+    
+    // 1. Verifica Motorista
+    if (!checkins.motorista) {
+        const m = getMotorista(op.motoristaId);
+        pendencias.push(`MOTORISTA: ${m ? m.nome : 'DESCONHECIDO'}`);
+    }
+
+    // 2. Verifica Ajudantes
+    if (op.ajudantes && op.ajudantes.length > 0) {
+        op.ajudantes.forEach(a => {
+            if (!checkins.ajudantes || !checkins.ajudantes.includes(a.id)) {
+                const aj = getAjudante(a.id);
+                pendencias.push(`AJUDANTE: ${aj ? aj.nome : 'ID '+a.id}`);
+            }
+        });
+    }
+
+    // DECISÃO DO ADMIN
+    if (pendencias.length > 0) {
+        const msg = "ATENÇÃO: OS SEGUINTES MEMBROS NÃO FIZERAM CHECK-IN:\n\n" + 
+                    pendencias.join("\n") + 
+                    "\n\nDESEJA INICIAR A ROTA MESMO ASSIM? (Isso confirmará a operação)";
+        
+        if (!confirm(msg)) return; // Cancela se o admin disser não
+    } else {
+        if(!confirm("TODOS FIZERAM CHECK-IN. INICIAR ROTA AGORA?")) return;
+    }
+
+    // CONFIRMA A OPERAÇÃO
+    op.status = 'CONFIRMADA';
+    saveData(DB_KEYS.OPERACOES, arr);
+    alert("ROTA INICIADA COM SUCESSO!");
+    renderCheckinsTable(); // Atualiza tabelas
+    renderOperacaoTable();
+};
 
 window.openCheckinConfirmModal = function(opId) {
     const op = loadData(DB_KEYS.OPERACOES).find(o => o.id === opId);
