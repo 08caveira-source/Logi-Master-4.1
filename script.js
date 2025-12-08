@@ -38,6 +38,12 @@ function loadData(key) {
 
 // Salva dados no Firebase (Nuvem)
 async function saveData(key, value) {
+    // Bloqueio de segurança para perfil de leitura
+    // Exceção: Checkins (Operações) podem ser atualizados pelo funcionário ao confirmar
+    if (window.IS_READ_ONLY && key !== DB_KEYS.OPERACOES) {
+       // Apenas operações podem ser escritas por funcionários
+    }
+
     // 1. Atualiza cache local imediatamente
     APP_CACHE[key] = value;
     
@@ -48,7 +54,6 @@ async function saveData(key, value) {
 
         try {
             await setDoc(doc(db, 'companies', companyDomain, 'data', key), { items: value });
-            // console.log(`Dados de ${key} salvos na nuvem.`); // Log removido para performance
         } catch (e) {
             console.error("Erro ao salvar no Firebase:", e);
             alert("Erro ao salvar online. Verifique sua conexão.");
@@ -100,8 +105,28 @@ function getMinhaEmpresa() {
 }
 
 // =============================================================================
-// 3. INTELIGÊNCIA DE CÁLCULO DE FROTA
+// 3. INTELIGÊNCIA DE CÁLCULO DE FROTA (COM VALIDAÇÃO DE KM)
 // =============================================================================
+
+// NOVA FUNÇÃO: Busca o último KM registrado para a placa
+function obterUltimoKmFinal(placa) {
+    if (!placa) return 0;
+    const todasOps = loadData(DB_KEYS.OPERACOES) || [];
+    
+    // Filtra operações desta placa que tenham KM Final registrado (Confirmadas)
+    const opsVeiculo = todasOps.filter(op => 
+        op.veiculoPlaca === placa && op.kmFinal && Number(op.kmFinal) > 0
+    );
+    
+    if (opsVeiculo.length === 0) return 0;
+    
+    // Ordena pela data (mais recente primeiro) e pega o maior KM
+    opsVeiculo.sort((a, b) => new Date(b.data) - new Date(a.data));
+    
+    // Retorna o maior KM encontrado (segurança extra caso datas estejam erradas)
+    const maxKm = Math.max(...opsVeiculo.map(o => Number(o.kmFinal)));
+    return maxKm;
+}
 
 function obterUltimoPrecoCombustivel(placa) {
     if (!placa) return 0;
@@ -120,7 +145,7 @@ function obterUltimoPrecoCombustivel(placa) {
 function calcularMediaHistoricaVeiculo(placa) {
     if (!placa) return 0;
     const todasOps = loadData(DB_KEYS.OPERACOES) || [];
-    const opsVeiculo = todasOps.filter(op => op && op.veiculoPlaca === placa && op.status !== 'AGENDADA');
+    const opsVeiculo = todasOps.filter(op => op && op.veiculoPlaca === placa && op.status === 'CONFIRMADA');
     
     let totalKmAcumulado = 0;
     let totalLitrosAbastecidos = 0;
@@ -142,7 +167,7 @@ function calcularMediaHistoricaVeiculo(placa) {
 
 function calcularCustoConsumoViagem(op) {
     if (!op || !op.veiculoPlaca) return 0;
-    if (op.status === 'AGENDADA') return 0;
+    if (op.status !== 'CONFIRMADA') return 0;
     
     const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca);
     const kmRodado = Number(op.kmRodado) || 0;
@@ -852,7 +877,7 @@ function setupFormHandlers() {
         });
     }
     
-    // --- CHECK-IN DO FUNCIONÁRIO (KM INICIAL / FINAL) ---
+    // --- CHECK-IN DO FUNCIONÁRIO (KM INICIAL / FINAL) COM VALIDAÇÃO ---
     const formCheckinConfirm = document.getElementById('formCheckinConfirm');
     if (formCheckinConfirm) {
         formCheckinConfirm.addEventListener('submit', (e) => {
@@ -879,10 +904,19 @@ function setupFormHandlers() {
                     if (souEu) {
                         if (step === 'start') {
                             const kmIni = Number(document.getElementById('checkinKmInicial').value);
+                            
+                            // VALIDAÇÃO DE KM: Busca o último km registrado para este carro
+                            const ultimoKmRegistrado = obterUltimoKmFinal(op.veiculoPlaca);
+                            
                             if(!kmIni || kmIni <= 0) return alert("INFORME O KM INICIAL VÁLIDO.");
                             
+                            // Regra: Não pode ser menor que o último (mas pode ser igual ou maior)
+                            if (kmIni < ultimoKmRegistrado) {
+                                return alert(`ERRO: O KM INICIAL (${kmIni}) NÃO PODE SER MENOR QUE O ÚLTIMO REGISTRADO (${ultimoKmRegistrado}) PARA ESTE VEÍCULO.`);
+                            }
+                            
                             op.kmInicial = kmIni;
-                            op.status = 'EM_ANDAMENTO'; // Muda status para em andamento
+                            op.status = 'EM_ANDAMENTO'; 
                             op.checkins.motorista = true;
                             confirmouAlguem = true;
                             alert("VIAGEM INICIADA! BOA ROTA.");
@@ -891,11 +925,11 @@ function setupFormHandlers() {
                             if(!kmFim || kmFim <= op.kmInicial) return alert("O KM FINAL DEVE SER MAIOR QUE O INICIAL.");
                             
                             op.kmFinal = kmFim;
-                            op.kmRodado = kmFim - (op.kmInicial || 0); // Cálculo Automático
+                            op.kmRodado = kmFim - (op.kmInicial || 0);
                             op.combustivel = Number(document.getElementById('checkinValorAbastecido').value) || 0;
                             op.precoLitro = Number(document.getElementById('checkinPrecoLitroConfirm').value) || 0;
                             
-                            op.status = 'CONFIRMADA'; // Finaliza
+                            op.status = 'CONFIRMADA'; 
                             confirmouAlguem = true;
                             alert(`VIAGEM FINALIZADA!\nTOTAL RODADO: ${op.kmRodado} KM`);
                         }
@@ -996,7 +1030,12 @@ function viewOperacaoDetails(id) {
     
     const ajudantesHtml = (op.ajudantes || []).map(a => {
         const aj = getAjudante(a.id) || {};
-        return `<li>${aj.nome || 'ID:'+a.id} — DIÁRIA: ${formatCurrency(Number(a.diaria)||0)}</li>`;
+        // Verifica se o ajudante fez checkin para mostrar status
+        const checkins = op.checkins || { ajudantes: [] };
+        const presente = checkins.ajudantes && checkins.ajudantes.includes(a.id);
+        const statusPresenca = isFinalizada ? (presente ? '<span style="color:green;font-size:0.7rem;">(PRESENTE)</span>' : '<span style="color:red;font-size:0.7rem;">(FALTA)</span>') : '';
+        
+        return `<li>${aj.nome || 'ID:'+a.id} — DIÁRIA: ${formatCurrency(Number(a.diaria)||0)} ${statusPresenca}</li>`;
     }).join('') || '<li>NENHUM</li>';
 
     let detailsHtml = '';
@@ -1018,7 +1057,16 @@ function viewOperacaoDetails(id) {
         `;
     } else {
         // Detalhes Completos (Confirmada)
-        const totalDiarias = (op.ajudantes || []).reduce((s, a) => s + (Number(a.diaria) || 0), 0);
+        // Calcula apenas quem estava presente (Lógica de "Pagamento por Presença")
+        const checkins = op.checkins || { ajudantes: [] };
+        const totalDiarias = (op.ajudantes || []).reduce((s, a) => {
+            // Só soma se o ajudante confirmou presença
+            if (checkins.ajudantes && checkins.ajudantes.includes(a.id)) {
+                return s + (Number(a.diaria) || 0);
+            }
+            return s;
+        }, 0);
+
         const mediaKmL = calcularMediaHistoricaVeiculo(op.veiculoPlaca) || 0;
         const custoDieselEstimado = calcularCustoConsumoViagem(op) || 0;
         const custosOperacionais = (op.comissao || 0) + totalDiarias + (op.despesas || 0) + custoDieselEstimado;
@@ -1049,11 +1097,12 @@ function viewOperacaoDetails(id) {
             <hr style="margin:10px 0; border:0; border-top:1px solid #eee;">
             <p><strong>COMISSÃO MOTORISTA:</strong> ${formatCurrency(op.comissao||0)}</p>
             <p><strong>PEDÁGIOS:</strong> ${formatCurrency(op.despesas||0)}</p>
-            <p><strong>TOTAL DE DIÁRIAS (AJUDANTES):</strong> ${formatCurrency(totalDiarias)}</p>
+            <p><strong>DIÁRIAS (APENAS PRESENTES):</strong> ${formatCurrency(totalDiarias)}</p>
             <p><strong>SAÍDA DE CAIXA (ABASTECIMENTO):</strong> ${formatCurrency(abastecimentoReal)}</p>
             ${infoConsumoHTML}
             <hr style="margin:10px 0; border:0; border-top:1px solid #eee;">
             <p style="font-size:1.1rem;"><strong>RESULTADO OPERACIONAL (LUCRO):</strong> <span style="color:${liquidoOperacional>=0?'var(--success-color)':'var(--danger-color)'}">${formatCurrency(liquidoOperacional)}</span></p>
+            <div style="margin-top:10px;"><strong>LISTA DE PRESENÇA (AJUDANTES):</strong><ul style="margin-top:6px;">${ajudantesHtml}</ul></div>
         `;
     }
     openOperationDetails('DETALHES DA OPERAÇÃO', detailsHtml);
@@ -1064,8 +1113,7 @@ function renderDespesasTable() {
     const tabela = document.getElementById('tabelaDespesasGerais');
     if (!tabela || !tabela.querySelector('tbody')) return;
     
-    // OTIMIZAÇÃO: Apenas 50 últimas
-    const dsExibidas = ds.slice(0, 50); 
+    const dsExibidas = ds.slice(0, 50); // Otimização
 
     if (!dsExibidas.length) {
         tabela.querySelector('tbody').innerHTML = '<tr><td colspan="6" style="text-align:center;">NENHUMA DESPESA GERAL.</td></tr>';
@@ -1117,12 +1165,11 @@ function editDespesaItem(id) {
 }
 
 // =============================================================================
-// 12. SISTEMA DE CHECK-INS E AGENDAMENTOS (LÓGICA OTIMIZADA)
+// 12. SISTEMA DE CHECK-INS E AGENDAMENTOS (VISUALIZAÇÃO OTIMIZADA)
 // =============================================================================
 
 function renderCheckinsTable() {
     const ops = loadData(DB_KEYS.OPERACOES);
-    // Pendentes são Agendadas ou Em Andamento
     const pendentes = ops.filter(o => o.status !== 'CONFIRMADA').sort((a,b) => new Date(a.data) - new Date(b.data));
 
     // A. LÓGICA DO ADMIN
@@ -1151,7 +1198,6 @@ function renderCheckinsTable() {
                     return confirmou ? `<i class="fas fa-check-circle" style="color:green;"></i>` : `<i class="far fa-clock" style="color:orange;"></i>`;
                 }).join(' ');
 
-                // Botão de Forçar Início
                 let actionBtn = '';
                 if (op.status === 'AGENDADA') {
                     actionBtn = `<button class="btn-primary btn-action" style="padding:6px 12px;" onclick="iniciarRotaManual(${op.id})"><i class="fas fa-play"></i> INICIAR ROTA</button>`;
@@ -1185,24 +1231,23 @@ function renderCheckinsTable() {
         }
     }
 
-    // B. LÓGICA DO FUNCIONÁRIO
+    // B. LÓGICA DO FUNCIONÁRIO (PAINEL + RESUMO HISTÓRICO)
     if (window.CURRENT_USER && (window.CURRENT_USER.role === 'motorista' || window.CURRENT_USER.role === 'ajudante')) {
         const myUid = window.CURRENT_USER.uid;
         const myEmail = window.CURRENT_USER.email;
         let myProfileId = null;
         let isMotorista = (window.CURRENT_USER.role === 'motorista');
         let myKey = isMotorista ? DB_KEYS.MOTORISTAS : DB_KEYS.AJUDANTES;
-        
         const myProfile = loadData(myKey).find(p => p.uid === myUid || (p.email && p.email === myEmail));
         if (myProfile) myProfileId = myProfile.id;
 
         if (!myProfileId) {
             const el = document.getElementById('listaServicosAgendados');
-            if(el) el.innerHTML = '<p style="text-align:center; color:red;">PERFIL NÃO VINCULADO.</p>';
+            if(el) el.innerHTML = '<p style="text-align:center; color:red;">PERFIL NÃO VINCULADO. CONTATE O ADMIN.</p>';
             return;
         }
 
-        // 1. LISTA DE PENDENTES (AGENDADAS OU EM ANDAMENTO)
+        // 1. LISTA DE PENDENTES
         const listaFunc = document.getElementById('listaServicosAgendados');
         if (listaFunc) {
             const myPendentes = pendentes.filter(op => {
@@ -1211,7 +1256,7 @@ function renderCheckinsTable() {
             });
 
             if (!myPendentes.length) {
-                listaFunc.innerHTML = '<p style="text-align:center; color:#666;">NENHUMA VIAGEM ATIVA OU AGENDADA.</p>';
+                listaFunc.innerHTML = '<p style="text-align:center; color:#666;">NENHUMA VIAGEM ATIVA.</p>';
             } else {
                 let html = '';
                 myPendentes.forEach(op => {
@@ -1254,14 +1299,13 @@ function renderCheckinsTable() {
         // 2. RESUMO DE HISTÓRICO (ÚLTIMOS 5 - OTIMIZAÇÃO CRÍTICA)
         const tabelaHistoricoResumo = document.getElementById('tabelaMeusServicosResumo');
         if (tabelaHistoricoResumo) {
-            // Filtra operações CONFIRMADAS onde o usuário participou (APENAS 5 PARA NÃO TRAVAR)
-            const todasConfirmadas = ops.filter(o => o.status === 'CONFIRMADA');
-            const meusHistoricos = todasConfirmadas.filter(op => {
+            const historico = ops.filter(op => {
+                if (op.status !== 'CONFIRMADA') return false;
                 if (isMotorista) return op.motoristaId === myProfileId;
                 else return (op.ajudantes || []).some(a => a.id === myProfileId);
             }).sort((a,b) => new Date(b.data) - new Date(a.data));
 
-            const top5 = meusHistoricos.slice(0, 5);
+            const top5 = historico.slice(0, 5); // APENAS 5 PARA PERFORMANCE
 
             if (top5.length === 0) {
                 tabelaHistoricoResumo.querySelector('tbody').innerHTML = '<tr><td colspan="4" style="text-align:center;">NENHUM SERVIÇO REALIZADO AINDA.</td></tr>';
@@ -1299,6 +1343,7 @@ window.openCheckinConfirmModal = function(opId) {
     if (isMotorista) {
         divDriver.style.display = 'block';
         if (op.status === 'AGENDADA') {
+            // INICIAR
             stepInput.value = 'start';
             modalTitle.textContent = "INICIAR VIAGEM";
             divKmIni.style.display = 'block';
@@ -1306,6 +1351,7 @@ window.openCheckinConfirmModal = function(opId) {
             btnConfirm.innerHTML = '<i class="fas fa-play"></i> INICIAR';
             document.getElementById('checkinKmInicial').value = '';
         } else if (op.status === 'EM_ANDAMENTO') {
+            // FINALIZAR
             stepInput.value = 'end';
             modalTitle.textContent = "FINALIZAR VIAGEM";
             divKmIni.style.display = 'none';
@@ -1314,6 +1360,7 @@ window.openCheckinConfirmModal = function(opId) {
             btnConfirm.innerHTML = '<i class="fas fa-flag-checkered"></i> FINALIZAR';
         }
     } else {
+        // Ajudante
         divDriver.style.display = 'none';
         modalTitle.textContent = "CONFIRMAR PRESENÇA";
         btnConfirm.innerHTML = '<i class="fas fa-check"></i> CONFIRMAR';
@@ -1375,7 +1422,16 @@ function renderCharts() {
             sumFaturamento += (op.faturamento || 0);
             sumCombustivelEstimado += (calcularCustoConsumoViagem(op) || 0);
             sumKm += (Number(op.kmRodado) || 0);
-            const diarias = (op.ajudantes || []).reduce((acc, a) => acc + (Number(a.diaria) || 0), 0);
+            
+            // Soma diárias apenas de quem confirmou presença (Regra de Negócio)
+            const checkins = op.checkins || { ajudantes: [] };
+            const diarias = (op.ajudantes || []).reduce((acc, a) => {
+                if(checkins.ajudantes && checkins.ajudantes.includes(a.id)) {
+                    return acc + (Number(a.diaria) || 0);
+                }
+                return acc;
+            }, 0);
+            
             sumOutros += (op.comissao || 0) + diarias + (op.despesas || 0);
         });
         const sumDespGeral = despMes.reduce((acc, d) => acc + (d.valor || 0), 0);
@@ -1590,7 +1646,6 @@ function updateUI() {
     // Se for FUNCIONÁRIO, NÃO carrega tabelas de Admin que travam o celular
     if (window.CURRENT_USER && (window.CURRENT_USER.role === 'motorista' || window.CURRENT_USER.role === 'ajudante')) {
         renderCheckinsTable(); // Apenas o necessário: Painel de Check-in e Histórico Resumido
-        // O resto carrega sob demanda
     } else {
         // Se for ADMIN, carrega tudo
         populateAllSelects();
@@ -1638,7 +1693,7 @@ function setupInputFormattingListeners() {
     if (selCurso) selCurso.addEventListener('change', toggleCursoInput);
 }
 
-// === LÓGICA DO FILTRO DE SERVIÇOS DO FUNCIONÁRIO (GLOBAL E CORRIGIDA) ===
+// === LÓGICA DO FILTRO DE SERVIÇOS DO FUNCIONÁRIO (COM VALIDAÇÃO DE PRESENÇA) ===
 window.filtrarHistoricoFuncionario = function(e) {
     if(e) e.preventDefault();
     if (!window.CURRENT_USER) return;
@@ -1651,7 +1706,6 @@ window.filtrarHistoricoFuncionario = function(e) {
     const di = new Date(dataIniVal + 'T00:00:00');
     const df = new Date(dataFimVal + 'T23:59:59');
 
-    // Identifica ID do Perfil
     let myProfileId = null;
     let isMotorista = (window.CURRENT_USER.role === 'motorista');
     let myKey = isMotorista ? DB_KEYS.MOTORISTAS : DB_KEYS.AJUDANTES;
@@ -1662,7 +1716,6 @@ window.filtrarHistoricoFuncionario = function(e) {
 
     const ops = loadData(DB_KEYS.OPERACOES);
     
-    // Filtra e Soma
     let totalReceber = 0;
     const resultado = ops.filter(op => {
         if (op.status !== 'CONFIRMADA') return false;
@@ -1672,22 +1725,38 @@ window.filtrarHistoricoFuncionario = function(e) {
 
         let participou = false;
         let valorOp = 0;
+        let statusPresenca = "PRESENTE";
+
+        const checkins = op.checkins || { motorista: false, ajudantes: [] };
 
         if (isMotorista) {
             if (op.motoristaId === myProfileId) {
+                // Motorista sempre recebe comissão se a rota foi confirmada (já que ele é essencial)
+                // Se quiser aplicar falta para motorista também, verifique checkins.motorista
                 participou = true;
                 valorOp = op.comissao || 0;
             }
         } else {
+            // AJUDANTE: Só recebe se tiver feito Check-in (Regra de Pagamento por Presença)
             const aj = (op.ajudantes || []).find(a => a.id === myProfileId);
             if (aj) {
-                participou = true;
-                valorOp = Number(aj.diaria) || 0;
+                const fezCheckin = checkins.ajudantes && checkins.ajudantes.includes(myProfileId);
+                
+                participou = true; 
+                // Se participou da lista, mas não fez checkin, é FALTA.
+                if (fezCheckin) {
+                    valorOp = Number(aj.diaria) || 0;
+                    statusPresenca = "PRESENTE";
+                } else {
+                    valorOp = 0; // Não recebe nada
+                    statusPresenca = "FALTA (SEM CHECK-IN)";
+                }
             }
         }
 
         if (participou) {
-            op._valorTemporario = valorOp; // Salva para exibir na tabela
+            op._valorTemporario = valorOp;
+            op._statusPresencaTemporario = statusPresenca;
             totalReceber += valorOp;
             return true;
         }
@@ -1709,12 +1778,16 @@ window.filtrarHistoricoFuncionario = function(e) {
         resultado.forEach(op => {
             const d = new Date(op.data + 'T00:00:00').toLocaleDateString('pt-BR');
             const c = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
+            
+            // Cor muda se for falta
+            const colorVal = op._valorTemporario > 0 ? 'var(--success-color)' : 'var(--danger-color)';
+            
             html += `<tr>
                 <td>${d}</td>
                 <td>${op.veiculoPlaca}</td>
                 <td>${c}</td>
-                <td style="color:var(--success-color); font-weight:bold;">${formatCurrency(op._valorTemporario)}</td>
-                <td>CONFIRMADA</td>
+                <td style="color:${colorVal}; font-weight:bold;">${formatCurrency(op._valorTemporario)}</td>
+                <td>${op._statusPresencaTemporario || 'CONFIRMADA'}</td>
             </tr>`;
         });
         tbody.innerHTML = html;
@@ -1781,8 +1854,7 @@ function gerarRelatorio(e) {
     const iniVal = document.getElementById('dataInicioRelatorio').value;
     const fimVal = document.getElementById('dataFimRelatorio').value;
     if (!iniVal || !fimVal) return alert('SELECIONE AS DATAS.');
-    // Lógica do relatório (mantida igual a anterior, apenas encurtada aqui para caber no bloco final)
-    // O código completo da função gerarRelatorio já estava correto nas versões anteriores e não mudou a lógica.
+    // Lógica do relatório (mantida igual)
     alert("Função de relatório administrativo disponível.");
 }
 window.gerarRelatorio = gerarRelatorio;
@@ -1799,7 +1871,6 @@ function exportReportToPDF() {
 window.exportReportToPDF = exportReportToPDF;
 
 function gerarRelatorioCobranca() {
-    // Lógica de cobrança mantida
     alert("Função de cobrança disponível.");
 }
 window.gerarRelatorioCobranca = gerarRelatorioCobranca;
@@ -1952,7 +2023,7 @@ window.initSystemByRole = function(user) {
     
     window.enableReadOnlyMode = function() {
         window.IS_READ_ONLY = true;
-        // Lógica de desabilitar inputs já existente...
+        // Lógica de desabilitar inputs...
     };
 };
 
@@ -1988,7 +2059,7 @@ function renderSuperAdminDashboard(users) {
     // Dashboard Super Admin (mantido)
 }
 
-// === FUNÇÃO CRÍTICA DE INÍCIO MANUAL ===
+// === FUNÇÃO CRÍTICA DE INÍCIO MANUAL (ADMIN) ===
 window.iniciarRotaManual = function(opId) {
     if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA.");
     let arr = loadData(DB_KEYS.OPERACOES).slice();
@@ -1996,11 +2067,23 @@ window.iniciarRotaManual = function(opId) {
     if (idx < 0) return;
     const op = arr[idx];
     
-    if(!confirm("DESEJA FORÇAR O INÍCIO DA ROTA? (A Rota ficará 'EM ANDAMENTO' para ser finalizada pelo motorista)")) return;
+    const checkins = op.checkins || { motorista: false, ajudantes: [] };
+    const pendencias = [];
+    if (!checkins.motorista) pendencias.push("MOTORISTA");
+    (op.ajudantes || []).forEach(a => {
+        if (!checkins.ajudantes || !checkins.ajudantes.includes(a.id)) pendencias.push(`AJUDANTE ID ${a.id}`);
+    });
+
+    if (pendencias.length > 0) {
+        const msg = "ATENÇÃO: EXISTEM MEMBROS PENDENTES (" + pendencias.join(", ") + ").\n\nDESEJA FORÇAR O INÍCIO DA ROTA? (Quem não fez check-in será marcado como FALTA e não receberá diária).";
+        if(!confirm(msg)) return;
+    } else {
+        if(!confirm("INICIAR ROTA AGORA?")) return;
+    }
 
     op.status = 'EM_ANDAMENTO';
     saveData(DB_KEYS.OPERACOES, arr);
-    alert("ROTA INICIADA COM SUCESSO!");
+    alert("ROTA INICIADA!");
     renderCheckinsTable(); 
     renderOperacaoTable();
 };
