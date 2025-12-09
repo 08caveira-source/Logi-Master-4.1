@@ -28,7 +28,7 @@
                 <li class="nav-item active" data-page="home"><i class="fas fa-calendar-alt"></i> DASHBOARD</li>
                 <li class="nav-item" data-page="operacoes"><i class="fas fa-route"></i> LANÇAR OPERAÇÃO</li> 
                 <li class="nav-item" data-page="checkins-pendentes"><i class="fas fa-bell"></i> CHECK-INS <span id="badgeCheckins" style="background:red; color:white; padding:1px 6px; border-radius:10px; font-size:0.7rem; margin-left:auto; display:none;">0</span></li>
-                <li class="nav-item" data-page="access-management"><i class="fas fa-users-cog"></i> EQUIPE / ACESSOS <span id="badgeAccess" style="background:orange; color:white; padding:1px 6px; border-radius:10px; font-size:0.7rem; margin-left:auto; display:none;">!</span></li>
+                <li class="nav-item" data-page="access-management"><i class="fas fa-users-cog"></i> EQUIPE / AVISOS <span id="badgeAccess" style="background:orange; color:white; padding:1px 6px; border-radius:10px; font-size:0.7rem; margin-left:auto; display:none;">!</span></li>
                 <li class="nav-item" data-page="despesas"><i class="fas fa-money-check-alt"></i> DESPESAS GERAIS</li> 
                 <li class="nav-item" data-page="cadastros"><i class="fas fa-truck"></i> CADASTROS</li>
                 <li class="nav-item" data-page="relatorios"><i class="fas fa-chart-bar"></i> RELATÓRIOS</li>
@@ -271,9 +271,32 @@
         </section>
 
         <section id="access-management" class="page">
-            <h2>GESTÃO DE FUNCIONÁRIOS</h2>
+            <h2>GESTÃO DE FUNCIONÁRIOS E COMUNICAÇÃO</h2>
             
-            <div class="card" id="cardSolicitacoesPerfil" style="border: 1px solid var(--primary-color);">
+            <div class="card" style="border: 1px solid var(--primary-color);">
+                <h3 style="color:var(--primary-color);"><i class="fas fa-paper-plane"></i> ENVIAR AVISO PARA A EQUIPE</h3>
+                <form id="formAdminMessage">
+                    <div class="form-row">
+                        <div class="form-col col-lg">
+                            <label>DESTINATÁRIO:</label>
+                            <select id="msgRecipientSelect">
+                                <option value="all">TODOS OS FUNCIONÁRIOS</option>
+                                </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-col col-full">
+                            <label>MENSAGEM:</label>
+                            <textarea id="msgTextAdmin" rows="3" required placeholder="Escreva o aviso aqui..."></textarea>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary"><i class="fas fa-paper-plane"></i> ENVIAR MENSAGEM</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card" id="cardSolicitacoesPerfil" style="margin-top:20px;">
                 <h3 style="color:var(--primary-color);"><i class="fas fa-id-card-alt"></i> SOLICITAÇÕES DE ALTERAÇÃO CADASTRAL</h3>
                 <div class="table-responsive">
                     <table class="data-table" id="tabelaProfileRequests">
@@ -566,20 +589,6 @@
             </div>
         </section>
 
-        <section id="super-admin" class="page">
-            <h2>PAINEL MASTER (GESTÃO GLOBAL)</h2>
-            <div class="card">
-                <div class="super-search-box" style="margin-bottom: 20px;">
-                    <i class="fas fa-search" style="color:var(--secondary-color);"></i>
-                    <input type="text" id="superAdminSearch" placeholder="BUSCAR POR EMPRESA, EMAIL OU NOME..." onkeyup="filterGlobalUsers()" style="border:none; outline:none; width:90%; font-size:1rem; padding-left:10px;">
-                </div>
-                
-                <div id="superAdminContainer" class="hierarchy-container">
-                    <p style="text-align:center; color:#666;">CARREGANDO DADOS GLOBAIS...</p>
-                </div>
-            </div>
-        </section>
-
         <section id="relatorios" class="page">
             <h2>RELATÓRIOS</h2>
             <div class="card no-print">
@@ -643,6 +652,44 @@
             <div class="card" style="margin-top: 20px; border: 1px solid var(--danger-color);">
                 <h3 style="color: var(--danger-color);">ZONA DE PERIGO</h3>
                 <button class="btn-danger" onclick="fullSystemReset()"><i class="fas fa-bomb"></i> RESETAR TUDO</button>
+            </div>
+        </section>
+
+        <section id="super-admin" class="page">
+            <h2>PAINEL MASTER (GESTÃO GLOBAL)</h2>
+            
+            <div class="card" style="border-left: 5px solid var(--primary-color);">
+                <h3><i class="fas fa-plus-circle"></i> CRIAR NOVA EMPRESA (ADMIN)</h3>
+                <form id="formCreateCompany">
+                    <div class="form-row">
+                        <div class="form-col"><label>NOME DA EMPRESA (Domínio):</label><input type="text" id="newCompanyDomain" placeholder="ex: transportesrapido.com" required></div>
+                        <div class="form-col"><label>EMAIL DO ADMIN:</label><input type="email" id="newAdminEmail" required></div>
+                        <div class="form-col"><label>SENHA PROVISÓRIA:</label><input type="text" id="newAdminPassword" required></div>
+                    </div>
+                    <div class="form-actions"><button type="submit" class="btn-success">CRIAR EMPRESA</button></div>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3><i class="fas fa-envelope"></i> ENVIAR AVISO PARA ADMINS</h3>
+                <form id="formSuperMessage">
+                    <div class="form-row">
+                        <div class="form-col"><label>DESTINO:</label><input type="text" id="superMsgTarget" placeholder="Email do Admin ou 'TODOS'"></div>
+                        <div class="form-col col-xl"><label>MENSAGEM:</label><input type="text" id="superMsgText" required></div>
+                    </div>
+                    <div class="form-actions"><button type="submit" class="btn-primary">ENVIAR</button></div>
+                </form>
+            </div>
+
+            <div class="card">
+                <div class="super-search-box">
+                    <i class="fas fa-search" style="color:var(--secondary-color);"></i>
+                    <input type="text" id="superAdminSearch" placeholder="BUSCAR EMPRESAS OU USUÁRIOS..." onkeyup="filterGlobalUsers()" style="border:none; width:90%; margin-left:10px; outline:none; font-size:1rem;">
+                </div>
+                
+                <div id="superAdminContainer" class="hierarchy-container">
+                    <p style="text-align:center; color:#666;">CARREGANDO DADOS GLOBAIS...</p>
+                </div>
             </div>
         </section>
 
@@ -721,7 +768,7 @@
                         <table class="data-table" id="tabelaHistoricoCompleto">
                             <thead>
                                 <tr>
-                                    <th>DATA</th>
+                                    <th>DATA / HORA</th>
                                     <th>VEÍCULO</th>
                                     <th>CLIENTE</th>
                                     <th>VALOR (R$)</th>
@@ -891,53 +938,41 @@
         </div>
     </div>
 
+    <div id="modalNotification" class="modal" style="z-index: 2000;">
+        <div class="modal-content notification-box">
+            <h3 style="color:#e65100; border-bottom: none;"><i class="fas fa-bell"></i> NOVA MENSAGEM IMPORTANTE</h3>
+            <p id="notificationMessageText" class="notification-text"></p>
+            <small id="notificationSender" style="color:#666; display:block; margin-bottom:20px; font-weight:bold;"></small>
+            <button onclick="confirmReadNotification()" class="btn-primary" style="width:100%; justify-content:center; padding: 15px;">ENTENDIDO, MARCAR COMO LIDO</button>
+        </div>
+    </div>
+
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-      // AQUI ESTAVA O ERRO: Faltava importar 'getDocs' e outros recursos usados no Super Admin
-      import { getFirestore, collection, setDoc, doc, onSnapshot, getDoc, updateDoc, query, where, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-      import { getAuth, onAuthStateChanged, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+      // IMPORTAÇÃO CORRIGIDA PARA INCLUIR TODAS AS FUNÇÕES NECESSÁRIAS
+      import { getFirestore, collection, setDoc, doc, onSnapshot, getDoc, updateDoc, query, where, deleteDoc, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+      import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
       
       const firebaseConfig = { apiKey: "AIzaSyBZjVdcyjbEoR_-X6_lZuTRDMeN2wIntZI", authDomain: "logi-master-dd4cd.firebaseapp.com", projectId: "logi-master-dd4cd", storageBucket: "logi-master-dd4cd.firebasestorage.app", messagingSenderId: "673000154258", appId: "1:673000154258:web:fc9d6fced43e557076324b" };
-      
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);
       const auth = getAuth(app);
       
-      // Disponibiliza TUDO globalmente para o script.js não falhar
-      window.dbRef = { 
-          db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, 
-          updateDoc, query, where, deleteDoc, getDocs, sendPasswordResetEmail 
-      };
+      // EXPORTAÇÃO GLOBAL SEGURA PARA O SCRIPT.JS
+      window.dbRef = { db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, updateDoc, query, where, deleteDoc, getDocs, addDoc, createUserWithEmailAndPassword };
 
       onAuthStateChanged(auth, async (user) => {
           if (user) {
-              try {
-                  const userSnap = await getDoc(doc(db, "users", user.uid));
-                  if (userSnap.exists()) {
-                      const userData = userSnap.data();
-                      window.currentUser = userData; 
-                      document.body.style.display = 'flex'; // Mostra o corpo só após carregar
-                      
-                      // Preenche sidebar
-                      const elEmail = document.getElementById('userEmailDisplay');
-                      const elRole = document.getElementById('userRoleDisplay');
-                      if(elEmail) elEmail.textContent = userData.email.toUpperCase();
-                      if(elRole) elRole.textContent = userData.role.toUpperCase();
-                      
-                      // Inicia o sistema
-                      setTimeout(() => { 
-                          if (window.initSystemByRole) window.initSystemByRole(userData); 
-                      }, 500);
-                  } else {
-                      console.error("Usuário sem perfil no banco.");
-                      // Fallback opcional ou logout
-                  }
-              } catch (e) {
-                  console.error("Erro no login:", e);
+              const userSnap = await getDoc(doc(db, "users", user.uid));
+              if (userSnap.exists()) {
+                  const userData = userSnap.data();
+                  window.currentUser = userData; 
+                  document.body.style.display = 'flex';
+                  document.getElementById('userEmailDisplay').textContent = userData.email.toUpperCase();
+                  document.getElementById('userRoleDisplay').textContent = userData.role.toUpperCase();
+                  setTimeout(() => { if (window.initSystemByRole) window.initSystemByRole(userData); }, 500);
               }
-          } else { 
-              window.location.replace("login.html"); 
-          }
+          } else { window.location.replace("login.html"); }
       });
     </script>
     <script src="script.js" defer></script>
