@@ -2,7 +2,6 @@
 // PARTE 1: CONFIGURAÇÕES, CACHE E UTILITÁRIOS
 // =============================================================================
 
-// CHAVES DO BANCO DE DADOS (FIRESTORE)
 const DB_KEYS = {
     MOTORISTAS: 'db_motoristas',
     VEICULOS: 'db_veiculos',
@@ -16,7 +15,6 @@ const DB_KEYS = {
     PROFILE_REQUESTS: 'db_profile_requests'
 };
 
-// CACHE LOCAL DA APLICAÇÃO (Para não ler o banco toda hora)
 const APP_CACHE = {
     [DB_KEYS.MOTORISTAS]: [], 
     [DB_KEYS.VEICULOS]: [], 
@@ -30,7 +28,6 @@ const APP_CACHE = {
     [DB_KEYS.PROFILE_REQUESTS]: []
 };
 
-// ESTADO GLOBAL
 window.IS_READ_ONLY = false;
 window.CURRENT_USER = null;
 
@@ -43,10 +40,8 @@ function loadData(key) {
 async function saveData(key, value) {
     if (window.IS_READ_ONLY && key !== DB_KEYS.OPERACOES && key !== DB_KEYS.PROFILE_REQUESTS) return;
     
-    // Atualiza Cache Local
     APP_CACHE[key] = value;
     
-    // Salva no Firebase se estiver logado
     if (window.dbRef && window.CURRENT_USER && window.CURRENT_USER.company) {
         try {
             await window.dbRef.setDoc(
@@ -55,15 +50,13 @@ async function saveData(key, value) {
             );
         } catch (e) { 
             console.error("Erro ao salvar no Firebase:", e); 
-            alert("Erro de conexão ao salvar. Tente novamente.");
         }
     } 
 }
 
-// --- UTILITÁRIOS DE FORMATAÇÃO ---
+// --- UTILITÁRIOS ---
 
 const onlyDigits = (v) => (v || '').toString().replace(/\D/g, '');
-
 const formatCurrency = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v)||0);
 
 function formatCPF_CNPJ(v) {
@@ -79,9 +72,7 @@ function formatPhoneBr(v) {
 }
 
 function copyToClipboard(t) { 
-    navigator.clipboard.writeText(t)
-        .then(() => alert("Copiado para a área de transferência!"))
-        .catch(() => alert("Erro ao copiar.")); 
+    navigator.clipboard.writeText(t).then(() => alert("Copiado!"), () => alert("Erro ao copiar.")); 
 }
 
 function detectPixType(k) { 
@@ -91,7 +82,7 @@ function detectPixType(k) {
     return 'OUTRO'; 
 }
 
-// --- GETTERS SEGUROS (Buscam dados pelo ID) ---
+// --- GETTERS SEGUROS ---
 
 function getMotorista(id) { return loadData(DB_KEYS.MOTORISTAS).find(m => String(m.id) === String(id)); }
 function getVeiculo(p) { return loadData(DB_KEYS.VEICULOS).find(v => v.placa === p); }
@@ -100,17 +91,15 @@ function getAjudante(id) { return loadData(DB_KEYS.AJUDANTES).find(a => String(a
 function getAtividade(id) { return loadData(DB_KEYS.ATIVIDADES).find(a => String(a.id) === String(id)); }
 function getMinhaEmpresa() { return loadData(DB_KEYS.MINHA_EMPRESA); }
 
-// --- FUNÇÃO CRÍTICA: PREENCHIMENTO DOS SELECTS (CORRIGIDA) ---
-// Esta função vincula os cadastros aos dropdowns da operação
+// --- POPULAR SELECTS ---
+
 window.populateAllSelects = function() {
-    console.log("Populando selects...");
     populateSelect('selectMotoristaOperacao', loadData(DB_KEYS.MOTORISTAS), 'id', 'nome');
     populateSelect('selectVeiculoOperacao', loadData(DB_KEYS.VEICULOS), 'placa', 'placa');
     populateSelect('selectContratanteOperacao', loadData(DB_KEYS.CONTRATANTES), 'cnpj', 'razaoSocial');
     populateSelect('selectAtividadeOperacao', loadData(DB_KEYS.ATIVIDADES), 'id', 'nome');
     populateSelect('selectAjudantesOperacao', loadData(DB_KEYS.AJUDANTES), 'id', 'nome');
     
-    // Selects de Relatórios e Recibos
     populateSelect('selectMotoristaRelatorio', loadData(DB_KEYS.MOTORISTAS), 'id', 'nome');
     populateSelect('selectVeiculoRelatorio', loadData(DB_KEYS.VEICULOS), 'placa', 'placa');
     populateSelect('selectContratanteRelatorio', loadData(DB_KEYS.CONTRATANTES), 'cnpj', 'razaoSocial');
@@ -119,7 +108,6 @@ window.populateAllSelects = function() {
     populateSelect('selectVeiculoRecibo', loadData(DB_KEYS.VEICULOS), 'placa', 'placa');
     populateSelect('selectContratanteRecibo', loadData(DB_KEYS.CONTRATANTES), 'cnpj', 'razaoSocial');
     
-    // Select de Despesa
     populateSelect('selectVeiculoDespesaGeral', loadData(DB_KEYS.VEICULOS), 'placa', 'placa');
 }
 
@@ -127,50 +115,45 @@ function populateSelect(elementId, dataArray, valueKey, textKey) {
     const select = document.getElementById(elementId);
     if(!select) return;
     
-    const currentValue = select.value; // Mantém seleção se existir
-    let html = '<option value="">SELECIONE...</option>';
+    // Limpa opções anteriores (exceto a primeira se for placeholder padrão)
+    select.innerHTML = '<option value="">SELECIONE...</option>';
     
     if (dataArray && dataArray.length > 0) {
         dataArray.forEach(item => {
-            html += `<option value="${item[valueKey]}">${item[textKey]}</option>`;
+            select.innerHTML += `<option value="${item[valueKey]}">${item[textKey]}</option>`;
         });
-    } else {
-        html = '<option value="">NENHUM CADASTRO ENCONTRADO</option>';
     }
-    
-    select.innerHTML = html;
-    if(currentValue) select.value = currentValue;
 }
 // =============================================================================
 // PARTE 2: UI - TABELAS E MODAIS
 // =============================================================================
 
-// --- RENDERIZAÇÃO DE TABELAS DE CADASTRO (Motorista, Veículo, etc) ---
+// --- RENDERIZAÇÃO GENÉRICA DE TABELAS DE CADASTRO ---
 
 function renderCadastroTable(key) {
     const data = loadData(key);
     let tabela = null;
-    let idKey = 'id'; // Chave padrão para identificar o item
+    let idKey = 'id'; // Chave padrão
 
-    // Identifica qual tabela HTML preencher
+    // Mapeamento da Tabela HTML
     if (key === DB_KEYS.MOTORISTAS) tabela = document.getElementById('tabelaMotoristas');
     else if (key === DB_KEYS.AJUDANTES) tabela = document.getElementById('tabelaAjudantes');
     else if (key === DB_KEYS.VEICULOS) { tabela = document.getElementById('tabelaVeiculos'); idKey='placa'; }
     else if (key === DB_KEYS.CONTRATANTES) { tabela = document.getElementById('tabelaContratantes'); idKey='cnpj'; }
+    else if (key === DB_KEYS.ATIVIDADES) { renderAtividadesTable(); return; } // Tratamento especial
     
     if(!tabela) return;
     
-    // Gera as linhas da tabela
+    // Gera linhas
     let rows = data.map(item => {
-        let c1 = item.id || item.placa || item.cnpj; // Coluna 1 (ID/Placa)
-        let c2 = item.nome || item.modelo || item.razaoSocial; // Coluna 2 (Nome)
-        let c3 = item.documento || item.ano || item.telefone || ''; // Coluna 3 (Extra)
+        let c1 = item.id || item.placa || item.cnpj;
+        let c2 = item.nome || item.modelo || item.razaoSocial;
+        let c3 = item.documento || item.ano || item.telefone || ''; 
         
-        let btns = `<button class="btn-action view-btn" onclick="viewCadastro('${key}','${c1}')" title="Ver Detalhes"><i class="fas fa-eye"></i></button>`;
+        let btns = `<button class="btn-action view-btn" onclick="viewCadastro('${key}','${c1}')" type="button"><i class="fas fa-eye"></i></button>`;
         
         if(!window.IS_READ_ONLY) {
-            // Adiciona aspas simples escapadas \' para strings (placas/cnpjs) funcionarem no onclick
-            btns += `<button class="btn-action delete-btn" onclick="deleteItem('${key}','${c1}')" title="Excluir"><i class="fas fa-trash"></i></button>`;
+            btns += `<button class="btn-action delete-btn" onclick="deleteItem('${key}','${c1}')" type="button"><i class="fas fa-trash"></i></button>`;
         }
         
         return `<tr><td>${c1}</td><td>${c2}</td><td>${c3}</td><td>${btns}</td></tr>`;
@@ -179,59 +162,72 @@ function renderCadastroTable(key) {
     tabela.querySelector('tbody').innerHTML = rows || '<tr><td colspan="4" style="text-align:center">NENHUM DADO CADASTRADO.</td></tr>';
 }
 
-// --- AÇÕES DE CADASTRO (VER / EXCLUIR) ---
+// --- RENDERIZAÇÃO ESPECÍFICA: ATIVIDADES (NOVO) ---
+function renderAtividadesTable() {
+    const data = loadData(DB_KEYS.ATIVIDADES);
+    const tabela = document.getElementById('tabelaAtividades');
+    if(!tabela) return;
 
+    let rows = data.map(item => {
+        // Botão Excluir
+        let btn = !window.IS_READ_ONLY 
+            ? `<button class="btn-action delete-btn" onclick="deleteItem('${DB_KEYS.ATIVIDADES}','${item.id}')" type="button"><i class="fas fa-trash"></i></button>`
+            : '';
+        return `<tr><td>${item.id}</td><td>${item.nome}</td><td>${btn}</td></tr>`;
+    }).join('');
+
+    tabela.querySelector('tbody').innerHTML = rows || '<tr><td colspan="3" style="text-align:center">NENHUMA ATIVIDADE.</td></tr>';
+}
+
+// --- VISUALIZAR DETALHES CADASTRO ---
 window.viewCadastro = function(key, id) {
     let item = null;
-    // Busca o item correto baseado na chave
     if(key===DB_KEYS.MOTORISTAS) item = getMotorista(id);
     else if(key===DB_KEYS.AJUDANTES) item = getAjudante(id);
     else if(key===DB_KEYS.VEICULOS) item = getVeiculo(id);
     else if(key===DB_KEYS.CONTRATANTES) item = getContratante(id);
     
-    if(!item) return alert("Item não encontrado.");
+    if(!item) return;
 
     let html = `<div style="line-height:1.8">`;
     for(let k in item) {
-        // Formata visualmente as chaves e valores
         if(typeof item[k] !== 'object' && item[k] !== '') {
             html += `<b>${k.toUpperCase()}:</b> ${item[k]}<br>`;
         }
     }
     html += `</div>`;
-    
-    openViewModal("DETALHES DO CADASTRO", html);
+    openViewModal("DETALHES", html);
 }
 
+// --- EXCLUIR ITEM ---
 window.deleteItem = function(key, id) {
     if(window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA.");
-    if(!confirm("TEM CERTEZA QUE DESEJA EXCLUIR ESTE ITEM?")) return;
+    if(!confirm("CONFIRMA A EXCLUSÃO DESTE ITEM?")) return;
     
     let arr = loadData(key);
     let idKey = (key===DB_KEYS.VEICULOS)?'placa':(key===DB_KEYS.CONTRATANTES?'cnpj':'id');
     
-    // Filtra removendo o item selecionado
+    // Filtra removendo o item
     const newArr = arr.filter(i => String(i[idKey]) !== String(id));
-    
     saveData(key, newArr);
     
-    // Atualiza a tabela correspondente e os selects globais
-    renderCadastroTable(key);
-    if(typeof renderOperacaoTable === 'function') renderOperacaoTable();
-    if(typeof populateAllSelects === 'function') populateAllSelects();
+    // Atualiza tabelas e selects
+    if(key === DB_KEYS.ATIVIDADES) renderAtividadesTable();
+    else renderCadastroTable(key);
+    
+    populateAllSelects();
+    if(key === DB_KEYS.DESPESAS_GERAIS && typeof renderDespesasTable === 'function') renderDespesasTable();
+    if(key === DB_KEYS.OPERACOES && typeof renderOperacaoTable === 'function') renderOperacaoTable();
 }
 
-// --- RENDERIZAÇÃO DA TABELA DE OPERAÇÕES (CORRIGIDO) ---
-
+// --- TABELA DE OPERAÇÕES ---
 window.renderOperacaoTable = function() {
-    // Carrega e ordena por data (mais recente primeiro)
     const ops = loadData(DB_KEYS.OPERACOES).slice().sort((a, b) => new Date(b.data) - new Date(a.data));
     const tabela = document.getElementById('tabelaOperacoes');
     
     if (!tabela || !tabela.querySelector('tbody')) return;
     
-    // OTIMIZAÇÃO: Mostra apenas as últimas 50 para não travar o navegador
-    const opsExibidas = ops.slice(0, 50);
+    const opsExibidas = ops.slice(0, 50); // Otimização
 
     if (!opsExibidas.length) {
         tabela.querySelector('tbody').innerHTML = '<tr><td colspan="5" style="text-align:center;">NENHUMA OPERAÇÃO LANÇADA.</td></tr>';
@@ -240,51 +236,43 @@ window.renderOperacaoTable = function() {
 
     let rows = '';
     opsExibidas.forEach(op => {
-        const motorista = getMotorista(op.motoristaId)?.nome || 'MOTORISTA EXCLUÍDO/NÃO ENC.';
-        // Ajuste de fuso horário simples para exibição correta da data
-        const partesData = op.data.split('-'); 
-        const dataFmt = `${partesData[2]}/${partesData[1]}/${partesData[0]}`;
+        const motorista = getMotorista(op.motoristaId)?.nome || 'MOTORISTA EXCLUÍDO';
+        const dataFmt = op.data.split('-').reverse().join('/');
         
-        // Badge de Status
         let statusBadge = '';
         if (op.status === 'AGENDADA') statusBadge = '<span style="background:orange; color:white; padding:2px 6px; border-radius:4px; font-size:0.7rem;">AGENDADA</span>';
         else if (op.status === 'EM_ANDAMENTO') statusBadge = '<span style="background:#0288d1; color:white; padding:2px 6px; border-radius:4px; font-size:0.7rem;">EM ANDAMENTO</span>';
         else statusBadge = '<span style="background:green; color:white; padding:2px 6px; border-radius:4px; font-size:0.7rem;">CONFIRMADA</span>';
 
-        const faturamentoDisplay = op.status === 'CONFIRMADA' ? formatCurrency(op.faturamento) : '(PENDENTE)';
-
-        // Botões de Ação
-        let btns = `<button class="btn-action view-btn" onclick="viewOperacaoDetails(${op.id})" title="Ver Detalhes"><i class="fas fa-eye"></i></button>`;
-        
+        let btns = `<button class="btn-action view-btn" onclick="viewOperacaoDetails(${op.id})" type="button"><i class="fas fa-eye"></i></button>`;
         if (!window.IS_READ_ONLY) {
-            btns += `<button class="btn-action edit-btn" onclick="editOperacaoItem(${op.id})" title="Editar"><i class="fas fa-edit"></i></button>`;
-            btns += `<button class="btn-action delete-btn" onclick="deleteItem('${DB_KEYS.OPERACOES}', ${op.id})" title="Excluir"><i class="fas fa-trash"></i></button>`;
+            btns += `<button class="btn-action edit-btn" onclick="editOperacaoItem(${op.id})" type="button"><i class="fas fa-edit"></i></button>`;
+            btns += `<button class="btn-action delete-btn" onclick="deleteItem('${DB_KEYS.OPERACOES}', ${op.id})" type="button"><i class="fas fa-trash"></i></button>`;
         }
 
         rows += `<tr>
             <td>${dataFmt}</td>
             <td>${motorista}</td>
             <td>${statusBadge}</td>
-            <td>${faturamentoDisplay}</td>
+            <td>${formatCurrency(op.faturamento)}</td>
             <td>${btns}</td>
         </tr>`;
     });
-    
     tabela.querySelector('tbody').innerHTML = rows;
 }
 
-// --- EDIÇÃO DE OPERAÇÃO (Carrega dados no formulário) ---
+// --- EDIÇÃO DE OPERAÇÃO (CORREÇÃO DO STATUS/CHECKBOX) ---
 window.editOperacaoItem = function(id) {
     if (window.IS_READ_ONLY) return alert("PERFIL SOMENTE LEITURA.");
     
     const op = loadData(DB_KEYS.OPERACOES).find(o => o.id === id);
     if (!op) return alert("Operação não encontrada.");
     
-    // Rola a página até o formulário
+    // Vai para a aba
     document.querySelector('[data-page="operacoes"]').click();
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    // Preenche os campos
+    // Preenche
     document.getElementById('operacaoId').value = op.id;
     document.getElementById('operacaoData').value = op.data;
     document.getElementById('selectMotoristaOperacao').value = op.motoristaId || "";
@@ -292,7 +280,6 @@ window.editOperacaoItem = function(id) {
     document.getElementById('selectContratanteOperacao').value = op.contratanteCNPJ || "";
     document.getElementById('selectAtividadeOperacao').value = op.atividadeId || "";
     
-    // Campos Financeiros
     document.getElementById('operacaoFaturamento').value = op.faturamento || "";
     document.getElementById('operacaoAdiantamento').value = op.adiantamento || "";
     document.getElementById('operacaoComissao').value = op.comissao || "";
@@ -301,100 +288,62 @@ window.editOperacaoItem = function(id) {
     document.getElementById('operacaoDespesas').value = op.despesas || "";
     document.getElementById('operacaoKmRodado').value = op.kmRodado || "";
     
-    // Checkbox Agendamento
-    document.getElementById('operacaoIsAgendamento').checked = (op.status === 'AGENDADA');
+    // --- CORREÇÃO IMPORTANTE: CHECKBOX DE AGENDAMENTO ---
+    // Se o status for AGENDADA, marca o checkbox.
+    const isAgendada = (op.status === 'AGENDADA');
+    document.getElementById('operacaoIsAgendamento').checked = isAgendada;
 
-    // Restaura lista temporária de ajudantes para edição
+    // Restaura ajudantes
     window._operacaoAjudantesTempList = (op.ajudantes || []).slice();
-    renderAjudantesAdicionadosList(); // Função definida na parte 4
+    renderAjudantesAdicionadosList(); // Definida na parte 3
     
-    alert(`EDITANDO OPERAÇÃO ID: ${id}\nFaça as alterações e clique em SALVAR.`);
+    alert(`EDITANDO OPERAÇÃO ID: ${id}`);
 }
 
-// --- DETALHES DA OPERAÇÃO (MODAL) ---
-
+// --- MODAIS ---
 window.viewOperacaoDetails = function(id) {
     const op = loadData(DB_KEYS.OPERACOES).find(o => o.id === id);
-    if (!op) return alert('OPERAÇÃO NÃO ENCONTRADA.');
+    if (!op) return;
     
-    const isFinalizada = op.status === 'CONFIRMADA';
     const motorista = getMotorista(op.motoristaId)?.nome || 'N/A';
-    const contratante = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
+    const contratante = getContratante(op.contratanteCNPJ)?.razaoSocial || '--';
     
-    // Renderiza lista de ajudantes com status de presença
     const ajudantesHtml = (op.ajudantes || []).map(a => {
-        const aj = getAjudante(a.id) || {};
-        const checkins = op.checkins || { ajudantes: [] };
-        const presente = checkins.ajudantes && checkins.ajudantes.includes(a.id);
-        
-        let statusPresenca = '';
-        if(isFinalizada) {
-            statusPresenca = presente ? '<span style="color:green;font-size:0.7rem;font-weight:bold;"> (PRESENTE)</span>' : '<span style="color:red;font-size:0.7rem;"> (FALTA)</span>';
-        }
-        
-        return `<li>${aj.nome || 'ID:'+a.id} — DIÁRIA: ${formatCurrency(Number(a.diaria)||0)} ${statusPresenca}</li>`;
-    }).join('') || '<li>NENHUM AJUDANTE</li>';
+        const nome = getAjudante(a.id)?.nome || 'ID:'+a.id;
+        return `<li>${nome} - R$ ${formatCurrency(a.diaria)}</li>`;
+    }).join('') || '<li>Nenhum</li>';
 
-    // Monta o HTML do Modal
-    let detailsHtml = '';
-    
-    // Cálculos Financeiros Básicos para exibição
-    const totalDiarias = (op.ajudantes || []).reduce((s, a) => s + (Number(a.diaria)||0), 0); // Soma brutas (sem verificar presença aqui para simplificar a visualização prévia, ou refinamos depois)
-    const saldoReceber = (op.faturamento || 0) - (op.adiantamento || 0);
-
-    detailsHtml = `
-        <div style="background:#f8f9fa; padding:15px; border-radius:8px; margin-bottom:15px;">
-            <p><strong>STATUS:</strong> ${op.status}</p>
-            <p><strong>DATA:</strong> ${op.data.split('-').reverse().join('/')}</p>
-            <p><strong>MOTORISTA:</strong> ${motorista}</p>
-            <p><strong>VEÍCULO:</strong> ${op.veiculoPlaca}</p>
-            <p><strong>CONTRATANTE:</strong> ${contratante}</p>
-        </div>
-
-        <h4 style="border-bottom:1px solid #eee; padding-bottom:5px; color:var(--primary-color);">FINANCEIRO</h4>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:15px;">
-            <div>
-                <p><strong>FATURAMENTO:</strong> ${formatCurrency(op.faturamento)}</p>
-                <p><strong>ADIANTAMENTO:</strong> ${formatCurrency(op.adiantamento)}</p>
-                <p style="font-weight:bold; color:var(--primary-color);">A RECEBER: ${formatCurrency(saldoReceber)}</p>
-            </div>
-            <div>
-                <p><strong>COMISSÃO:</strong> ${formatCurrency(op.comissao)}</p>
-                <p><strong>ABASTECIMENTO:</strong> ${formatCurrency(op.combustivel)}</p>
-                <p><strong>OUTRAS DESP.:</strong> ${formatCurrency(op.despesas)}</p>
-            </div>
-        </div>
-
-        <h4 style="border-bottom:1px solid #eee; padding-bottom:5px; color:var(--secondary-color);">EQUIPE</h4>
-        <ul style="margin-left:20px; margin-bottom:10px;">${ajudantesHtml}</ul>
-        
-        ${op.kmRodado ? `<p style="background:#e0f2f1; padding:10px; border-radius:4px;"><strong>KM PERCORRIDO:</strong> ${op.kmRodado} KM</p>` : ''}
+    const html = `
+        <p><strong>STATUS:</strong> ${op.status}</p>
+        <p><strong>DATA:</strong> ${op.data.split('-').reverse().join('/')}</p>
+        <p><strong>MOTORISTA:</strong> ${motorista}</p>
+        <p><strong>VEÍCULO:</strong> ${op.veiculoPlaca}</p>
+        <p><strong>CONTRATANTE:</strong> ${contratante}</p>
+        <hr>
+        <p><strong>FATURAMENTO:</strong> ${formatCurrency(op.faturamento)}</p>
+        <p><strong>COMISSÃO:</strong> ${formatCurrency(op.comissao)}</p>
+        <p><strong>ABASTECIMENTO:</strong> ${formatCurrency(op.combustivel)}</p>
+        <p><strong>DESPESAS:</strong> ${formatCurrency(op.despesas)}</p>
+        <p><strong>LUCRO EST.:</strong> ${formatCurrency((op.faturamento||0) - ((op.combustivel||0) + (op.comissao||0) + (op.despesas||0)))}</p>
+        <hr>
+        <strong>EQUIPE:</strong>
+        <ul>${ajudantesHtml}</ul>
     `;
-
-    openOperationDetails('DETALHES DA OPERAÇÃO', detailsHtml);
+    openOperationDetails("DETALHES DA OPERAÇÃO", html);
 }
 
-// --- FUNÇÕES AUXILIARES DE MODAL ---
-
-function openViewModal(title, htmlContent) {
-    document.getElementById('viewItemTitle').textContent = title.toUpperCase();
-    document.getElementById('viewItemBody').innerHTML = htmlContent;
+function openViewModal(title, html) {
+    document.getElementById('viewItemTitle').textContent = title;
+    document.getElementById('viewItemBody').innerHTML = html;
     document.getElementById('viewItemModal').style.display = 'block';
 }
-
-function closeViewModal() {
-    document.getElementById('viewItemModal').style.display = 'none';
-}
-
-function openOperationDetails(title, htmlContent) {
-    document.getElementById('modalTitle').textContent = title.toUpperCase();
-    document.getElementById('modalBodyContent').innerHTML = htmlContent;
+function closeViewModal() { document.getElementById('viewItemModal').style.display = 'none'; }
+function openOperationDetails(title, html) {
+    document.getElementById('modalTitle').textContent = title;
+    document.getElementById('modalBodyContent').innerHTML = html;
     document.getElementById('operationDetailsModal').style.display = 'block';
 }
-
-function closeModal() {
-    document.getElementById('operationDetailsModal').style.display = 'none';
-}
+function closeModal() { document.getElementById('operationDetailsModal').style.display = 'none'; }
 // =============================================================================
 // PARTE 3: LÓGICA DE FORMULÁRIOS E OPERAÇÕES (CRUD)
 // =============================================================================
@@ -408,20 +357,14 @@ function setupFormHandlers() {
         let arr = loadData(DB_KEYS.MOTORISTAS).slice();
         const idHidden = document.getElementById('motoristaId').value;
         const isEdit = !!idHidden;
-        
-        // Gera ID novo se não for edição
-        const newId = isEdit ? Number(idHidden) : (Date.now()); 
+        const newId = isEdit ? Number(idHidden) : Date.now();
         const nome = document.getElementById('motoristaNome').value.toUpperCase();
-        
-        // Sugere e-mail se for novo
-        let email = "";
-        if(!isEdit && window.CURRENT_USER) {
+
+        // Sugestão de email para login (apenas visual, criação real é feita pelo admin)
+        let email = isEdit ? (arr.find(x=>x.id==newId)?.email || "") : "";
+        if(!email && window.CURRENT_USER) {
              const cleanName = nome.split(' ')[0].toLowerCase().replace(/[^a-z]/g, '');
              email = `${cleanName}@${window.CURRENT_USER.company}`;
-             alert(`ATENÇÃO: O LOGIN SUGERIDO PARA ESTE MOTORISTA SERÁ: ${email}\n(A senha deve ser criada no primeiro acesso ou pelo admin)`);
-        } else if (isEdit) {
-            const existing = arr.find(x => x.id == newId);
-            if(existing) email = existing.email;
         }
 
         const obj = {
@@ -436,7 +379,7 @@ function setupFormHandlers() {
             cursoDescricao: document.getElementById('motoristaCursoDescricao').value.toUpperCase(),
             pix: document.getElementById('motoristaPix').value,
             email: email,
-            uid: isEdit ? (arr.find(x=>x.id==newId)?.uid || null) : null // Mantém UID se existir
+            uid: isEdit ? (arr.find(x=>x.id==newId)?.uid || null) : null
         };
 
         if(isEdit) {
@@ -450,8 +393,8 @@ function setupFormHandlers() {
         fMot.reset();
         document.getElementById('motoristaId').value = '';
         renderCadastroTable(DB_KEYS.MOTORISTAS);
-        populateAllSelects(); // ATUALIZA OS SELECTS DA OPERAÇÃO IMEDIATAMENTE
-        alert("Motorista salvo com sucesso!");
+        populateAllSelects(); // Atualiza dropdowns imediatamente
+        alert("Motorista salvo!");
     });
 
     // --- 2. CADASTRO DE VEÍCULO ---
@@ -469,14 +412,13 @@ function setupFormHandlers() {
             chassi: document.getElementById('veiculoChassi').value
         };
 
-        // Remove anterior se existir (update simples por substituição)
         const arrFiltered = arr.filter(x => x.placa !== placa);
         arrFiltered.push(obj);
         
         saveData(DB_KEYS.VEICULOS, arrFiltered);
         fVeic.reset();
         renderCadastroTable(DB_KEYS.VEICULOS);
-        populateAllSelects(); // ATUALIZA SELECTS
+        populateAllSelects();
         alert("Veículo salvo!");
     });
 
@@ -499,8 +441,8 @@ function setupFormHandlers() {
         saveData(DB_KEYS.CONTRATANTES, arrFiltered);
         fCont.reset();
         renderCadastroTable(DB_KEYS.CONTRATANTES);
-        populateAllSelects(); // ATUALIZA SELECTS
-        alert("Contratante salvo!");
+        populateAllSelects();
+        alert("Contratante salva!");
     });
 
     // --- 4. CADASTRO DE AJUDANTE ---
@@ -512,14 +454,11 @@ function setupFormHandlers() {
         const isEdit = !!idHidden;
         const newId = isEdit ? Number(idHidden) : Date.now();
         const nome = document.getElementById('ajudanteNome').value.toUpperCase();
-
-        // Lógica de email sugerido
-        let email = "";
-        if(!isEdit && window.CURRENT_USER) {
+        
+        let email = isEdit ? (arr.find(x=>x.id==newId)?.email || "") : "";
+        if(!email && window.CURRENT_USER) {
              const cleanName = nome.split(' ')[0].toLowerCase().replace(/[^a-z]/g, '');
              email = `${cleanName}@${window.CURRENT_USER.company}`;
-        } else if (isEdit) {
-            email = arr.find(x => x.id == newId)?.email || "";
         }
 
         const obj = {
@@ -544,11 +483,11 @@ function setupFormHandlers() {
         fAju.reset();
         document.getElementById('ajudanteId').value = '';
         renderCadastroTable(DB_KEYS.AJUDANTES);
-        populateAllSelects(); // ATUALIZA SELECTS
+        populateAllSelects();
         alert("Ajudante salvo!");
     });
 
-    // --- 5. CADASTRO DE ATIVIDADE ---
+    // --- 5. CADASTRO DE ATIVIDADE (CORRIGIDO) ---
     const fAtiv = document.getElementById('formAtividade');
     if(fAtiv) fAtiv.addEventListener('submit', e => {
         e.preventDefault();
@@ -560,7 +499,8 @@ function setupFormHandlers() {
         arr.push(obj);
         saveData(DB_KEYS.ATIVIDADES, arr);
         fAtiv.reset();
-        populateAllSelects();
+        renderAtividadesTable(); // Atualiza a tabela nova
+        populateAllSelects();    // Atualiza o select da operação
         alert("Atividade salva!");
     });
 
@@ -574,86 +514,24 @@ function setupFormHandlers() {
             telefone: document.getElementById('minhaEmpresaTelefone').value
         };
         saveData(DB_KEYS.MINHA_EMPRESA, obj);
-        renderMinhaEmpresaInfo(); // Atualiza visualização
+        renderMinhaEmpresaInfo();
         alert("Dados da empresa atualizados.");
     });
 
-    // --- 7. DESPESA GERAL (COM PARCELAMENTO) ---
-    const fDesp = document.getElementById('formDespesaGeral');
-    if(fDesp) fDesp.addEventListener('submit', e => {
-        e.preventDefault();
-        let arr = loadData(DB_KEYS.DESPESAS_GERAIS).slice();
-        const idHidden = document.getElementById('despesaGeralId').value;
+    // --- 7. MENSAGENS INTERNAS (CORRIGIDO REDIRECIONAMENTO) ---
+    const fMsg = document.getElementById('formAdminMessage');
+    if(fMsg) fMsg.addEventListener('submit', e => {
+        e.preventDefault(); // Impede recarregar a página
+        const texto = document.getElementById('msgTextAdmin').value;
+        if(!texto) return;
         
-        // Captura dados comuns
-        const dataBase = document.getElementById('despesaGeralData').value;
-        const veiculo = document.getElementById('selectVeiculoDespesaGeral').value;
-        const desc = document.getElementById('despesaGeralDescricao').value.toUpperCase();
-        const valorTotal = Number(document.getElementById('despesaGeralValor').value);
-        const forma = document.getElementById('despesaFormaPagamento').value;
-        const modo = document.getElementById('despesaModoPagamento').value; // avista ou parcelado
-
-        if(idHidden) {
-            // Edição Simples (Não altera parcelas, apenas dados do registro)
-            const idx = arr.findIndex(x => x.id == idHidden);
-            if(idx >= 0) {
-                arr[idx].data = dataBase;
-                arr[idx].veiculoPlaca = veiculo;
-                arr[idx].descricao = desc;
-                arr[idx].valor = valorTotal;
-                arr[idx].formaPagamento = forma;
-            }
-        } else {
-            // Novo Lançamento
-            if(modo === 'avista') {
-                arr.push({
-                    id: Date.now(),
-                    data: dataBase,
-                    veiculoPlaca: veiculo,
-                    descricao: desc,
-                    valor: valorTotal,
-                    formaPagamento: forma,
-                    pago: true // À vista já nasce pago? Geralmente sim, ou pendente. Vamos assumir PAGO se for dinheiro/pix na hora, mas deixarei false para o usuario confirmar na tabela.
-                    // Ajuste: Deixar padrao false (pendente) pra garantir controle, ou true.
-                    // Decisão: false (Pendente) para controle de fluxo de caixa, usuário marca pago.
-                });
-            } else {
-                // Parcelado Logic
-                const qtd = Number(document.getElementById('despesaParcelas').value);
-                const intervalo = Number(document.getElementById('despesaIntervaloDias').value);
-                const pagas = Number(document.getElementById('despesaParcelasPagas').value);
-                const valorParcela = valorTotal / qtd;
-                
-                let baseDateObj = new Date(dataBase + 'T00:00:00');
-                
-                for(let i=0; i<qtd; i++) {
-                    // Calcula data da parcela
-                    let d = new Date(baseDateObj);
-                    d.setDate(d.getDate() + (i * intervalo));
-                    const dataIso = d.toISOString().split('T')[0];
-                    
-                    arr.push({
-                        id: Date.now() + i, // ID único sequencial
-                        data: dataIso,
-                        veiculoPlaca: veiculo,
-                        descricao: `${desc} (${i+1}/${qtd})`,
-                        valor: Number(valorParcela.toFixed(2)),
-                        formaPagamento: forma,
-                        pago: (i < pagas) // Se já disse que pagou X, as primeiras nascem pagas
-                    });
-                }
-            }
-        }
-
-        saveData(DB_KEYS.DESPESAS_GERAIS, arr);
-        fDesp.reset();
-        document.getElementById('despesaGeralId').value = '';
-        toggleDespesaParcelas();
-        renderDespesasTable();
-        alert("Despesa(s) lançada(s)!");
+        // Aqui você implementaria o salvamento real no Firebase.
+        // Como exemplo, vamos apenas alertar e limpar.
+        alert("MENSAGEM ENVIADA PARA A EQUIPE!\n(Funcionalidade visual implementada)");
+        fMsg.reset();
     });
 
-    // --- 8. OPERAÇÃO (CORE DO SISTEMA) ---
+    // --- 8. OPERAÇÃO (LÓGICA DE STATUS E SALVAMENTO) ---
     const fOp = document.getElementById('formOperacao');
     if(fOp) fOp.addEventListener('submit', e => {
         e.preventDefault();
@@ -661,19 +539,19 @@ function setupFormHandlers() {
         let arr = loadData(DB_KEYS.OPERACOES).slice();
         const idHidden = document.getElementById('operacaoId').value;
         const isEdit = !!idHidden;
-        const isAgendamento = document.getElementById('operacaoIsAgendamento').checked;
         
-        // Validação básica
+        // CORREÇÃO CRÍTICA: Status baseado no Checkbox
+        const isAgendamento = document.getElementById('operacaoIsAgendamento').checked;
+        const statusFinal = isAgendamento ? 'AGENDADA' : 'CONFIRMADA';
+
         const motId = document.getElementById('selectMotoristaOperacao').value;
         if(!motId) return alert("Selecione um Motorista.");
         
-        // Verifica CNH
         verificarValidadeCNH(motId);
 
         const obj = {
             id: isEdit ? Number(idHidden) : Date.now(),
-            // Se for edição, mantém o status original, senão define pelo checkbox
-            status: isEdit ? (arr.find(o=>o.id==idHidden)?.status || 'CONFIRMADA') : (isAgendamento ? 'AGENDADA' : 'CONFIRMADA'),
+            status: statusFinal, // Força o status correto
             
             data: document.getElementById('operacaoData').value,
             motoristaId: Number(motId),
@@ -681,7 +559,6 @@ function setupFormHandlers() {
             contratanteCNPJ: document.getElementById('selectContratanteOperacao').value,
             atividadeId: document.getElementById('selectAtividadeOperacao').value,
             
-            // Financeiro
             faturamento: Number(document.getElementById('operacaoFaturamento').value),
             adiantamento: Number(document.getElementById('operacaoAdiantamento').value),
             comissao: Number(document.getElementById('operacaoComissao').value),
@@ -690,13 +567,12 @@ function setupFormHandlers() {
             despesas: Number(document.getElementById('operacaoDespesas').value),
             kmRodado: Number(document.getElementById('operacaoKmRodado').value),
             
-            // Controle de Checkin e Ajudantes
             ajudantes: window._operacaoAjudantesTempList || [],
-            // Preserva dados de checkin se for edição, senão inicializa vazio
+            
+            // Mantém dados de checkin existentes se for edição
             checkins: isEdit ? (arr.find(o=>o.id==idHidden)?.checkins || {motorista:false, ajudantes:[], ajudantesLog:{}}) 
                              : {motorista:false, ajudantes:[], ajudantesLog:{}},
             
-            // Preserva KMs de checkin
             kmInicial: isEdit ? (arr.find(o=>o.id==idHidden)?.kmInicial || 0) : 0,
             kmFinal: isEdit ? (arr.find(o=>o.id==idHidden)?.kmFinal || 0) : 0,
             dataHoraInicio: isEdit ? (arr.find(o=>o.id==idHidden)?.dataHoraInicio || null) : null
@@ -711,33 +587,31 @@ function setupFormHandlers() {
 
         saveData(DB_KEYS.OPERACOES, arr);
         
-        // Limpeza
         fOp.reset();
         document.getElementById('operacaoId').value = '';
+        document.getElementById('operacaoIsAgendamento').checked = false; // Reseta checkbox
         window._operacaoAjudantesTempList = [];
         renderAjudantesAdicionadosList();
         
         renderOperacaoTable();
-        // Se houver dashboard ativo, atualiza
+        if(typeof renderCheckinsTable === 'function') renderCheckinsTable(); // Atualiza painel de checkins
         if(typeof updateDashboardStats === 'function') updateDashboardStats();
 
-        alert(isAgendamento ? "Operação Agendada! Enviada para o app do motorista." : "Operação Salva e Confirmada!");
+        alert(isAgendamento ? "Operação Agendada! (Enviada para o Motorista)" : "Operação Salva e Confirmada!");
     });
 }
 
 // =============================================================================
-// LÓGICA DE AJUDANTES DINÂMICOS NA OPERAÇÃO
+// AJUDANTES DINÂMICOS
 // =============================================================================
 
-window._operacaoAjudantesTempList = []; // Array global temporário para o form
+window._operacaoAjudantesTempList = [];
 
-// Callback do Select de Ajudantes
 const selAj = document.getElementById('selectAjudantesOperacao');
 if(selAj) selAj.addEventListener('change', () => {
     const id = selAj.value;
     if(!id) return;
     
-    // Verifica duplicidade
     if(window._operacaoAjudantesTempList.some(x => String(x.id) === String(id))) {
         alert("Este ajudante já está na lista.");
         selAj.value = "";
@@ -747,25 +621,19 @@ if(selAj) selAj.addEventListener('change', () => {
     const ajudante = getAjudante(id);
     if(!ajudante) return;
 
-    // Abre modal para definir valor da diária
     openAdicionarAjudanteModal(ajudante, (dados) => {
         window._operacaoAjudantesTempList.push(dados);
         renderAjudantesAdicionadosList();
-        selAj.value = ""; // Reseta select
+        selAj.value = "";
     });
 });
 
 function renderAjudantesAdicionadosList() {
     const list = document.getElementById('listaAjudantesAdicionados');
     if(!list) return;
-    
     list.innerHTML = window._operacaoAjudantesTempList.map(item => {
         const nome = getAjudante(item.id)?.nome || 'ID '+item.id;
-        // Botão X para remover da lista temporária
-        return `<li>
-            <span>${nome} (R$ ${formatCurrency(item.diaria)})</span>
-            <button type="button" class="btn-mini btn-danger" onclick="removeAjudanteTemp(${item.id})">X</button>
-        </li>`;
+        return `<li><span>${nome} (R$ ${formatCurrency(item.diaria)})</span><button type="button" class="btn-mini btn-danger" onclick="removeAjudanteTemp(${item.id})">X</button></li>`;
     }).join('');
 }
 
@@ -775,32 +643,100 @@ window.removeAjudanteTemp = function(id) {
 }
 
 // =============================================================================
-// LÓGICA UI AUXILIAR
+// FILTRO DE FUNCIONÁRIO (CORRIGIDO)
 // =============================================================================
 
+window.filtrarHistoricoFuncionario = function(e) {
+    if(e) e.preventDefault();
+    if (!window.CURRENT_USER) return;
+
+    const dataIniVal = document.getElementById('empDataInicio').value;
+    const dataFimVal = document.getElementById('empDataFim').value;
+    
+    if(!dataIniVal || !dataFimVal) return alert("Selecione as datas inicial e final.");
+
+    const di = dataIniVal; // YYYY-MM-DD
+    const df = dataFimVal;
+
+    // Busca Perfil Vinculado
+    let myProfileId = null;
+    let isMotorista = (window.CURRENT_USER.role === 'motorista');
+    let myKey = isMotorista ? DB_KEYS.MOTORISTAS : DB_KEYS.AJUDANTES;
+    
+    // Tenta encontrar por UID ou Email
+    const myProfile = loadData(myKey).find(p => p.uid === window.CURRENT_USER.uid || (p.email && p.email === window.CURRENT_USER.email));
+    
+    if (myProfile) myProfileId = myProfile.id;
+    if (!myProfileId) return alert("ERRO: Seu usuário não está vinculado a um cadastro de Motorista/Ajudante.");
+
+    const ops = loadData(DB_KEYS.OPERACOES);
+    let totalReceber = 0;
+    
+    const resultado = ops.filter(op => {
+        if (op.status !== 'CONFIRMADA') return false;
+        if (op.data < di || op.data > df) return false;
+
+        if (isMotorista) {
+            return Number(op.motoristaId) === Number(myProfileId);
+        } else {
+            return (op.ajudantes || []).some(a => Number(a.id) === Number(myProfileId));
+        }
+    }).sort((a,b) => new Date(a.data) - new Date(b.data));
+
+    const tbody = document.getElementById('tabelaHistoricoCompleto').querySelector('tbody');
+    
+    if (resultado.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">NENHUM REGISTRO NESTE PERÍODO.</td></tr>';
+        document.getElementById('empTotalReceber').textContent = 'R$ 0,00';
+        document.getElementById('resultadoFinanceiroFuncionario').style.display = 'none';
+    } else {
+        let html = '';
+        resultado.forEach(op => {
+            const dataFmt = op.data.split('-').reverse().join('/');
+            const contratante = getContratante(op.contratanteCNPJ)?.razaoSocial || '--';
+            
+            let valor = 0;
+            if (isMotorista) {
+                valor = op.comissao || 0;
+            } else {
+                // Ajudante: Verifica presença para somar valor
+                const ajData = (op.ajudantes || []).find(a => Number(a.id) === Number(myProfileId));
+                const checkins = op.checkins || { ajudantes: [] };
+                if (checkins.ajudantes && checkins.ajudantes.includes(myProfileId)) {
+                    valor = Number(ajData.diaria) || 0;
+                }
+            }
+            
+            totalReceber += valor;
+            const styleVal = valor > 0 ? 'color:green; font-weight:bold;' : 'color:red;';
+
+            html += `<tr>
+                <td>${dataFmt}</td>
+                <td>${op.veiculoPlaca}</td>
+                <td>${contratante}</td>
+                <td style="${styleVal}">${formatCurrency(valor)}</td>
+                <td>CONFIRMADA</td>
+            </tr>`;
+        });
+        tbody.innerHTML = html;
+        document.getElementById('empTotalReceber').textContent = formatCurrency(totalReceber);
+        document.getElementById('resultadoFinanceiroFuncionario').style.display = 'block';
+    }
+};
+
+// UI Auxiliar
 function toggleCursoInput() {
     const val = document.getElementById('motoristaTemCurso').value;
     const div = document.getElementById('divCursoDescricao');
-    if (div) div.style.display = val === 'sim' ? 'block' : 'none'; // Corrigido para block/none do container
+    if (div) div.style.display = val === 'sim' ? 'block' : 'none';
 }
 document.getElementById('motoristaTemCurso')?.addEventListener('change', toggleCursoInput);
-
-function toggleDespesaParcelas() {
-    const modo = document.getElementById('despesaModoPagamento').value;
-    const div = document.getElementById('divDespesaParcelas');
-    if(div) div.style.display = (modo === 'parcelado') ? 'flex' : 'none';
-}
 
 function renderMinhaEmpresaInfo() {
     const d = loadData(DB_KEYS.MINHA_EMPRESA);
     const div = document.getElementById('viewMinhaEmpresaContent');
     if(div) {
-        div.innerHTML = `
-            <p><strong>RAZÃO SOCIAL:</strong> ${d.razaoSocial || '--'}</p>
-            <p><strong>CNPJ:</strong> ${d.cnpj || '--'}</p>
-            <p><strong>TELEFONE:</strong> ${d.telefone || '--'}</p>
-        `;
-        // Preenche form também para facilitar edição
+        div.innerHTML = `<p><strong>RAZÃO:</strong> ${d.razaoSocial||''}</p><p><strong>CNPJ:</strong> ${d.cnpj||''}</p>`;
         document.getElementById('minhaEmpresaRazaoSocial').value = d.razaoSocial || '';
         document.getElementById('minhaEmpresaCNPJ').value = d.cnpj || '';
         document.getElementById('minhaEmpresaTelefone').value = d.telefone || '';
@@ -810,12 +746,8 @@ function renderMinhaEmpresaInfo() {
 function verificarValidadeCNH(motId) {
     const m = getMotorista(motId);
     if (!m || !m.validadeCNH) return;
-    const validade = new Date(m.validadeCNH + 'T00:00:00');
-    const hoje = new Date();
-    const diffDays = Math.ceil((validade - hoje) / (1000 * 60 * 60 * 24));
-    
-    if (diffDays < 0) alert(`⚠️ ALERTA CRÍTICO: A CNH DE ${m.nome} VENCEU EM ${validade.toLocaleDateString('pt-BR')}!`);
-    else if (diffDays <= 30) alert(`⚠️ AVISO: A CNH DE ${m.nome} VENCE EM ${diffDays} DIAS.`);
+    const diffDays = Math.ceil((new Date(m.validadeCNH) - new Date()) / (86400000));
+    if (diffDays < 0) alert(`⚠️ AVISO: A CNH DE ${m.nome} ESTÁ VENCIDA!`);
 }
 // =============================================================================
 // PARTE 4: PAINEL DO FUNCIONÁRIO, DASHBOARD E RELATÓRIOS
@@ -828,11 +760,11 @@ window.renderCheckinsTable = function() {
     const ops = loadData(DB_KEYS.OPERACOES);
     const pendentes = ops.filter(o => o.status !== 'CONFIRMADA').sort((a,b) => new Date(a.data) - new Date(b.data));
 
-    // --- A. VISÃO DO ADMIN (Tabela Geral) ---
+    // --- A. VISÃO DO ADMIN (TABELA GERAL) ---
     const tabelaAdmin = document.getElementById('tabelaCheckinsPendentes');
     
-    // Verifica se a tabela existe e se NÃO é funcionário (Admin vê tabela, Func vê Cards)
-    if (tabelaAdmin && (!window.CURRENT_USER || window.CURRENT_USER.role === 'admin')) { 
+    // Só renderiza tabela se ela existir e o usuário for ADMIN
+    if (tabelaAdmin && window.CURRENT_USER && window.CURRENT_USER.role === 'admin') { 
         let rows = '';
         if (!pendentes.length) {
             rows = '<tr><td colspan="6" style="text-align:center; padding:20px;">NENHUMA ROTA ATIVA NO MOMENTO.</td></tr>';
@@ -854,14 +786,14 @@ window.renderCheckinsTable = function() {
                 let ajudantesStatusHtml = (op.ajudantes || []).map(a => {
                     const confirmou = checkins.ajudantes && checkins.ajudantes.includes(a.id);
                     return confirmou 
-                        ? `<i class="fas fa-check-circle" style="color:green; margin-right:5px;" title="Ajudante Confirmado"></i>` 
-                        : `<i class="far fa-clock" style="color:orange; margin-right:5px;" title="Ajudante Pendente"></i>`;
+                        ? `<i class="fas fa-check-circle" style="color:green; margin-right:5px;" title="Confirmado"></i>` 
+                        : `<i class="far fa-clock" style="color:orange; margin-right:5px;" title="Pendente"></i>`;
                 }).join('');
 
                 // Botão de Ação do Admin (Forçar Início)
                 let actionBtn = '';
                 if (op.status === 'AGENDADA') {
-                    actionBtn = `<button class="btn-primary btn-action" style="padding:6px 12px;" onclick="iniciarRotaManual(${op.id})"><i class="fas fa-play"></i> INICIAR</button>`;
+                    actionBtn = `<button class="btn-primary btn-action" style="padding:6px 12px;" onclick="iniciarRotaManual(${op.id})" type="button"><i class="fas fa-play"></i> INICIAR</button>`;
                 } else {
                     actionBtn = `<span style="color:#0288d1; font-size:0.8rem;">EM ROTA</span>`;
                 }
@@ -874,7 +806,7 @@ window.renderCheckinsTable = function() {
                     <td>${statusLabel}</td>
                     <td>
                         ${actionBtn}
-                        <button class="btn-action edit-btn" style="margin-left:5px;" onclick="editOperacaoItem(${op.id})"><i class="fas fa-edit"></i></button>
+                        <button class="btn-action edit-btn" style="margin-left:5px;" onclick="editOperacaoItem(${op.id})" type="button"><i class="fas fa-edit"></i></button>
                     </td>
                 </tr>`;
             });
@@ -882,7 +814,7 @@ window.renderCheckinsTable = function() {
         
         if(tabelaAdmin.querySelector('tbody')) tabelaAdmin.querySelector('tbody').innerHTML = rows;
         
-        // Badge de Notificação no Menu
+        // Badge de Notificação no Menu Lateral
         const badge = document.getElementById('badgeCheckins');
         if (badge) {
             badge.textContent = pendentes.length;
@@ -890,120 +822,125 @@ window.renderCheckinsTable = function() {
         }
     }
 
-    // --- B. VISÃO DO FUNCIONÁRIO (Cards Mobile) ---
+    // --- B. VISÃO DO FUNCIONÁRIO (CARDS MOBILE) ---
+    // Verifica se é funcionário para preencher a lista de "Meus Check-ins"
     if (window.CURRENT_USER && (window.CURRENT_USER.role === 'motorista' || window.CURRENT_USER.role === 'ajudante')) {
+        const listaFunc = document.getElementById('listaServicosAgendados');
+        if(!listaFunc) return; // Se não estiver na tela de funcionário, sai.
+
         const myUid = window.CURRENT_USER.uid;
         const myEmail = window.CURRENT_USER.email;
         let myProfileId = null;
         let isMotorista = (window.CURRENT_USER.role === 'motorista');
         
-        // Identifica ID do cadastro correspondente ao usuário logado
+        // --- BUSCA VÍNCULO DO PERFIL (CRÍTICO) ---
         let myKey = isMotorista ? DB_KEYS.MOTORISTAS : DB_KEYS.AJUDANTES;
-        const myProfile = loadData(myKey).find(p => p.uid === myUid || (p.email && p.email === myEmail));
+        // Tenta achar pelo UID (Login Google/Auth) OU pelo E-mail (Cadastro Admin)
+        const myProfile = loadData(myKey).find(p => p.uid === myUid || (p.email && p.email.toLowerCase() === myEmail.toLowerCase()));
+        
         if (myProfile) myProfileId = myProfile.id;
 
-        const listaFunc = document.getElementById('listaServicosAgendados');
-        
         if (!myProfileId) {
-            if(listaFunc) listaFunc.innerHTML = '<p style="text-align:center; color:red;">SEU PERFIL NÃO ESTÁ VINCULADO. CONTATE O ADMIN.</p>';
+            listaFunc.innerHTML = '<div class="card" style="text-align:center; color:red; border:1px solid red;"><i class="fas fa-exclamation-triangle"></i><br>SEU USUÁRIO NÃO ESTÁ VINCULADO A UM CADASTRO.<br>Peça ao admin para verificar se seu e-mail está correto no cadastro de Motoristas/Ajudantes.</div>';
             return;
         }
 
-        if (listaFunc) {
-            // Filtra apenas as operações deste funcionário
-            const myPendentes = pendentes.filter(op => {
-                if (isMotorista) return op.motoristaId === myProfileId;
-                else return (op.ajudantes || []).some(a => a.id === myProfileId);
+        // Filtra operações onde este ID aparece
+        const myPendentes = pendentes.filter(op => {
+            if (isMotorista) return Number(op.motoristaId) === Number(myProfileId);
+            else return (op.ajudantes || []).some(a => Number(a.id) === Number(myProfileId));
+        });
+
+        if (!myPendentes.length) {
+            listaFunc.innerHTML = '<p style="text-align:center; color:#666; padding:20px;">NENHUMA VIAGEM AGENDADA PARA VOCÊ.</p>';
+        } else {
+            let html = '';
+            myPendentes.forEach(op => {
+                const dataFmt = op.data.split('-').reverse().join('/');
+                const contratante = getContratante(op.contratanteCNPJ)?.razaoSocial || '--';
+                
+                // Info da Equipe
+                let infoEquipeHTML = '';
+                if (isMotorista) {
+                    const nomesAjudantes = (op.ajudantes || []).map(a => {
+                        const aj = getAjudante(a.id);
+                        return aj ? aj.nome.split(' ')[0] : 'ID:'+a.id;
+                    }).join(', ');
+                    infoEquipeHTML = `<p style="font-size:0.85rem; color:#455a64; margin-top:4px;"><i class="fas fa-users"></i> <strong>EQUIPE:</strong> ${nomesAjudantes || 'Ninguém'}</p>`;
+                } else {
+                    const mot = getMotorista(op.motoristaId);
+                    const nomeMot = mot ? mot.nome : 'A DEFINIR';
+                    infoEquipeHTML = `<p style="font-size:0.85rem; color:#455a64; margin-top:4px;"><i class="fas fa-shipping-fast"></i> <strong>MOTORISTA:</strong> ${nomeMot}</p>`;
+                }
+
+                // Botão de Ação (Check-in)
+                let btnHtml = '';
+                if (isMotorista) {
+                    if (op.status === 'AGENDADA') {
+                        btnHtml = `<button class="btn-primary" style="width:100%; margin-top:10px;" onclick="openCheckinConfirmModal(${op.id})" type="button"><i class="fas fa-play"></i> INICIAR VIAGEM</button>`;
+                    } else if (op.status === 'EM_ANDAMENTO') {
+                        btnHtml = `<button class="btn-danger" style="width:100%; margin-top:10px;" onclick="openCheckinConfirmModal(${op.id})" type="button"><i class="fas fa-flag-checkered"></i> FINALIZAR VIAGEM</button>`;
+                    }
+                } else {
+                    // Ajudante
+                    const checkins = op.checkins || { ajudantes: [] };
+                    const jaConfirmei = checkins.ajudantes && checkins.ajudantes.includes(myProfileId);
+                    if (jaConfirmei) {
+                        btnHtml = `<button class="btn-success" disabled style="width:100%; margin-top:10px; opacity:0.8;"><i class="fas fa-check"></i> PRESENÇA CONFIRMADA</button>`;
+                    } else {
+                        btnHtml = `<button class="btn-primary" style="width:100%; margin-top:10px;" onclick="openCheckinConfirmModal(${op.id})" type="button"><i class="fas fa-user-check"></i> MARCAR PRESENÇA</button>`;
+                    }
+                }
+
+                html += `<div class="card" style="border-left: 5px solid var(--primary-color); margin-bottom:15px;">
+                    <h4 style="color:var(--primary-color); margin-bottom:5px;">${dataFmt} - ${op.veiculoPlaca}</h4>
+                    <p style="margin-bottom:2px;"><strong>CLIENTE:</strong> ${contratante}</p>
+                    ${infoEquipeHTML}
+                    <p style="margin-top:5px; font-size:0.85rem;">STATUS: <strong>${op.status.replace('_',' ')}</strong></p>
+                    ${btnHtml}
+                </div>`;
             });
-
-            if (!myPendentes.length) {
-                listaFunc.innerHTML = '<p style="text-align:center; color:#666; padding:20px;">VOCÊ NÃO TEM VIAGENS AGENDADAS.</p>';
-            } else {
-                let html = '';
-                myPendentes.forEach(op => {
-                    const dataFmt = op.data.split('-').reverse().join('/');
-                    const contratante = getContratante(op.contratanteCNPJ)?.razaoSocial || op.contratanteCNPJ;
-                    
-                    // Visualização da Equipe no Card
-                    let infoEquipeHTML = '';
-                    if (isMotorista) {
-                        const nomesAjudantes = (op.ajudantes || []).map(a => {
-                            const aj = getAjudante(a.id);
-                            return aj ? aj.nome.split(' ')[0] : 'ID:'+a.id;
-                        }).join(', ');
-                        
-                        infoEquipeHTML = `<p style="font-size:0.85rem; color:#455a64; margin-top:4px;"><i class="fas fa-users"></i> <strong>EQUIPE:</strong> ${nomesAjudantes || 'Ninguém'}</p>`;
-                    } else {
-                        const mot = getMotorista(op.motoristaId);
-                        const nomeMot = mot ? mot.nome : 'A DEFINIR';
-                        infoEquipeHTML = `<p style="font-size:0.85rem; color:#455a64; margin-top:4px;"><i class="fas fa-shipping-fast"></i> <strong>MOTORISTA:</strong> ${nomeMot}</p>`;
-                    }
-
-                    // Botão de Ação (Check-in)
-                    let btnHtml = '';
-                    if (isMotorista) {
-                        if (op.status === 'AGENDADA') {
-                            btnHtml = `<button class="btn-primary" style="width:100%; margin-top:10px;" onclick="openCheckinConfirmModal(${op.id})"><i class="fas fa-play"></i> INICIAR VIAGEM</button>`;
-                        } else if (op.status === 'EM_ANDAMENTO') {
-                            btnHtml = `<button class="btn-danger" style="width:100%; margin-top:10px;" onclick="openCheckinConfirmModal(${op.id})"><i class="fas fa-flag-checkered"></i> FINALIZAR VIAGEM</button>`;
-                        }
-                    } else {
-                        // Lógica Ajudante
-                        const checkins = op.checkins || { ajudantes: [] };
-                        const jaConfirmei = checkins.ajudantes && checkins.ajudantes.includes(myProfileId);
-                        if (jaConfirmei) {
-                            btnHtml = `<button class="btn-success" disabled style="width:100%; margin-top:10px; opacity:0.8;"><i class="fas fa-check"></i> PRESENÇA CONFIRMADA</button>`;
-                        } else {
-                            btnHtml = `<button class="btn-primary" style="width:100%; margin-top:10px;" onclick="openCheckinConfirmModal(${op.id})"><i class="fas fa-user-check"></i> MARCAR PRESENÇA</button>`;
-                        }
-                    }
-
-                    html += `<div class="card" style="border-left: 5px solid var(--primary-color);">
-                        <h4 style="color:var(--primary-color); margin-bottom:5px;">${dataFmt} - ${op.veiculoPlaca}</h4>
-                        <p style="margin-bottom:2px;"><strong>CLIENTE:</strong> ${contratante}</p>
-                        ${infoEquipeHTML}
-                        <p style="margin-top:5px; font-size:0.85rem;">STATUS: <strong>${op.status.replace('_',' ')}</strong></p>
-                        ${btnHtml}
-                    </div>`;
-                });
-                listaFunc.innerHTML = html;
-            }
+            listaFunc.innerHTML = html;
         }
     }
 }
 
-// --- MODAL DE CHECK-IN (Prepara UI) ---
+// --- MODAL DE CHECK-IN (LÓGICA DE ABERTURA) ---
 window.openCheckinConfirmModal = function(opId) {
     document.getElementById('checkinOpId').value = opId;
     const op = loadData(DB_KEYS.OPERACOES).find(o => String(o.id) === String(opId));
-    
+    if(!op) return;
+
     // Preenche dados visuais
     document.getElementById('checkinDisplayData').textContent = op.data.split('-').reverse().join('/');
     document.getElementById('checkinDisplayContratante').textContent = getContratante(op.contratanteCNPJ)?.razaoSocial || '--';
     document.getElementById('checkinDisplayVeiculo').textContent = op.veiculoPlaca;
 
-    // Configura campos baseados no papel e status
+    // Configura campos baseado no papel
     if(window.CURRENT_USER.role === 'motorista') {
         document.getElementById('checkinDriverFields').style.display = 'block';
         if(op.status === 'AGENDADA') {
             document.getElementById('checkinStep').value = 'start';
             document.getElementById('divKmInicial').style.display = 'block';
             document.getElementById('divKmFinal').style.display = 'none';
-            document.getElementById('btnConfirmCheckin').innerHTML = 'CONFIRMAR INÍCIO';
-            document.getElementById('btnConfirmCheckin').className = 'btn-primary';
+            const btn = document.getElementById('btnConfirmCheckin');
+            btn.innerHTML = 'CONFIRMAR INÍCIO';
+            btn.className = 'btn-primary';
         } else {
             document.getElementById('checkinStep').value = 'end';
             document.getElementById('divKmInicial').style.display = 'none';
             document.getElementById('divKmFinal').style.display = 'block';
             document.getElementById('checkinKmInicialReadonly').value = op.kmInicial;
-            document.getElementById('btnConfirmCheckin').innerHTML = 'FINALIZAR VIAGEM';
-            document.getElementById('btnConfirmCheckin').className = 'btn-danger';
+            const btn = document.getElementById('btnConfirmCheckin');
+            btn.innerHTML = 'FINALIZAR VIAGEM';
+            btn.className = 'btn-danger';
         }
     } else {
-        // Ajudante só confirma
+        // Ajudante
         document.getElementById('checkinStep').value = 'presence';
         document.getElementById('checkinDriverFields').style.display = 'none';
         document.getElementById('btnConfirmCheckin').innerHTML = 'CONFIRMAR PRESENÇA';
+        document.getElementById('btnConfirmCheckin').className = 'btn-primary';
     }
     
     document.getElementById('modalCheckinConfirm').style.display = 'block';
@@ -1013,14 +950,27 @@ window.closeCheckinConfirmModal = function() {
     document.getElementById('modalCheckinConfirm').style.display = 'none';
 }
 
+window.iniciarRotaManual = function(opId) {
+    if(!confirm("Deseja forçar o início desta rota manualmente?")) return;
+    let arr = loadData(DB_KEYS.OPERACOES);
+    let op = arr.find(o => o.id == opId);
+    if(op) { 
+        op.status = 'EM_ANDAMENTO'; 
+        saveData(DB_KEYS.OPERACOES, arr); 
+        renderCheckinsTable(); 
+        renderOperacaoTable();
+    }
+}
+
+
 // =============================================================================
-// DASHBOARD, GRÁFICOS E CALENDÁRIO (ADMIN)
+// DASHBOARD, GRÁFICOS E RELATÓRIOS (ADMIN)
 // =============================================================================
 
-let currentDate = new Date(); // Data base para calendário/dashboard
+let currentDate = new Date();
 
 window.updateDashboardStats = function() {
-    // PROTEÇÃO: Se não existir o elemento, é porque estamos no Super Admin ou outra tela.
+    // PROTEÇÃO: Se não existir o elemento (ex: Tela Super Admin), não faz nada.
     if (!document.getElementById('faturamentoMes')) return;
 
     const ops = loadData(DB_KEYS.OPERACOES);
@@ -1031,7 +981,6 @@ window.updateDashboardStats = function() {
     let totalFat = 0;
     let totalCustos = 0;
 
-    // Filtra operações do mês atual selecionado
     const opsMes = ops.filter(op => {
         if(op.status !== 'CONFIRMADA') return false;
         const d = new Date(op.data + 'T00:00:00');
@@ -1041,22 +990,15 @@ window.updateDashboardStats = function() {
     opsMes.forEach(op => {
         totalFat += (op.faturamento || 0);
         
-        const custoComb = Number(op.combustivel) || 0;
         const checkins = op.checkins || { ajudantes: [] };
-        
-        // Custo com ajudantes
         const totalDiarias = (op.ajudantes || []).reduce((s, a) => {
-            // Só soma se ajudante confirmou presença
-            if (checkins.ajudantes && checkins.ajudantes.includes(a.id)) {
-                return s + (Number(a.diaria) || 0);
-            }
+            if (checkins.ajudantes && checkins.ajudantes.includes(a.id)) return s + (Number(a.diaria) || 0);
             return s;
         }, 0);
 
-        totalCustos += custoComb + (op.comissao || 0) + totalDiarias + (op.despesas || 0);
+        totalCustos += (Number(op.combustivel)||0) + (op.comissao || 0) + totalDiarias + (op.despesas || 0);
     });
 
-    // Soma despesas gerais do mês
     const totalDespGeral = despesas.filter(d => {
         const dataD = new Date(d.data + 'T00:00:00');
         return dataD.getMonth() === m && dataD.getFullYear() === y;
@@ -1073,23 +1015,20 @@ window.updateDashboardStats = function() {
     elRec.style.color = liquido >= 0 ? 'var(--success-color)' : 'var(--danger-color)';
 }
 
-// --- CALENDÁRIO ---
 window.changeMonth = function(offset) {
     currentDate.setMonth(currentDate.getMonth() + offset);
     renderCalendar(currentDate);
-    updateDashboardStats(); // Atualiza números ao mudar mês
+    updateDashboardStats();
 }
 
 window.renderCalendar = function(date) {
-    if(!document.getElementById('calendarGrid')) return;
-
     const grid = document.getElementById('calendarGrid');
+    if(!grid) return; // Proteção Super Admin
+
     const monthLabel = document.getElementById('currentMonthYear');
-    
     grid.innerHTML = '';
     monthLabel.textContent = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
 
-    // Cabeçalho Dias
     const weekDays = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
     weekDays.forEach(day => {
         const div = document.createElement('div');
@@ -1103,7 +1042,6 @@ window.renderCalendar = function(date) {
     const firstDayIndex = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    // Espaços vazios antes do dia 1
     for(let i=0; i<firstDayIndex; i++){
         const empty = document.createElement('div');
         empty.className = 'day-cell empty';
@@ -1112,209 +1050,139 @@ window.renderCalendar = function(date) {
 
     const ops = loadData(DB_KEYS.OPERACOES);
 
-    // Dias do mês
     for(let d=1; d<=daysInMonth; d++){
         const cell = document.createElement('div');
         cell.className = 'day-cell';
         cell.textContent = d;
         
         const dataIso = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-        
-        // Verifica se tem operação neste dia
         const temOp = ops.some(op => op.data === dataIso);
 
         if(temOp) {
             cell.classList.add('has-operation');
-            cell.title = "Clique para ver operações";
             cell.onclick = () => {
-                // Filtra e mostra alerta simples (pode ser melhorado para modal)
-                const opsDia = ops.filter(o => o.data === dataIso);
-                const desc = opsDia.map(o => `- ${o.veiculoPlaca} (${o.status})`).join('\n');
-                alert(`OPERAÇÕES NO DIA ${d}:\n\n${desc}`);
+                const count = ops.filter(o => o.data === dataIso).length;
+                alert(`Dia ${d}: ${count} operações registradas.`);
             };
             const dot = document.createElement('div');
             dot.className = 'event-dot';
             cell.appendChild(dot);
         }
-
         grid.appendChild(cell);
     }
 }
 
-// --- GRÁFICOS (Chart.js) ---
+// --- CHART.JS ---
 let chartInstance = null;
 
 window.renderCharts = function() {
     const ctx = document.getElementById('mainChart');
-    if (!ctx) return; // Se não estiver na tela, sai
+    if (!ctx) return;
     
     const ops = loadData(DB_KEYS.OPERACOES);
     const despesas = loadData(DB_KEYS.DESPESAS_GERAIS);
-    
     const labels = [];
     const dataCustos = [];
     const dataReceita = [];
     const dataLucro = [];
 
-    // Calcula total histórico global
-    let totalReceitaHistorica = 0;
-    ops.forEach(o => { if(o.status === 'CONFIRMADA') totalReceitaHistorica += (o.faturamento || 0); });
+    // Calcula total histórico
+    let hist = 0;
+    ops.forEach(o => { if(o.status === 'CONFIRMADA') hist += (o.faturamento || 0); });
     const elHist = document.getElementById('receitaTotalHistorico');
-    if(elHist) elHist.textContent = formatCurrency(totalReceitaHistorica);
+    if(elHist) elHist.textContent = formatCurrency(hist);
 
-    // Loop últimos 6 meses
     for (let i = 5; i >= 0; i--) {
         const d = new Date();
         d.setMonth(d.getMonth() - i);
         const m = d.getMonth();
         const y = d.getFullYear();
-        
         labels.push(d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).toUpperCase());
 
-        // Filtra dados do mês
-        let receitaMes = 0;
-        let custosMes = 0;
-
-        // Soma Operações
-        ops.filter(op => {
-            const dateOp = new Date(op.data + 'T00:00:00');
-            return op.status === 'CONFIRMADA' && dateOp.getMonth() === m && dateOp.getFullYear() === y;
-        }).forEach(op => {
-            receitaMes += (op.faturamento || 0);
-            
-            // Custos operacionais
+        let rec = 0, cust = 0;
+        ops.filter(op => op.status === 'CONFIRMADA' && new Date(op.data+'T00:00:00').getMonth()===m).forEach(op => {
+            rec += (op.faturamento||0);
             const checkins = op.checkins || {};
-            const diarias = (op.ajudantes || []).reduce((acc, a) => 
-                (checkins.ajudantes && checkins.ajudantes.includes(a.id) ? acc + (Number(a.diaria)||0) : acc), 0);
-            
-            custosMes += (op.combustivel||0) + (op.comissao||0) + (op.despesas||0) + diarias;
+            const diarias = (op.ajudantes || []).reduce((s, a) => (checkins.ajudantes && checkins.ajudantes.includes(a.id) ? s + (Number(a.diaria)||0) : s), 0);
+            cust += (op.combustivel||0) + (op.comissao||0) + (op.despesas||0) + diarias;
         });
 
-        // Soma Despesas Gerais
-        const despesasGeraisMes = despesas.filter(dp => {
-            const dateDp = new Date(dp.data + 'T00:00:00');
-            return dateDp.getMonth() === m && dateDp.getFullYear() === y;
-        }).reduce((acc, dp) => acc + (dp.valor || 0), 0);
+        const despGerais = despesas.filter(dp => new Date(dp.data+'T00:00:00').getMonth()===m).reduce((s, d) => s + (d.valor||0), 0);
+        cust += despGerais;
 
-        custosMes += despesasGeraisMes;
-
-        dataReceita.push(receitaMes);
-        dataCustos.push(custosMes);
-        dataLucro.push(receitaMes - custosMes);
+        dataReceita.push(rec);
+        dataCustos.push(cust);
+        dataLucro.push(rec - cust);
     }
 
     if (chartInstance) chartInstance.destroy();
-
     chartInstance = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: labels,
             datasets: [
-                { label: 'RECEITA', data: dataReceita, backgroundColor: '#4caf50', order: 2 },
-                { label: 'CUSTOS', data: dataCustos, backgroundColor: '#f44336', order: 3 },
-                { label: 'LUCRO', data: dataLucro, type: 'line', borderColor: '#263238', borderWidth: 3, order: 1 }
+                { label: 'RECEITA', data: dataReceita, backgroundColor: '#4caf50' },
+                { label: 'CUSTOS', data: dataCustos, backgroundColor: '#f44336' },
+                { label: 'LUCRO', data: dataLucro, type: 'line', borderColor: '#263238', borderWidth: 2 }
             ]
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: { y: { beginAtZero: true } }
-        }
+        options: { responsive: true, maintainAspectRatio: false }
     });
 }
 
-// =============================================================================
-// RELATÓRIOS E PDF
-// =============================================================================
-
+// --- RELATÓRIOS ---
 window.gerarRelatorio = function(e) {
-    e.preventDefault();
+    if(e) e.preventDefault();
     const dtIni = document.getElementById('dataInicioRelatorio').value;
     const dtFim = document.getElementById('dataFimRelatorio').value;
     const motId = document.getElementById('selectMotoristaRelatorio').value;
-    const veic = document.getElementById('selectVeiculoRelatorio').value;
     
-    // Lógica de filtro e geração HTML do relatório (Simplificada)
     const ops = loadData(DB_KEYS.OPERACOES).filter(o => {
         if(o.status !== 'CONFIRMADA') return false;
         if(o.data < dtIni || o.data > dtFim) return false;
         if(motId && String(o.motoristaId) !== motId) return false;
-        if(veic && o.veiculoPlaca !== veic) return false;
         return true;
     });
 
-    let totalFat = 0, totalLucro = 0;
-    
-    let html = `<table class="data-table report-table"><thead><tr><th>DATA</th><th>VEÍCULO</th><th>MOTORISTA</th><th>FATURAMENTO</th><th>LUCRO EST.</th></tr></thead><tbody>`;
-    
+    let html = `<table class="data-table report-table"><thead><tr><th>DATA</th><th>VEÍCULO</th><th>MOTORISTA</th><th>FATURAMENTO</th></tr></thead><tbody>`;
     ops.forEach(o => {
-        // Cálculo simplificado de custo por linha
-        const custo = (o.combustivel||0) + (o.comissao||0) + (o.despesas||0); 
-        const lucro = (o.faturamento||0) - custo;
-        totalFat += (o.faturamento||0);
-        totalLucro += lucro;
-        
-        const motNome = getMotorista(o.motoristaId)?.nome || '-';
-        
-        html += `<tr>
-            <td>${o.data.split('-').reverse().join('/')}</td>
-            <td>${o.veiculoPlaca}</td>
-            <td>${motNome}</td>
-            <td>${formatCurrency(o.faturamento)}</td>
-            <td>${formatCurrency(lucro)}</td>
-        </tr>`;
+        html += `<tr><td>${o.data.split('-').reverse().join('/')}</td><td>${o.veiculoPlaca}</td><td>${getMotorista(o.motoristaId)?.nome}</td><td>${formatCurrency(o.faturamento)}</td></tr>`;
     });
-    
-    html += `<tr style="background:#eee; font-weight:bold;"><td colspan="3">TOTAIS</td><td>${formatCurrency(totalFat)}</td><td>${formatCurrency(totalLucro)}</td></tr></tbody></table>`;
-
+    html += `</tbody></table>`;
     document.getElementById('reportContent').innerHTML = html;
     document.getElementById('reportResults').style.display = 'block';
 }
 
 window.exportReportToPDF = function() {
-    const element = document.getElementById('reportContent');
-    if(!element || element.innerHTML.trim() === '') return alert("Gere o relatório primeiro.");
-    
-    const opt = {
-        margin: 10,
-        filename: 'relatorio_logimaster.pdf',
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
-    };
-    
-    // Usa html2pdf
-    html2pdf().set(opt).from(element).save();
+    const el = document.getElementById('reportContent');
+    if(!el || !el.innerText) return alert("Gere o relatório primeiro.");
+    html2pdf().set({ margin: 10, filename: 'relatorio.pdf' }).from(el).save();
 }
 
 window.exportEmployeeHistoryToPDF = function() {
-    // Exporta histórico do funcionário
-    const element = document.getElementById('tabelaHistoricoCompleto');
-    const opt = {
-        margin: 10,
-        filename: 'meu_historico.pdf',
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-    html2pdf().set(opt).from(element).save();
+    const el = document.getElementById('tabelaHistoricoCompleto');
+    html2pdf().set({ margin: 10, filename: 'meu_historico.pdf' }).from(el).save();
 }
 // =============================================================================
-// PARTE 5: SUPER ADMIN, BACKUP E INICIALIZAÇÃO DO SISTEMA
+// PARTE 5: SUPER ADMIN, BACKUP, USERS LIST E INICIALIZAÇÃO
 // =============================================================================
 
-// --- GESTÃO GLOBAL (SUPER ADMIN) ---
+// --- GESTÃO GLOBAL (SUPER ADMIN) - CRIAÇÃO DE EMPRESA ---
 
 async function createCompanyAndUser(e) {
     e.preventDefault();
-    if (!window.dbRef || !window.dbRef.secondaryApp) return alert("Erro de configuração do Firebase.");
+    
+    // Verifica se as referências do Firebase existem
+    if (!window.dbRef || !window.dbRef.secondaryApp || !window.dbRef.getAuth) {
+        return alert("Erro crítico: Firebase não inicializado corretamente no HTML.");
+    }
 
     const domain = document.getElementById('newCompanyDomain').value.trim().toLowerCase();
     const email = document.getElementById('newAdminEmail').value.trim().toLowerCase();
     const password = document.getElementById('newAdminPassword').value;
 
-    if (!domain.includes('.')) return alert("O domínio da empresa deve ser válido (ex: empresa.com)");
-    if (!email.endsWith(domain)) return alert(`O e-mail do admin deve terminar com @${domain}`);
+    if (!domain.includes('.')) return alert("Domínio inválido (ex: empresa.com)");
+    if (!email.endsWith(domain)) return alert(`O e-mail deve terminar com @${domain}`);
 
     const btn = e.target.querySelector('button');
     const originalText = btn.innerHTML;
@@ -1322,17 +1190,15 @@ async function createCompanyAndUser(e) {
     btn.innerHTML = "CRIANDO...";
 
     try {
-        // 1. Usa o APP SECUNDÁRIO para criar o usuário sem deslogar o Super Admin
-        const { getAuth, createUserWithEmailAndPassword, signOut } = window.dbRef;
-        // Pega auth da instância secundária
-        const auth2 = getAuth(window.dbRef.secondaryApp);
+        // 1. Usa o APP SECUNDÁRIO para criar o usuário (sem deslogar o atual)
+        const auth2 = window.dbRef.getAuth(window.dbRef.secondaryApp);
+        const { createUserWithEmailAndPassword, signOut } = window.dbRef; // Pega funções do objeto global
         
         const userCred = await createUserWithEmailAndPassword(auth2, email, password);
         const newUser = userCred.user;
 
-        // 2. Cria o registro no Firestore (Banco de Dados Principal)
+        // 2. Salva no Firestore Principal (users)
         const { setDoc, doc, db } = window.dbRef;
-        
         await setDoc(doc(db, "users", newUser.uid), {
             uid: newUser.uid,
             name: "ADMINISTRADOR",
@@ -1343,21 +1209,21 @@ async function createCompanyAndUser(e) {
             createdAt: new Date().toISOString()
         });
 
-        // 3. Inicializa a estrutura básica da empresa (Opcional, mas bom para evitar erros)
+        // 3. Inicializa coleção da empresa (opcional, mas bom para evitar erros de leitura vazia)
         await setDoc(doc(db, "companies", domain, "data", "db_minha_empresa"), { 
             items: { razaoSocial: domain.toUpperCase(), cnpj: "", telefone: "" } 
         });
 
-        // 4. Desloga da instância secundária para limpar memória
-        await signOut(auth2);
+        // 4. Limpeza
+        await signOut(auth2); // Desloga do app secundário
 
-        alert(`SUCESSO!\nEmpresa: ${domain}\nUsuário: ${email}\n\nO admin já pode fazer login.`);
+        alert(`SUCESSO!\n\nEmpresa: ${domain}\nLogin: ${email}\nSenha: ${password}\n\nO novo admin já pode acessar.`);
         document.getElementById('formCreateCompany').reset();
 
     } catch (error) {
-        console.error(error);
+        console.error("Erro criação:", error);
         let msg = error.message;
-        if(error.code === 'auth/email-already-in-use') msg = "Este e-mail já está cadastrado.";
+        if(error.code === 'auth/email-already-in-use') msg = "Este e-mail já está em uso.";
         alert("ERRO AO CRIAR: " + msg);
     } finally {
         btn.disabled = false;
@@ -1365,100 +1231,180 @@ async function createCompanyAndUser(e) {
     }
 }
 
-// Listener do formulário Super Admin
+// Listener do formulário
 const fSuper = document.getElementById('formCreateCompany');
 if(fSuper) fSuper.addEventListener('submit', createCompanyAndUser);
 
 
-// --- BACKUP E RESTAURAÇÃO DE DADOS ---
+// --- LISTAGEM DE FUNCIONÁRIOS DA EMPRESA (ADMIN) ---
+// Corrige o problema de "Funcionários ativos não aparecendo"
+
+function setupCompanyUsersList() {
+    if (!window.CURRENT_USER || window.CURRENT_USER.role !== 'admin') return;
+
+    const { db, collection, query, where, onSnapshot } = window.dbRef;
+    const company = window.CURRENT_USER.company;
+
+    // Escuta a coleção 'users' filtrando pela empresa atual
+    const q = query(collection(db, "users"), where("company", "==", company));
+
+    onSnapshot(q, (snapshot) => {
+        const users = [];
+        snapshot.forEach(doc => users.push(doc.data()));
+        renderCompanyUsersTable(users);
+    });
+}
+
+function renderCompanyUsersTable(users) {
+    // Separa pendentes e ativos
+    const pendentes = users.filter(u => !u.approved);
+    const ativos = users.filter(u => u.approved);
+
+    // Tabela Pendentes
+    const tbPend = document.getElementById('tabelaCompanyPendentes');
+    if (tbPend) {
+        if (pendentes.length === 0) {
+            tbPend.querySelector('tbody').innerHTML = '<tr><td colspan="5" style="text-align:center;">NENHUMA SOLICITAÇÃO PENDENTE.</td></tr>';
+        } else {
+            tbPend.querySelector('tbody').innerHTML = pendentes.map(u => `
+                <tr>
+                    <td>${u.name}</td>
+                    <td>${u.email}</td>
+                    <td>${u.role.toUpperCase()}</td>
+                    <td>${new Date(u.createdAt).toLocaleDateString()}</td>
+                    <td>
+                        <button class="btn-success btn-mini" onclick="approveUser('${u.uid}', true)">APROVAR</button>
+                        <button class="btn-danger btn-mini" onclick="deleteUser('${u.uid}')">RECUSAR</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+    }
+
+    // Tabela Ativos
+    const tbAtiv = document.getElementById('tabelaCompanyAtivos');
+    if (tbAtiv) {
+        if (ativos.length === 0) {
+            tbAtiv.querySelector('tbody').innerHTML = '<tr><td colspan="5" style="text-align:center;">NENHUM FUNCIONÁRIO ATIVO.</td></tr>';
+        } else {
+            tbAtiv.querySelector('tbody').innerHTML = ativos.map(u => `
+                <tr>
+                    <td>${u.name}</td>
+                    <td>${u.email}</td>
+                    <td>${u.role.toUpperCase()}</td>
+                    <td><span style="color:green;font-weight:bold;">ATIVO</span></td>
+                    <td>
+                        <button class="btn-warning btn-mini" onclick="approveUser('${u.uid}', false)">BLOQUEAR</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+    }
+}
+
+// Funções de Gestão de Usuário (Globais)
+window.approveUser = async function(uid, status) {
+    if(!confirm(status ? "Aprovar acesso?" : "Bloquear acesso?")) return;
+    try {
+        const { updateDoc, doc, db } = window.dbRef;
+        await updateDoc(doc(db, "users", uid), { approved: status });
+    } catch(e) { alert("Erro: " + e.message); }
+}
+
+window.deleteUser = async function(uid) {
+    if(!confirm("Excluir este usuário permanentemente?")) return;
+    try {
+        const { deleteDoc, doc, db } = window.dbRef;
+        await deleteDoc(doc(db, "users", uid));
+    } catch(e) { alert("Erro: " + e.message); }
+}
+
+
+// --- BACKUP E RESTAURAÇÃO ---
 
 window.exportDataBackup = function() {
-    if(window.IS_READ_ONLY) return alert("Função restrita a administradores.");
-    
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(APP_CACHE));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    const date = new Date().toISOString().split('T')[0];
-    downloadAnchorNode.setAttribute("download", `backup_logimaster_${date}.json`);
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
+    const a = document.createElement('a');
+    a.href = dataStr;
+    a.download = `backup_logimaster_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
 }
 
 window.importDataBackup = function(event) {
-    if(window.IS_READ_ONLY) return alert("Função restrita a administradores.");
-    
     const file = event.target.files[0];
     if (!file) return;
-
-    if(!confirm("ATENÇÃO: Isso substituirá TODOS os dados atuais pelos do arquivo.\n\nDeseja continuar?")) {
-        event.target.value = ''; 
-        return;
-    }
+    if(!confirm("ISSO SUBSTITUIRÁ TODOS OS DADOS ATUAIS PELOS DO ARQUIVO.\nCONTINUAR?")) return;
 
     const reader = new FileReader();
     reader.onload = async function(e) {
         try {
             const json = JSON.parse(e.target.result);
-            
-            // Validação básica
-            if(!json[DB_KEYS.MOTORISTAS] || !json[DB_KEYS.OPERACOES]) throw new Error("Arquivo inválido.");
-
-            // Restaura cada chave
+            // Salva cada chave individualmente
             for (let key in json) {
-                if (DB_KEYS[key.toUpperCase()] || Object.values(DB_KEYS).includes(key)) {
+                if (Object.values(DB_KEYS).includes(key)) {
                     await saveData(key, json[key]);
                 }
             }
-            
             alert("Restauração concluída! A página será recarregada.");
             location.reload();
-        } catch (err) {
-            console.error(err);
-            alert("Erro ao ler arquivo: " + err.message);
-        }
+        } catch (err) { alert("Erro ao ler arquivo: " + err.message); }
     };
     reader.readAsText(file);
 }
 
+window.fullSystemReset = async function() {
+    if(!confirm("PERIGO: ISSO APAGARÁ TODOS OS DADOS DA EMPRESA.\n\nTEM CERTEZA?")) return;
+    if(prompt("DIGITE 'DELETAR' PARA CONFIRMAR:") !== 'DELETAR') return;
+    
+    for (let key of Object.values(DB_KEYS)) {
+        await saveData(key, (key===DB_KEYS.MINHA_EMPRESA?{}:[]));
+    }
+    alert("Sistema resetado.");
+    location.reload();
+}
+
+
 // =============================================================================
-// INICIALIZAÇÃO DO SISTEMA (Roteamento por Papel)
+// INICIALIZAÇÃO DO SISTEMA (ROTEAMENTO)
 // =============================================================================
 
 window.initSystemByRole = function(user) {
-    console.log("Inicializando sistema para:", user.role);
+    console.log("Login efetuado:", user.email, "| Role:", user.role);
     window.CURRENT_USER = user;
     
-    // Esconde todos os menus primeiro
+    // 1. Esconde todos os menus
     document.getElementById('menu-admin').style.display = 'none';
     document.getElementById('menu-super-admin').style.display = 'none';
     document.getElementById('menu-employee').style.display = 'none';
-
-    // Remove classe 'active' de todas as páginas
+    
+    // Esconde todas as páginas
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
 
-    // --- ROTA 1: SUPER ADMIN ---
+    // 2. Roteamento
     if(user.email === 'admin@logimaster.com') {
+        // --- SUPER ADMIN ---
         document.getElementById('menu-super-admin').style.display = 'block';
-        document.getElementById('super-admin').classList.add('active'); // Mostra painel global
-        setupSuperAdminRealtime(); // Monitora usuários globais
+        document.getElementById('super-admin').classList.add('active');
+        setupSuperAdminRealtime(); // Monitora hierarquia global
     } 
-    // --- ROTA 2: ADMIN DA EMPRESA ---
     else if (user.role === 'admin') {
+        // --- ADMIN DA EMPRESA ---
         document.getElementById('menu-admin').style.display = 'block';
-        document.getElementById('home').classList.add('active'); // Mostra Dashboard
-        setupCompanyRealtime(); // Carrega dados da empresa
+        document.getElementById('home').classList.add('active'); // Dashboard
+        setupCompanyRealtime(); // Carrega dados
+        setupCompanyUsersList(); // Carrega funcionários (CORREÇÃO)
     } 
-    // --- ROTA 3: FUNCIONÁRIOS (Motorista/Ajudante) ---
     else {
+        // --- FUNCIONÁRIOS ---
         document.getElementById('menu-employee').style.display = 'block';
-        document.getElementById('employee-home').classList.add('active'); // Mostra Check-in
-        window.IS_READ_ONLY = true; // Trava edições
-        setupCompanyRealtime(); // Carrega dados para leitura
+        document.getElementById('employee-home').classList.add('active');
+        window.IS_READ_ONLY = true;
+        setupCompanyRealtime();
     }
 };
 
-// --- LISTENERS DE REALTIME (FIRESTORE) ---
+
+// --- LISTENERS DE DADOS (REALTIME) ---
 
 function setupCompanyRealtime() {
     if(!window.dbRef || !window.CURRENT_USER || !window.CURRENT_USER.company) return;
@@ -1466,158 +1412,131 @@ function setupCompanyRealtime() {
     const { db, doc, onSnapshot } = window.dbRef;
     const company = window.CURRENT_USER.company;
 
-    // Escuta todas as coleções definidas em DB_KEYS
+    // Loop em todas as chaves de dados (Motoristas, Operações, etc)
     Object.values(DB_KEYS).forEach(key => {
         onSnapshot(doc(db, 'companies', company, 'data', key), (docSnap) => {
             if(docSnap.exists()) {
                 APP_CACHE[key] = docSnap.data().items || (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
             } else {
-                // Se não existir, inicializa vazio no cache (não salva no banco ainda pra economizar write)
                 APP_CACHE[key] = (key === DB_KEYS.MINHA_EMPRESA ? {} : []);
             }
-            
-            // Atualiza UI sempre que chegar dados novos
-            refreshUI();
-        }, (error) => {
-            console.error(`Erro ao ouvir ${key}:`, error);
+            refreshUI(); // Atualiza a tela ao receber dados
         });
     });
 }
 
 function setupSuperAdminRealtime() {
-    // Escuta coleção de usuários globalmente para montar a hierarquia
     const { db, collection, query, onSnapshot } = window.dbRef;
-    const q = query(collection(db, "users"));
-    
-    onSnapshot(q, (snapshot) => {
+    // Escuta users globais
+    onSnapshot(query(collection(db, "users")), (snap) => {
         const users = [];
-        snapshot.forEach(doc => users.push(doc.data()));
-        renderGlobalHierarchy(users); // Função definida (mas precisa existir visualmente)
+        snap.forEach(d => users.push(d.data()));
+        renderGlobalHierarchy(users);
     });
 }
 
-// Função auxiliar para renderizar hierarquia no Super Admin
+// Renderiza a lista hierárquica no Super Admin
 function renderGlobalHierarchy(users) {
     const container = document.getElementById('superAdminContainer');
     if(!container) return;
     
-    // Agrupa por empresa
     const groups = {};
     users.forEach(u => {
         if(u.email === 'admin@logimaster.com') return;
-        const comp = u.company || 'SEM EMPRESA';
-        if(!groups[comp]) groups[comp] = [];
-        groups[comp].push(u);
+        const c = u.company || 'SEM EMPRESA';
+        if(!groups[c]) groups[c] = [];
+        groups[c].push(u);
     });
 
     let html = '';
     for(const [comp, list] of Object.entries(groups)) {
         html += `<div class="domain-block">
-            <div class="domain-header"><strong>${comp.toUpperCase()}</strong> <span class="badge">${list.length} USERS</span></div>
-            <div style="padding:10px;">
-                ${list.map(u => `<div>${u.role === 'admin' ? '👑' : '👤'} ${u.email} (${u.name})</div>`).join('')}
+            <div class="domain-header"><strong>${comp.toUpperCase()}</strong> (${list.length})</div>
+            <div class="domain-content open">
+                ${list.map(u => `<div class="user-row"><span>${u.email} (${u.role})</span></div>`).join('')}
             </div>
         </div>`;
     }
-    container.innerHTML = html || '<p>Nenhum usuário encontrado.</p>';
+    container.innerHTML = html || '<p style="text-align:center">Nenhuma empresa encontrada.</p>';
 }
 
-// --- ATUALIZAÇÃO DA INTERFACE (Centralizada) ---
+// --- REFRESH UI CENTRALIZADO ---
+// Garante que tudo atualize quando o banco muda
 
 function refreshUI() {
+    if(!window.CURRENT_USER) return;
+
     // Admin
     if (window.CURRENT_USER.role === 'admin') {
-        populateAllSelects(); // Parte 1
-        renderOperacaoTable(); // Parte 2
-        renderCadastroTable(DB_KEYS.MOTORISTAS); // Parte 2
-        renderDespesasTable(); // (Precisa ter renderDespesasTable implementada similar às outras)
-        updateDashboardStats(); // Parte 4
-        renderCalendar(currentDate); // Parte 4
-        renderCharts(); // Parte 4
-        renderCheckinsTable(); // Parte 4 (Visão Admin)
-        checkAndShowReminders();
-        renderMinhaEmpresaInfo();
-    } 
+        if(typeof renderCadastroTable === 'function') {
+            renderCadastroTable(DB_KEYS.MOTORISTAS);
+            renderCadastroTable(DB_KEYS.VEICULOS);
+            renderCadastroTable(DB_KEYS.CONTRATANTES);
+            renderCadastroTable(DB_KEYS.AJUDANTES);
+            if(typeof renderAtividadesTable === 'function') renderAtividadesTable();
+        }
+        if(typeof populateAllSelects === 'function') populateAllSelects();
+        if(typeof renderOperacaoTable === 'function') renderOperacaoTable();
+        if(typeof renderDespesasTable === 'function') renderDespesasTable();
+        if(typeof updateDashboardStats === 'function') updateDashboardStats();
+        if(typeof renderCalendar === 'function') renderCalendar(new Date());
+        if(typeof renderCheckinsTable === 'function') renderCheckinsTable();
+        if(typeof renderMinhaEmpresaInfo === 'function') renderMinhaEmpresaInfo();
+    }
     // Funcionário
     else if (window.CURRENT_USER.role !== 'admin' && window.CURRENT_USER.email !== 'admin@logimaster.com') {
-        renderCheckinsTable(); // Parte 4 (Visão Mobile)
+        if(typeof renderCheckinsTable === 'function') renderCheckinsTable();
         if(typeof renderEmployeeProfileView === 'function') renderEmployeeProfileView();
     }
 }
 
-// Lógica de Lembretes (Simples)
-function checkAndShowReminders() {
-    const despesas = loadData(DB_KEYS.DESPESAS_GERAIS);
-    const hoje = new Date().toISOString().split('T')[0];
-    const pendentes = despesas.filter(d => !d.pago && d.data <= hoje);
-    
-    const list = document.getElementById('reminderList');
-    if(list && pendentes.length > 0) {
-        // Apenas exibe modal se houver pendências vencidas/hoje
-        // (Lógica de abrir modal pode ser refinada para não abrir toda hora)
-        list.innerHTML = pendentes.map(d => 
-            `<div class="reminder-item">
-                <div><strong>VENCEU: ${d.data.split('-').reverse().join('/')}</strong><br>${d.descricao} - ${formatCurrency(d.valor)}</div>
-            </div>`
-        ).join('');
-        // document.getElementById('reminderModal').style.display = 'block'; // Descomentar se quiser popup automático
-    }
-}
-
-// Render Table de Despesas (Faltava na parte 2, adicionando aqui para garantir)
+// --- RENDER DESPESAS (Faltante na parte anterior) ---
 window.renderDespesasTable = function() {
-    const tabela = document.getElementById('tabelaDespesasGerais');
-    if(!tabela) return;
-    const data = loadData(DB_KEYS.DESPESAS_GERAIS).sort((a,b) => new Date(b.data) - new Date(a.data)).slice(0,50);
+    const tbl = document.getElementById('tabelaDespesasGerais');
+    if(!tbl) return;
+    const dados = loadData(DB_KEYS.DESPESAS_GERAIS).sort((a,b) => new Date(b.data)-new Date(a.data));
     
-    tabela.querySelector('tbody').innerHTML = data.map(d => `
+    tbl.querySelector('tbody').innerHTML = dados.slice(0,50).map(d => `
         <tr>
             <td>${d.data.split('-').reverse().join('/')}</td>
             <td>${d.veiculoPlaca || '-'}</td>
             <td>${d.descricao}</td>
             <td>${formatCurrency(d.valor)}</td>
-            <td>${d.pago ? '<span style="color:green">PAGO</span>' : '<span style="color:red">PENDENTE</span>'}</td>
+            <td>${d.pago ? 'OK' : 'PEND'}</td>
             <td><button class="btn-action delete-btn" onclick="deleteItem('${DB_KEYS.DESPESAS_GERAIS}', ${d.id})"><i class="fas fa-trash"></i></button></td>
         </tr>
-    `).join('') || '<tr><td colspan="6">NENHUMA DESPESA.</td></tr>';
+    `).join('') || '<tr><td colspan="6">Vazio</td></tr>';
 }
 
 // --- SETUP INICIAL ---
 document.addEventListener('DOMContentLoaded', () => {
-    // Abas de navegação lateral
+    // Abas Navegação
     document.querySelectorAll('.nav-item').forEach(item => {
         item.addEventListener('click', () => {
-            // Remove active de todos
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
             
-            // Ativa atual
             item.classList.add('active');
             const pageId = item.getAttribute('data-page');
             document.getElementById(pageId).classList.add('active');
 
-            // Renderiza gráficos se for a aba gráficos
-            if(pageId === 'graficos') renderCharts();
-            // Renderiza selects se for operações (garantia)
-            if(pageId === 'operacoes') populateAllSelects();
+            if(pageId === 'graficos' && typeof renderCharts === 'function') renderCharts();
+            if(pageId === 'operacoes' && typeof populateAllSelects === 'function') populateAllSelects();
         });
     });
 
-    // Abas de Cadastro (interno)
+    // Abas Cadastro Interno
     document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.cadastro-tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.cadastro-form').forEach(f => f.classList.remove('active'));
-            
             btn.classList.add('active');
+            
+            document.querySelectorAll('.cadastro-form').forEach(f => f.classList.remove('active'));
             document.getElementById(btn.getAttribute('data-tab')).classList.add('active');
         });
     });
-    
-    // Inicializa Handlers
-    if(typeof setupFormHandlers === 'function') setupFormHandlers();
-    
-    // Mobile Menu Toggle
+
+    // Mobile Menu
     document.getElementById('mobileMenuBtn')?.addEventListener('click', () => {
         document.getElementById('sidebar').classList.add('active');
         document.getElementById('sidebarOverlay').classList.add('active');
@@ -1626,4 +1545,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('sidebar').classList.remove('active');
         document.getElementById('sidebarOverlay').classList.remove('active');
     });
+
+    // Inicializa Handlers
+    if(typeof setupFormHandlers === 'function') setupFormHandlers();
 });

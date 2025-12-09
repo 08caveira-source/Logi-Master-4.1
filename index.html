@@ -77,7 +77,6 @@
                     <h3 id="receitaMes">R$ 0,00</h3>
                 </div>
             </div>
-
             <div class="calendar-section card">
                 <h3>CALENDÁRIO DE OPERAÇÕES</h3>
                 <div class="calendar-controls">
@@ -282,7 +281,7 @@
                             <label>DESTINATÁRIO:</label>
                             <select id="msgRecipientSelect">
                                 <option value="all">TODOS OS FUNCIONÁRIOS</option>
-                                </select>
+                            </select>
                         </div>
                     </div>
                     <div class="form-row">
@@ -601,7 +600,13 @@
                     </div>
                     <div class="form-actions"><button type="submit" class="btn-primary">SALVAR</button></div>
                 </form>
+                <div class="table-responsive" style="margin-top:15px;">
+                    <table id="tabelaAtividades" class="data-table">
+                        <thead><tr><th>ID</th><th>NOME</th><th>AÇÕES</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
+            </div>
         </section>
 
         <section id="relatorios" class="page">
@@ -964,23 +969,23 @@
 
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-      // IMPORTAÇÃO CORRIGIDA PARA INCLUIR TODAS AS FUNÇÕES NECESSÁRIAS
       import { getFirestore, collection, setDoc, doc, onSnapshot, getDoc, updateDoc, query, where, deleteDoc, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+      // IMPORTANDO GETAUTH EXPLICITAMENTE
       import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
       
       const firebaseConfig = { apiKey: "AIzaSyBZjVdcyjbEoR_-X6_lZuTRDMeN2wIntZI", authDomain: "logi-master-dd4cd.firebaseapp.com", projectId: "logi-master-dd4cd", storageBucket: "logi-master-dd4cd.firebasestorage.app", messagingSenderId: "673000154258", appId: "1:673000154258:web:fc9d6fced43e557076324b" };
       const app = initializeApp(firebaseConfig);
       
-      // Inicializar Secondary App para criação de users sem logout (Super Admin)
+      // Secondary App para criação de users sem logout
       const secondaryApp = initializeApp(firebaseConfig, "Secondary");
 
       const db = getFirestore(app);
       const auth = getAuth(app);
       
-      // EXPORTAÇÃO GLOBAL SEGURA PARA O SCRIPT.JS
+      // EXPORTAÇÃO GLOBAL SEGURA COM GETAUTH
       window.dbRef = { 
-          db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, updateDoc, query, where, deleteDoc, getDocs, addDoc, createUserWithEmailAndPassword,
-          secondaryApp: secondaryApp // Exportando o App secundário
+          db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, updateDoc, query, where, deleteDoc, getDocs, addDoc, createUserWithEmailAndPassword, getAuth,
+          secondaryApp: secondaryApp 
       };
 
       onAuthStateChanged(auth, async (user) => {
