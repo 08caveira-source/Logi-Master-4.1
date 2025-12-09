@@ -893,25 +893,51 @@
 
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-      import { getFirestore, collection, setDoc, doc, onSnapshot, getDoc, updateDoc, query, where, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+      // AQUI ESTAVA O ERRO: Faltava importar 'getDocs' e outros recursos usados no Super Admin
+      import { getFirestore, collection, setDoc, doc, onSnapshot, getDoc, updateDoc, query, where, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
       import { getAuth, onAuthStateChanged, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+      
       const firebaseConfig = { apiKey: "AIzaSyBZjVdcyjbEoR_-X6_lZuTRDMeN2wIntZI", authDomain: "logi-master-dd4cd.firebaseapp.com", projectId: "logi-master-dd4cd", storageBucket: "logi-master-dd4cd.firebasestorage.app", messagingSenderId: "673000154258", appId: "1:673000154258:web:fc9d6fced43e557076324b" };
+      
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);
       const auth = getAuth(app);
-      window.dbRef = { db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, updateDoc, query, where, deleteDoc, sendPasswordResetEmail };
+      
+      // Disponibiliza TUDO globalmente para o script.js não falhar
+      window.dbRef = { 
+          db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, 
+          updateDoc, query, where, deleteDoc, getDocs, sendPasswordResetEmail 
+      };
+
       onAuthStateChanged(auth, async (user) => {
           if (user) {
-              const userSnap = await getDoc(doc(db, "users", user.uid));
-              if (userSnap.exists()) {
-                  const userData = userSnap.data();
-                  window.currentUser = userData; 
-                  document.body.style.display = 'flex';
-                  document.getElementById('userEmailDisplay').textContent = userData.email.toUpperCase();
-                  document.getElementById('userRoleDisplay').textContent = userData.role.toUpperCase();
-                  setTimeout(() => { if (window.initSystemByRole) window.initSystemByRole(userData); }, 500);
+              try {
+                  const userSnap = await getDoc(doc(db, "users", user.uid));
+                  if (userSnap.exists()) {
+                      const userData = userSnap.data();
+                      window.currentUser = userData; 
+                      document.body.style.display = 'flex'; // Mostra o corpo só após carregar
+                      
+                      // Preenche sidebar
+                      const elEmail = document.getElementById('userEmailDisplay');
+                      const elRole = document.getElementById('userRoleDisplay');
+                      if(elEmail) elEmail.textContent = userData.email.toUpperCase();
+                      if(elRole) elRole.textContent = userData.role.toUpperCase();
+                      
+                      // Inicia o sistema
+                      setTimeout(() => { 
+                          if (window.initSystemByRole) window.initSystemByRole(userData); 
+                      }, 500);
+                  } else {
+                      console.error("Usuário sem perfil no banco.");
+                      // Fallback opcional ou logout
+                  }
+              } catch (e) {
+                  console.error("Erro no login:", e);
               }
-          } else { window.location.replace("login.html"); }
+          } else { 
+              window.location.replace("login.html"); 
+          }
       });
     </script>
     <script src="script.js" defer></script>
