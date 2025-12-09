@@ -541,3 +541,44 @@ button.btn-mini:hover { background: #ddd; }
 .ef-input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; height: 40px; }
 .ef-btn { flex: 1; height: 40px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.9rem; font-weight: 600; border: none; border-radius: 4px; cursor: pointer; text-transform: uppercase; }
 @media (max-width: 600px) { .ef-row { flex-direction: column; gap: 10px; } }
+
+/* --- ESTILOS DO SUPER ADMIN (HIERARQUIA) --- */
+.super-search-box {
+    border: 1px solid #ccc; padding: 10px; border-radius: 8px; display: flex; align-items: center;
+}
+.hierarchy-container { margin-top: 10px; }
+
+/* Item de Domínio (Empresa) */
+.domain-block { border: 1px solid #ddd; border-radius: 8px; margin-bottom: 15px; overflow: hidden; }
+.domain-header {
+    background-color: #eee; padding: 15px; cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center;
+    font-weight: 700; color: var(--primary-color);
+}
+.domain-header:hover { background-color: #e0e0e0; }
+
+/* Conteúdo do Domínio */
+.domain-content { display: none; padding: 15px; background-color: #fff; border-top: 1px solid #ddd; }
+.domain-content.open { display: block; animation: fadeIn 0.3s; }
+
+/* Item de Usuário */
+.user-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 0; border-bottom: 1px solid #f0f0f0; flex-wrap: wrap; gap: 10px;
+}
+.user-row:last-child { border-bottom: none; }
+
+.user-info-box { display: flex; flex-direction: column; }
+.user-role-badge { 
+    font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; 
+    text-transform: uppercase; width: fit-content; margin-top: 4px;
+}
+.badge-admin { background-color: #263238; color: white; }
+.badge-func { background-color: #78909c; color: white; }
+
+.user-actions { display: flex; gap: 5px; }
+
+/* Status do Usuário */
+.status-indicator { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+.status-indicator.blocked { background-color: var(--danger-color); }
+.status-indicator.active { background-color: var(--success-color); }

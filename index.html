@@ -633,20 +633,16 @@
         </section>
 
         <section id="super-admin" class="page">
-            <h2>GESTÃO DE EMPRESAS</h2>
+            <h2>PAINEL MASTER (GESTÃO GLOBAL)</h2>
             <div class="card">
-                <h3>EMPRESAS PENDENTES DE APROVAÇÃO</h3>
-                <table class="data-table" id="tabelaEmpresasPendentes">
-                    <thead><tr><th>EMAIL</th><th>DATA</th><th>AÇÃO</th></tr></thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-            <div class="card" style="margin-top:20px;">
-                <h3>EMPRESAS ATIVAS</h3>
-                <table class="data-table" id="tabelaEmpresasAtivas">
-                    <thead><tr><th>EMAIL</th><th>DATA</th><th>AÇÃO</th></tr></thead>
-                    <tbody></tbody>
-                </table>
+                <div class="super-search-box" style="margin-bottom: 20px;">
+                    <i class="fas fa-search" style="color:var(--secondary-color);"></i>
+                    <input type="text" id="superAdminSearch" placeholder="BUSCAR POR EMPRESA, EMAIL OU NOME..." onkeyup="filterGlobalUsers()" style="border:none; outline:none; width:90%; font-size:1rem; padding-left:10px;">
+                </div>
+                
+                <div id="superAdminContainer" class="hierarchy-container">
+                    <p style="text-align:center; color:#666;">CARREGANDO DADOS GLOBAIS...</p>
+                </div>
             </div>
         </section>
 
