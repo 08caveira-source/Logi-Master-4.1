@@ -10,6 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body style="display:none;"> 
+    
     <div class="mobile-nav">
         <button id="mobileMenuBtn"><i class="fas fa-bars"></i></button>
         <span class="logo-mobile">LOGI<span style="color:var(--primary-color);">MASTER</span></span>
@@ -130,13 +131,13 @@
                          <div class="form-col col-lg">
                             <div class="form-group">
                                 <label for="selectMotoristaOperacao">MOTORISTA:</label>
-                                <select id="selectMotoristaOperacao" required></select>
+                                <select id="selectMotoristaOperacao" required><option value="">CARREGANDO...</option></select>
                             </div>
                         </div>
                         <div class="form-col col-md">
                             <div class="form-group">
                                 <label for="selectVeiculoOperacao">VEÍCULO (PLACA):</label>
-                                <select id="selectVeiculoOperacao" required></select>
+                                <select id="selectVeiculoOperacao" required><option value="">CARREGANDO...</option></select>
                             </div>
                         </div>
                     </div>
@@ -145,13 +146,13 @@
                         <div class="form-col col-lg">
                             <div class="form-group">
                                 <label for="selectContratanteOperacao">CONTRATANTE (CNPJ):</label>
-                                <select id="selectContratanteOperacao" required></select>
+                                <select id="selectContratanteOperacao" required><option value="">CARREGANDO...</option></select>
                             </div>
                         </div>
                         <div class="form-col col-md">
                             <div class="form-group">
                                 <label for="selectAtividadeOperacao">ATIVIDADE:</label>
-                                <select id="selectAtividadeOperacao" required></select>
+                                <select id="selectAtividadeOperacao" required><option value="">CARREGANDO...</option></select>
                             </div>
                         </div>
                     </div>
@@ -211,7 +212,7 @@
                         <div class="form-col col-md">
                             <div class="form-group">
                                 <label for="selectAjudantesOperacao">ADICIONAR AJUDANTE:</label>
-                                <select id="selectAjudantesOperacao"></select>
+                                <select id="selectAjudantesOperacao"><option value="">CARREGANDO...</option></select>
                             </div>
                         </div>
                         <div class="form-col">
@@ -343,7 +344,7 @@
                         <div class="form-col col-md">
                             <div class="form-group">
                                 <label for="selectVeiculoDespesaGeral">PLACA (OPCIONAL):</label>
-                                <select id="selectVeiculoDespesaGeral"></select>
+                                <select id="selectVeiculoDespesaGeral"><option value="">CARREGANDO...</option></select>
                             </div>
                         </div>
                         <div class="form-col col-xl">
@@ -439,6 +440,7 @@
                 <button class="cadastro-tab-btn" data-tab="contratantes">CONTRATANTES</button>
                 <button class="cadastro-tab-btn" data-tab="ajudantes">AJUDANTES</button>
                 <button class="cadastro-tab-btn" data-tab="minhaEmpresa">MINHA EMPRESA</button>
+                <button class="cadastro-tab-btn" data-tab="atividades">ATIVIDADES</button>
             </div>
 
             <div id="motoristas" class="cadastro-form card active">
@@ -587,6 +589,19 @@
                     <div id="viewMinhaEmpresaContent" style="font-size:0.95rem;"></div>
                 </div>
             </div>
+
+            <div id="atividades" class="cadastro-form card">
+                <h3>CADASTRO DE ATIVIDADES</h3>
+                <form id="formAtividade">
+                    <input type="hidden" id="atividadeId">
+                    <div class="form-row">
+                        <div class="form-col col-full">
+                            <div class="form-group"><label>NOME DA ATIVIDADE:</label><input type="text" id="atividadeNome" required placeholder="Ex: ENTREGA URBANA, VIAGEM LONGA, COLETA"></div>
+                        </div>
+                    </div>
+                    <div class="form-actions"><button type="submit" class="btn-primary">SALVAR</button></div>
+                </form>
+                </div>
         </section>
 
         <section id="relatorios" class="page">
@@ -955,11 +970,18 @@
       
       const firebaseConfig = { apiKey: "AIzaSyBZjVdcyjbEoR_-X6_lZuTRDMeN2wIntZI", authDomain: "logi-master-dd4cd.firebaseapp.com", projectId: "logi-master-dd4cd", storageBucket: "logi-master-dd4cd.firebasestorage.app", messagingSenderId: "673000154258", appId: "1:673000154258:web:fc9d6fced43e557076324b" };
       const app = initializeApp(firebaseConfig);
+      
+      // Inicializar Secondary App para criação de users sem logout (Super Admin)
+      const secondaryApp = initializeApp(firebaseConfig, "Secondary");
+
       const db = getFirestore(app);
       const auth = getAuth(app);
       
       // EXPORTAÇÃO GLOBAL SEGURA PARA O SCRIPT.JS
-      window.dbRef = { db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, updateDoc, query, where, deleteDoc, getDocs, addDoc, createUserWithEmailAndPassword };
+      window.dbRef = { 
+          db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, updateDoc, query, where, deleteDoc, getDocs, addDoc, createUserWithEmailAndPassword,
+          secondaryApp: secondaryApp // Exportando o App secundário
+      };
 
       onAuthStateChanged(auth, async (user) => {
           if (user) {
@@ -974,7 +996,12 @@
               }
           } else { window.location.replace("login.html"); }
       });
+      
+      window.logoutSystem = async function() {
+          await signOut(auth);
+          window.location.href = "login.html";
+      }
     </script>
-    <script src="script.js" defer></script>
+    <script src="script.js" type="module" defer></script>
 </body>
 </html>
