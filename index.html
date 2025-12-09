@@ -38,7 +38,7 @@
             </ul>
 
             <ul id="menu-super-admin" style="display:none;">
-                <li class="nav-item active" data-page="super-admin"><i class="fas fa-globe"></i> GESTÃO DE EMPRESAS</li>
+                <li class="nav-item active" data-page="super-admin"><i class="fas fa-globe"></i> GESTÃO GLOBAL</li>
             </ul>
 
             <ul id="menu-employee" style="display:none;">
@@ -566,6 +566,20 @@
             </div>
         </section>
 
+        <section id="super-admin" class="page">
+            <h2>PAINEL MASTER (GESTÃO GLOBAL)</h2>
+            <div class="card">
+                <div class="super-search-box" style="margin-bottom: 20px;">
+                    <i class="fas fa-search" style="color:var(--secondary-color);"></i>
+                    <input type="text" id="superAdminSearch" placeholder="BUSCAR POR EMPRESA, EMAIL OU NOME..." onkeyup="filterGlobalUsers()" style="border:none; outline:none; width:90%; font-size:1rem; padding-left:10px;">
+                </div>
+                
+                <div id="superAdminContainer" class="hierarchy-container">
+                    <p style="text-align:center; color:#666;">CARREGANDO DADOS GLOBAIS...</p>
+                </div>
+            </div>
+        </section>
+
         <section id="relatorios" class="page">
             <h2>RELATÓRIOS</h2>
             <div class="card no-print">
@@ -629,20 +643,6 @@
             <div class="card" style="margin-top: 20px; border: 1px solid var(--danger-color);">
                 <h3 style="color: var(--danger-color);">ZONA DE PERIGO</h3>
                 <button class="btn-danger" onclick="fullSystemReset()"><i class="fas fa-bomb"></i> RESETAR TUDO</button>
-            </div>
-        </section>
-
-        <section id="super-admin" class="page">
-            <h2>PAINEL MASTER (GESTÃO GLOBAL)</h2>
-            <div class="card">
-                <div class="super-search-box" style="margin-bottom: 20px;">
-                    <i class="fas fa-search" style="color:var(--secondary-color);"></i>
-                    <input type="text" id="superAdminSearch" placeholder="BUSCAR POR EMPRESA, EMAIL OU NOME..." onkeyup="filterGlobalUsers()" style="border:none; outline:none; width:90%; font-size:1rem; padding-left:10px;">
-                </div>
-                
-                <div id="superAdminContainer" class="hierarchy-container">
-                    <p style="text-align:center; color:#666;">CARREGANDO DADOS GLOBAIS...</p>
-                </div>
             </div>
         </section>
 
