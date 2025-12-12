@@ -1,53 +1,75 @@
-/* ==========================================================================
-   1. RESET, VARIÁVEIS E TIPOGRAFIA GLOBAL
-   ========================================================================== */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+/* =============================================================================
+   LOGIMASTER - SISTEMA DE GESTÃO DE FROTAS
+   VERSÃO: 4.5 (FULL EXPANDED)
+   ============================================================================= */
+
+/* 1. IMPORTAÇÕES E VARIÁVEIS GLOBAIS
+   -------------------------------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-    /* Cores Principais - Identidade Visual */
-    --primary-color: #00796b;      /* Teal Escuro */
-    --primary-hover: #004d40;      /* Teal Mais Escuro para Hover */
-    --secondary-color: #546e7a;    /* Cinza Azulado */
-    --secondary-hover: #37474f;    /* Cinza Escuro para Hover */
+    /* --- PALETA DE CORES PRINCIPAL (IDENTIDADE CORPORATIVA) --- */
+    --primary-color: #00796b;       /* Teal Escuro */
+    --primary-light: #48a999;       /* Teal Claro */
+    --primary-dark: #004d40;        /* Teal Muito Escuro */
     
-    /* Cores de Fundo e Superfície */
-    --background-color: #f0f4f8;   /* Fundo da Página (Gelo) */
-    --surface-color: #ffffff;      /* Fundo de Cards (Branco) */
-    --header-bg: #263238;          /* Fundo da Sidebar (Quase Preto) */
+    --secondary-color: #546e7a;     /* Cinza Azulado */
+    --secondary-light: #819ca9;     /* Cinza Claro */
+    --secondary-dark: #29434e;      /* Cinza Escuro */
     
-    /* Cores de Texto e Bordas */
-    --text-color: #37474f;         /* Texto Principal */
-    --text-muted: #78909c;         /* Texto Secundário */
-    --border-color: #cfd8dc;       /* Bordas de Inputs/Tabelas */
+    /* --- CORES DE FUNDO E SUPERFÍCIE --- */
+    --background-color: #f0f4f8;    /* Fundo da Página (Gelo/Cinza Suave) */
+    --surface-color: #ffffff;       /* Fundo dos Cards e Modais */
+    --header-bg: #263238;           /* Fundo da Sidebar (Blue Grey Dark) */
     
-    /* Cores Semânticas (Status) */
-    --success-color: #4caf50;      /* Verde (Confirmado/Pago) */
-    --success-hover: #388e3c;
-    --danger-color: #f44336;       /* Vermelho (Erro/Pendente/Excluir) */
-    --danger-hover: #d32f2f;
-    --warning-color: #ff9800;      /* Laranja (Aviso/Agendado) */
-    --warning-hover: #f57c00;
-    --info-color: #0288d1;         /* Azul (Em Andamento) */
-    --whatsapp-color: #25D366;     /* Verde WhatsApp */
+    /* --- TIPOGRAFIA E BORDAS --- */
+    --text-color: #37474f;          /* Texto Principal */
+    --text-muted: #78909c;          /* Texto Secundário / Labels */
+    --border-color: #cfd8dc;        /* Bordas de Inputs e Tabelas */
     
-    /* Variáveis de UI */
+    /* --- CORES SEMÂNTICAS (STATUS) --- */
+    --success-color: #4caf50;       /* Verde (Confirmado/Pago/Lucro) */
+    --success-bg: #e8f5e9;          /* Fundo Verde Claro */
+    
+    --danger-color: #f44336;        /* Vermelho (Erro/Pendente/Prejuízo) */
+    --danger-bg: #ffebee;           /* Fundo Vermelho Claro */
+    
+    --warning-color: #ff9800;       /* Laranja (Aviso/Agendado) */
+    --warning-bg: #fff3e0;          /* Fundo Laranja Claro */
+    
+    --info-color: #0288d1;          /* Azul (Em Andamento/Info) */
+    --info-bg: #e1f5fe;             /* Fundo Azul Claro */
+    
+    --whatsapp-color: #25D366;      /* Verde Oficial WhatsApp */
+
+    /* --- VARIÁVEIS DE UI (LAYOUT) --- */
     --shadow-soft: 0 4px 16px rgba(0, 0, 0, 0.08);
-    --shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.12);
-    --border-radius: 8px;
-    --transition-speed: 0.2s;
-    --sidebar-width: 260px;
-    --header-height: 60px;
+    --shadow-medium: 0 8px 24px rgba(0, 0, 0, 0.12);
+    --shadow-hard: 0 10px 30px rgba(0, 0, 0, 0.2);
+    
+    --border-radius: 8px;           /* Arredondamento Padrão */
+    --border-radius-sm: 4px;        /* Arredondamento Pequeno */
+    --border-radius-lg: 12px;       /* Arredondamento Grande */
+    
+    --transition-speed: 0.25s;      /* Velocidade de Animação */
+    
+    --sidebar-width: 260px;         /* Largura do Menu Lateral */
+    --header-height: 60px;          /* Altura da Barra Mobile */
 }
 
+/* 2. RESET CSS E CONFIGURAÇÕES GLOBAIS
+   -------------------------------------------------------------------------- */
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
     font-family: 'Inter', sans-serif;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
-/* REGRA GLOBAL DE CAIXA ALTA (Exceto campos sensíveis) */
+/* REGRA DE CAIXA ALTA GLOBAL */
+/* Aplica uppercase em quase tudo para manter padrão visual */
 body, 
 input, 
 select, 
@@ -58,14 +80,17 @@ p,
 label, 
 span, 
 td, 
-th {
+th,
+li,
+div {
     text-transform: uppercase;
 }
 
-/* Exceções para Caixa Baixa/Normal */
+/* EXCEÇÕES PARA CAIXA ALTA */
+/* Campos sensíveis ou textos longos específicos */
 input[type="password"], 
 input[type="email"], 
-textarea.message-box, 
+textarea.message-box,
 .no-caps {
     text-transform: none;
 }
@@ -74,37 +99,39 @@ body {
     background-color: var(--background-color);
     color: var(--text-color);
     display: flex;
+    flex-direction: row;
     min-height: 100vh;
-    overflow-x: hidden; /* Evita scroll horizontal indesejado */
+    width: 100%;
+    overflow-x: hidden;
+    line-height: 1.6;
 }
 
 a {
     text-decoration: none;
     color: inherit;
     cursor: pointer;
+    transition: color var(--transition-speed) ease;
 }
 
-ul {
+ul, ol {
     list-style: none;
+    padding: 0;
+    margin: 0;
 }
 
-/* Utilitários */
+/* Utilitários de Visibilidade */
 .hidden {
     display: none !important;
 }
 
-.text-center { text-align: center; }
-.text-right { text-align: right; }
-.text-success { color: var(--success-color); }
-.text-danger { color: var(--danger-color); }
-.text-warning { color: var(--warning-color); }
-.text-muted { color: var(--text-muted); }
+.show {
+    display: block !important;
+}
 
-/* ==========================================================================
-   2. BARRA DE NAVEGAÇÃO MOBILE (TOPBAR)
-   ========================================================================== */
+/* 3. BARRA DE NAVEGAÇÃO MOBILE (TOPBAR)
+   -------------------------------------------------------------------------- */
 .mobile-nav {
-    display: none; /* Padrão desktop: invisível */
+    display: none; /* Padrão Desktop: Oculto */
     position: fixed;
     top: 0;
     left: 0;
@@ -112,61 +139,70 @@ ul {
     height: var(--header-height);
     background-color: var(--header-bg);
     color: white;
-    z-index: 200;
+    z-index: 1000;
     align-items: center;
+    justify-content: space-between;
     padding: 0 20px;
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    justify-content: space-between;
 }
 
 .mobile-nav button {
     background: transparent;
     border: none;
     color: white;
-    font-size: 1.5rem;
+    font-size: 1.6rem;
     cursor: pointer;
     padding: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .logo-mobile {
-    font-size: 1.2rem;
-    font-weight: 700;
+    font-size: 1.3rem;
+    font-weight: 800;
     color: white;
     letter-spacing: 1px;
 }
 
-/* ==========================================================================
-   3. SIDEBAR (MENU LATERAL)
-   ========================================================================== */
+/* 4. SIDEBAR (MENU LATERAL ESQUERDO)
+   -------------------------------------------------------------------------- */
 .sidebar {
     width: var(--sidebar-width);
     background-color: var(--header-bg);
     color: var(--surface-color);
     padding: 0;
     position: fixed;
+    top: 0;
+    left: 0;
     height: 100%;
     display: flex;
     flex-direction: column;
-    box-shadow: 4px 0 10px rgba(0, 0, 0, 0.1);
-    z-index: 300;
-    transition: transform var(--transition-speed) ease;
-    overflow-y: auto; /* Scroll se o menu for muito longo */
+    box-shadow: 4px 0 15px rgba(0, 0, 0, 0.1);
+    z-index: 1100;
+    transition: transform var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto; /* Permite scroll no menu se necessário */
 }
 
 /* Logotipo na Sidebar */
 .logo {
     font-size: 1.8rem;
-    font-weight: 800;
+    font-weight: 900;
     padding: 30px 25px;
     color: var(--surface-color);
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     text-align: center;
-    letter-spacing: 1px;
+    letter-spacing: 1.5px;
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.logo span {
+    color: var(--primary-light);
 }
 
 /* Área de Perfil do Usuário na Sidebar */
 .user-profile-section {
-    padding: 20px 15px;
+    padding: 25px 20px;
     background-color: rgba(0, 0, 0, 0.2);
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     text-align: center;
@@ -174,7 +210,7 @@ ul {
 }
 
 .user-profile-section p {
-    margin: 0;
+    margin: 5px 0;
     line-height: 1.4;
 }
 
@@ -182,22 +218,30 @@ ul {
     font-size: 0.85rem;
     color: #cfd8dc;
     word-break: break-all;
+    font-weight: 500;
+    display: block;
 }
 
 #userRoleDisplay {
-    font-size: 0.75rem;
-    color: var(--primary-color); /* Destaque na função */
+    font-size: 0.7rem;
+    color: var(--surface-color);
     font-weight: 700;
-    margin-top: 5px;
-    background: rgba(255, 255, 255, 0.1);
-    padding: 2px 8px;
+    margin-top: 8px;
+    background-color: var(--primary-color);
+    padding: 4px 12px;
     border-radius: 12px;
     display: inline-block;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
-/* Itens de Navegação */
-nav ul {
+/* Lista de Navegação */
+nav {
     flex-grow: 1;
+    overflow-y: auto;
+}
+
+nav ul {
     padding-top: 10px;
 }
 
@@ -205,26 +249,29 @@ nav ul {
     padding: 16px 25px;
     color: #b0bec5;
     cursor: pointer;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 500;
     transition: all var(--transition-speed);
     display: flex;
     align-items: center;
     border-left: 4px solid transparent;
+    margin-bottom: 2px;
 }
 
 .nav-item i {
-    margin-right: 12px;
+    margin-right: 15px;
     font-size: 1.1rem;
-    width: 24px; /* Alinhamento fixo dos ícones */
+    width: 24px;
     text-align: center;
     color: #90a4ae;
     transition: color var(--transition-speed);
 }
 
+/* Estados do Menu */
 .nav-item:hover {
     background-color: rgba(255, 255, 255, 0.05);
     color: white;
+    padding-left: 30px; /* Pequeno efeito de movimento */
 }
 
 .nav-item:hover i {
@@ -232,163 +279,185 @@ nav ul {
 }
 
 .nav-item.active {
-    background-color: rgba(0, 121, 107, 0.15); /* Tint do primary */
-    color: var(--primary-color); /* Highlight text */
-    border-left-color: var(--primary-color);
+    background-color: rgba(0, 121, 107, 0.2); /* Tint do primary */
+    color: var(--primary-light); 
+    border-left-color: var(--primary-light);
+    font-weight: 700;
 }
 
 .nav-item.active i {
-    color: var(--primary-color);
+    color: var(--primary-light);
 }
 
 /* Rodapé da Sidebar */
 .sidebar-footer {
     padding: 20px 25px;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
-    background-color: rgba(0,0,0,0.1);
+    background-color: rgba(0,0,0,0.2);
+    margin-top: auto;
 }
 
 .sidebar-footer p {
     font-size: 0.7rem;
-    color: #607d8b;
+    color: #546e7a; /* Cor mais escura para o copyright */
     text-align: center;
-    margin-top: 10px;
+    margin-top: 15px;
+    opacity: 0.7;
 }
 
 /* Overlay para Mobile */
 .overlay {
     display: none;
     position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: 250;
+    top: 0; 
+    left: 0; 
+    right: 0; 
+    bottom: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 1050; /* Abaixo da sidebar, acima do conteudo */
     backdrop-filter: blur(2px);
+    transition: opacity var(--transition-speed);
 }
 
 .overlay.active {
     display: block;
 }
 
-/* ==========================================================================
-   4. ÁREA DE CONTEÚDO PRINCIPAL
-   ========================================================================== */
+/* 5. ÁREA DE CONTEÚDO PRINCIPAL
+   -------------------------------------------------------------------------- */
 .content {
     margin-left: var(--sidebar-width);
-    padding: 30px 40px;
+    padding: 40px;
     flex-grow: 1;
     transition: margin-left var(--transition-speed) ease;
-    width: 100%; /* Garante que ocupe o resto */
+    width: 100%;
+    min-height: 100vh;
 }
 
-/* Páginas (SPA Logic) */
+/* Animação de Entrada das Páginas */
 .page {
     display: none;
-    animation: fadeIn 0.4s ease-out;
+    animation: fadeInPage 0.4s ease-out;
 }
 
 .page.active {
     display: block;
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+@keyframes fadeInPage {
+    from { 
+        opacity: 0; 
+        transform: translateY(15px); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateY(0); 
+    }
 }
 
-/* Cabeçalhos de Página */
+/* Cabeçalhos H2 */
 .content h2 {
     color: var(--primary-color);
-    margin-bottom: 30px;
-    font-size: 1.6rem;
-    font-weight: 700;
-    border-bottom: 3px solid var(--primary-color);
+    margin-bottom: 35px;
+    font-size: 1.8rem;
+    font-weight: 800;
+    border-bottom: 4px solid var(--primary-color);
     display: inline-block;
-    padding-bottom: 5px;
+    padding-bottom: 8px;
     letter-spacing: -0.5px;
 }
 
-/* ==========================================================================
-   5. CARDS, GRID E DASHBOARD
-   ========================================================================== */
+/* 6. CARDS, CONTAINERS E DASHBOARD
+   -------------------------------------------------------------------------- */
 .card {
     background-color: var(--surface-color);
-    padding: 25px;
+    padding: 30px;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-soft);
-    margin-bottom: 25px;
+    margin-bottom: 30px;
     border: 1px solid #eef2f6;
-    transition: transform 0.2s;
+    transition: transform var(--transition-speed), box-shadow var(--transition-speed);
+    position: relative;
 }
 
-/* Títulos dentro de Cards */
+.card:hover {
+    box-shadow: var(--shadow-medium);
+    transform: translateY(-2px);
+}
+
 .card h3 {
     color: var(--secondary-color);
-    margin-bottom: 20px;
+    margin-bottom: 25px;
     font-weight: 700;
-    font-size: 1.1rem;
-    border-bottom: 1px solid #f0f0f0;
-    padding-bottom: 10px;
+    font-size: 1.2rem;
+    border-bottom: 2px solid #f5f5f5;
+    padding-bottom: 12px;
+    letter-spacing: 0.5px;
 }
 
+/* Grid de Cards (Dashboard) */
 .card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 25px;
-    margin-bottom: 30px;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 30px;
+    margin-bottom: 40px;
 }
 
-/* Cards de Estatística */
+/* Stat Cards (KPIs) */
 .stat-card {
     text-align: center;
     position: relative;
     overflow: hidden;
+    padding-top: 35px;
+    padding-bottom: 35px;
 }
 
-.stat-card::after {
+.stat-card::before {
     content: '';
     position: absolute;
-    top: 0; left: 0; width: 100%; height: 4px;
+    top: 0; left: 0; width: 100%; height: 6px;
 }
 
-.stat-card.success::after { background-color: var(--success-color); }
-.stat-card.danger::after { background-color: var(--danger-color); }
-.stat-card.primary::after { background-color: var(--primary-color); }
+.stat-card.success::before { background-color: var(--success-color); }
+.stat-card.danger::before { background-color: var(--danger-color); }
+.stat-card.primary::before { background-color: var(--primary-color); }
 
 .stat-card p {
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     color: var(--text-muted);
-    margin-bottom: 10px;
+    margin-bottom: 12px;
     font-weight: 600;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
 }
 
 .stat-card h3 {
-    font-size: 2.2rem;
+    font-size: 2.5rem;
     margin: 0;
-    border: none; /* Remove borda padrão de h3 em cards */
+    border: none;
     padding: 0;
+    font-weight: 800;
+    line-height: 1;
 }
 
 .stat-card.success h3 { color: var(--success-color); }
 .stat-card.danger h3 { color: var(--danger-color); }
 .stat-card.primary h3 { color: var(--primary-color); }
 
-/* Container de Gráfico */
+/* Container para Gráficos Chart.js */
 .chart-container {
     height: 400px;
+    width: 100%;
     margin-bottom: 20px;
     position: relative;
-    width: 100%;
 }
 
-/* ==========================================================================
-   6. SISTEMA DE FORMULÁRIOS E INPUTS
-   ========================================================================== */
-/* Grid de Formulário Flexbox */
+/* 7. SISTEMA DE GRID PARA FORMULÁRIOS
+   -------------------------------------------------------------------------- */
 .form-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 20px; /* Espaçamento horizontal e vertical */
+    gap: 20px;
     margin-bottom: 20px;
     align-items: flex-end; /* Alinha inputs com botões na base */
 }
@@ -396,19 +465,39 @@ nav ul {
 .form-col {
     display: flex;
     flex-direction: column;
-    flex: 1; /* Cresce para ocupar espaço */
-    min-width: 150px; /* Largura mínima para não quebrar layout */
+    flex: 1; /* Ocupa espaço disponível */
+    min-width: 160px; /* Evita ficar muito estreito */
 }
 
-/* Classes Utilitárias de Largura */
-.col-sm { flex: 0 0 140px; } /* Datas, Placas, Valores Curtos */
-.col-md { flex: 0 0 220px; } /* Telefones, Documentos, Selects médios */
-.col-lg { flex: 2; min-width: 300px; } /* Nomes, Endereços */
-.col-xl { flex: 3; min-width: 400px; } /* Descrições Longas */
-.col-auto { flex: 0 1 auto; } /* Tamanho do conteúdo */
-.col-full { flex: 0 0 100%; width: 100%; } /* Linha inteira */
+/* Classes de Largura Específica */
+.col-sm { 
+    flex: 0 0 150px; 
+} 
 
-/* Estilo dos Campos */
+.col-md { 
+    flex: 0 0 240px; 
+} 
+
+.col-lg { 
+    flex: 2; 
+    min-width: 300px; 
+} 
+
+.col-xl { 
+    flex: 3; 
+    min-width: 400px; 
+} 
+
+.col-auto { 
+    flex: 0 1 auto; 
+} 
+
+.col-full { 
+    flex: 0 0 100%; 
+    width: 100%; 
+}
+
+/* Estilo dos Inputs e Labels */
 .form-group {
     display: flex;
     flex-direction: column;
@@ -421,24 +510,21 @@ nav ul {
     font-weight: 700;
     margin-bottom: 8px;
     color: var(--secondary-color);
-    letter-spacing: 0.3px;
+    letter-spacing: 0.5px;
 }
 
-.form-group input[type="text"],
-.form-group input[type="number"],
-.form-group input[type="date"],
-.form-group input[type="email"],
-.form-group input[type="password"],
-.form-group select,
+.form-group input, 
+.form-group select, 
 .form-group textarea {
-    padding: 12px 15px;
+    padding: 12px 16px;
     border: 1px solid var(--border-color);
-    border-radius: 6px;
+    border-radius: var(--border-radius-sm);
     font-size: 1rem;
     background-color: #fff;
-    transition: border-color var(--transition-speed), box-shadow var(--transition-speed);
+    transition: all var(--transition-speed);
     width: 100%;
     color: var(--text-color);
+    line-height: 1.5;
 }
 
 .form-group input:focus,
@@ -452,12 +538,13 @@ nav ul {
 .form-group input::placeholder,
 .form-group textarea::placeholder {
     color: #cfd8dc;
+    text-transform: none; /* Placeholder pode ser normal */
 }
 
-/* Botões de Ação do Formulário */
+/* Ações do Formulário (Botões de Salvar/Limpar) */
 .form-actions {
-    margin-top: 30px;
-    padding-top: 20px;
+    margin-top: 40px;
+    padding-top: 25px;
     border-top: 1px solid #eee;
     display: flex;
     gap: 15px;
@@ -465,51 +552,54 @@ nav ul {
     justify-content: flex-start;
 }
 
-/* ==========================================================================
-   7. BOTÕES
-   ========================================================================== */
-.btn-primary, .btn-secondary, .btn-danger, .btn-action, .btn-whatsapp, .btn-success, .btn-warning {
-    padding: 12px 24px;
-    border-radius: 6px;
+/* 8. COMPONENTES: BOTÕES
+   -------------------------------------------------------------------------- */
+.btn-primary, 
+.btn-secondary, 
+.btn-danger, 
+.btn-action, 
+.btn-success, 
+.btn-warning {
+    padding: 12px 28px;
+    border-radius: var(--border-radius-sm);
     cursor: pointer;
-    font-weight: 600;
+    font-weight: 700;
     font-size: 0.9rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 10px;
     text-decoration: none;
     border: none;
-    transition: background-color 0.2s, transform 0.1s;
+    transition: all var(--transition-speed);
     text-transform: uppercase;
     color: white;
-    line-height: 1;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .btn-primary:active, .btn-secondary:active, .btn-danger:active {
-    transform: translateY(1px);
+    transform: translateY(2px);
+    box-shadow: none;
 }
 
-/* Variantes de Cor */
+/* Cores dos Botões */
 .btn-primary { background-color: var(--primary-color); }
-.btn-primary:hover { background-color: var(--primary-hover); }
+.btn-primary:hover { background-color: var(--primary-hover); box-shadow: 0 4px 8px rgba(0, 121, 107, 0.3); }
 
 .btn-secondary { background-color: var(--secondary-color); }
-.btn-secondary:hover { background-color: var(--secondary-hover); }
+.btn-secondary:hover { background-color: var(--secondary-hover); box-shadow: 0 4px 8px rgba(84, 110, 122, 0.3); }
 
 .btn-danger { background-color: var(--danger-color); }
-.btn-danger:hover { background-color: var(--danger-hover); }
+.btn-danger:hover { background-color: var(--danger-hover); box-shadow: 0 4px 8px rgba(244, 67, 54, 0.3); }
 
 .btn-success { background-color: var(--success-color); }
-.btn-success:hover { background-color: var(--success-hover); }
+.btn-success:hover { background-color: #388e3c; }
 
 .btn-warning { background-color: var(--warning-color); }
-.btn-warning:hover { background-color: var(--warning-hover); }
+.btn-warning:hover { background-color: #f57c00; }
 
-.btn-whatsapp { background-color: var(--whatsapp-color); }
-.btn-whatsapp:hover { background-color: #1ebe57; }
-
-/* Botões Pequenos (Tabelas) */
+/* Botões Pequenos (Para Tabelas) */
 .btn-action {
     padding: 6px 12px;
     margin: 0 2px;
@@ -519,9 +609,11 @@ nav ul {
 .edit-btn { background-color: var(--warning-color); }
 .delete-btn { background-color: var(--danger-color); }
 
-/* Botão Mini (Ícones soltos) */
+/* Botões Mini (Ícones Quadrados) */
 .btn-mini {
-    padding: 6px 10px;
+    padding: 6px;
+    width: 32px;
+    height: 32px;
     font-size: 0.8rem;
     border-radius: 4px;
     border: 1px solid #ddd;
@@ -530,46 +622,53 @@ nav ul {
     cursor: pointer;
     transition: all 0.2s;
     margin-left: 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 .btn-mini:hover { background-color: #e0e0e0; }
 
-/* Botões Mini Coloridos */
 .btn-mini.btn-danger { border-color: var(--danger-color); background-color: var(--danger-color); color: white; }
 .btn-mini.btn-warning { border-color: var(--warning-color); background-color: var(--warning-color); color: white; }
 .btn-mini.btn-success { border-color: var(--success-color); background-color: var(--success-color); color: white; }
 .btn-mini.btn-primary { border-color: var(--primary-color); background-color: var(--primary-color); color: white; }
 
-/* ==========================================================================
-   8. TABELAS DE DADOS
-   ========================================================================== */
+/* 9. TABELAS DE DADOS
+   -------------------------------------------------------------------------- */
 .table-responsive {
     width: 100%;
     overflow-x: auto;
     border: 1px solid var(--border-color);
-    border-radius: 6px;
+    border-radius: var(--border-radius);
+    background-color: #fff;
+    margin-top: 15px;
 }
 
 .data-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.9rem;
-    min-width: 700px; /* Garante scroll em telas pequenas */
-    background-color: #fff;
-}
-
-.data-table th, .data-table td {
-    padding: 15px 20px;
-    text-align: left;
-    border-bottom: 1px solid #f0f0f0;
+    font-size: 0.95rem;
+    min-width: 800px; /* Garante que a tabela não esmague em telas pequenas */
 }
 
 .data-table th {
     background-color: #f8f9fa;
     color: var(--secondary-color);
-    font-weight: 700;
+    font-weight: 800;
     text-transform: uppercase;
     font-size: 0.8rem;
     border-bottom: 2px solid #e0e0e0;
+    padding: 18px 20px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.data-table td {
+    padding: 16px 20px;
+    text-align: left;
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: middle;
+    color: var(--text-color);
 }
 
 .data-table tbody tr:hover {
@@ -580,35 +679,35 @@ nav ul {
     border-bottom: none;
 }
 
-/* ==========================================================================
-   9. ABAS (TABS) PARA CADASTROS
-   ========================================================================== */
+/* 10. ABAS DE NAVEGAÇÃO INTERNA (TABS)
+   -------------------------------------------------------------------------- */
 .tab-controls {
     display: flex;
-    gap: 8px;
-    margin-bottom: 25px;
+    gap: 5px;
+    margin-bottom: 30px;
     overflow-x: auto;
     padding-bottom: 5px;
     border-bottom: 2px solid #eee;
 }
 
 .cadastro-tab-btn {
-    padding: 12px 24px;
+    padding: 14px 24px;
     border: none;
     border-radius: 8px 8px 0 0;
     background-color: transparent;
     color: var(--text-muted);
     cursor: pointer;
-    font-weight: 600;
+    font-weight: 700;
     transition: all 0.2s;
     white-space: nowrap;
     position: relative;
     top: 2px;
+    font-size: 0.9rem;
 }
 
 .cadastro-tab-btn:hover {
     color: var(--primary-color);
-    background-color: #f5f5f5;
+    background-color: #fcfcfc;
 }
 
 .cadastro-tab-btn.active {
@@ -617,48 +716,48 @@ nav ul {
     border: 1px solid #eee;
     border-bottom-color: var(--surface-color);
     z-index: 10;
+    box-shadow: 0 -2px 5px rgba(0,0,0,0.02);
 }
 
 .cadastro-form {
     display: none;
-    animation: fadeIn 0.3s;
+    animation: fadeIn 0.3s ease;
 }
 
 .cadastro-form.active {
     display: block;
 }
 
-/* ==========================================================================
-   10. SUPER ADMIN (PAINEL HIERÁRQUICO)
-   ========================================================================== */
+/* 11. SUPER ADMIN - HIERARQUIA VISUAL
+   -------------------------------------------------------------------------- */
 .super-search-box {
     border: 1px solid #ddd;
-    padding: 12px;
+    padding: 15px;
     border-radius: 8px;
     display: flex;
     align-items: center;
-    margin-bottom: 25px;
+    margin-bottom: 30px;
     background: #fff;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
 }
 
 .hierarchy-container {
-    margin-top: 15px;
+    margin-top: 20px;
 }
 
 /* Bloco da Empresa */
 .domain-block {
     border: 1px solid #e0e0e0;
     border-radius: 8px;
-    margin-bottom: 20px;
+    margin-bottom: 25px;
     background: #fff;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
     overflow: hidden;
 }
 
 .domain-header {
     background-color: #f8f9fa;
-    padding: 15px 20px;
+    padding: 20px 25px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -672,27 +771,28 @@ nav ul {
 }
 
 .domain-title {
-    font-weight: 700;
+    font-weight: 800;
     color: var(--text-color);
     display: flex;
     align-items: center;
-    gap: 12px;
-    font-size: 1.1rem;
+    gap: 15px;
+    font-size: 1.2rem;
 }
 
 .domain-title i {
     color: var(--primary-color);
+    font-size: 1.4rem;
 }
 
 .domain-actions {
     display: flex;
-    gap: 10px;
+    gap: 12px;
 }
 
-/* Conteúdo da Cascata (Dropdown) */
+/* Conteúdo Expansível */
 .domain-content {
     display: none;
-    padding: 25px;
+    padding: 30px;
     background-color: #fff;
     border-top: 1px solid #e0e0e0;
 }
@@ -702,29 +802,29 @@ nav ul {
     animation: fadeIn 0.3s;
 }
 
-/* Seções Internas (Admin vs Funcionários) */
+/* Seções de Admins e Funcionários */
 .admin-section {
-    background-color: #e3f2fd; /* Azul Suave */
-    padding: 15px;
-    border-left: 4px solid #2196f3;
-    margin-bottom: 20px;
-    border-radius: 4px;
+    background-color: #e3f2fd;
+    padding: 20px;
+    border-left: 5px solid #2196f3;
+    margin-bottom: 25px;
+    border-radius: 6px;
 }
 
 .employee-section {
-    padding-left: 20px;
-    border-left: 3px solid #f5f5f5;
+    padding-left: 25px;
+    border-left: 4px solid #f5f5f5;
 }
 
-/* Linha de Usuário */
+/* Lista de Usuários */
 .user-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 0;
+    padding: 15px 0;
     border-bottom: 1px solid #f0f0f0;
     flex-wrap: wrap;
-    gap: 15px;
+    gap: 20px;
 }
 
 .user-row:last-child {
@@ -740,115 +840,103 @@ nav ul {
     font-size: 0.9rem;
     color: #666;
     text-transform: lowercase;
-}
-
-.user-role-badge {
-    font-size: 0.7rem;
-    padding: 2px 8px;
-    border-radius: 12px;
-    text-transform: uppercase;
-    width: fit-content;
     margin-top: 4px;
-    font-weight: 700;
 }
-
-.badge-admin { background-color: #263238; color: white; }
-.badge-func { background-color: #78909c; color: white; }
 
 .status-pill {
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 0.7rem;
-    font-weight: bold;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 800;
     color: white;
     text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 .pill-active { background-color: var(--success-color); }
 .pill-blocked { background-color: var(--danger-color); }
 
-/* =============================================================================
-   11. PERFIL DO FUNCIONÁRIO (FICHA VISUAL)
-   ============================================================================= */
+/* 12. PERFIL DO FUNCIONÁRIO (FICHA VISUAL)
+   -------------------------------------------------------------------------- */
 .profile-view-container {
     background-color: #fff;
-    border-radius: 8px;
-    padding: 20px;
+    border-radius: 12px;
+    padding: 30px;
+    border: 1px solid #eee;
 }
 
 .profile-header {
     display: flex;
     align-items: center;
-    gap: 25px;
-    margin-bottom: 30px;
-    border-bottom: 2px solid var(--primary-color);
-    padding-bottom: 20px;
+    gap: 30px;
+    margin-bottom: 40px;
+    border-bottom: 3px solid var(--primary-color);
+    padding-bottom: 30px;
 }
 
 .profile-avatar-placeholder {
-    width: 80px;
-    height: 80px;
+    width: 100px;
+    height: 100px;
     background-color: var(--secondary-color);
     color: white;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2rem;
-    font-weight: bold;
+    font-size: 3rem;
+    font-weight: 800;
 }
 
 .profile-info-main h2 {
     color: var(--primary-color);
-    margin-bottom: 5px;
+    margin-bottom: 10px;
     border: none;
-    font-size: 1.8rem;
+    font-size: 2rem;
 }
 
 .profile-info-main p {
     color: #666;
-    font-size: 1rem;
+    font-size: 1.1rem;
     font-weight: 500;
 }
 
 .profile-data-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 30px;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 40px;
 }
 
 .data-item {
     border-bottom: 1px solid #eee;
-    padding-bottom: 8px;
+    padding-bottom: 10px;
 }
 
 .data-item label {
     display: block;
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     color: var(--secondary-color);
-    font-weight: 700;
-    margin-bottom: 5px;
+    font-weight: 800;
+    margin-bottom: 6px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
 .data-item span {
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     color: var(--text-color);
-    font-weight: 500;
+    font-weight: 600;
     display: block;
 }
 
-/* =============================================================================
-   12. FILTROS E PESQUISA (FUNCIONÁRIO)
-   ============================================================================= */
+/* 13. FILTROS DE FUNCIONÁRIO (MOBILE FRIENDLY)
+   -------------------------------------------------------------------------- */
 .employee-filter-container {
     background-color: #f8f9fa;
-    padding: 20px;
-    border-radius: 8px;
+    padding: 25px;
+    border-radius: 12px;
     border: 1px solid #e0e0e0;
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 20px;
 }
 
 .ef-row {
@@ -865,68 +953,89 @@ nav ul {
 
 .ef-input {
     width: 100%;
-    padding: 10px;
+    padding: 12px;
     border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 0.95rem;
-    height: 42px;
+    border-radius: 6px;
+    font-size: 1rem;
+    height: 48px;
 }
 
 .ef-btn {
     flex: 1;
-    height: 42px;
+    height: 48px;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    font-size: 0.9rem;
+    gap: 12px;
+    font-size: 1rem;
     font-weight: 700;
     border: none;
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
     text-transform: uppercase;
     color: white;
 }
 
-/* =============================================================================
-   13. MODAIS E NOTIFICAÇÕES
-   ============================================================================= */
+/* 14. MODAIS E POPUPS
+   -------------------------------------------------------------------------- */
 .modal {
     display: none;
     position: fixed;
-    z-index: 1000;
+    z-index: 2000;
     left: 0;
     top: 0;
     width: 100%;
     height: 100%;
     overflow: auto;
-    background-color: rgba(0,0,0,0.6);
-    backdrop-filter: blur(4px);
+    background-color: rgba(0,0,0,0.7);
+    backdrop-filter: blur(5px);
 }
 
 .modal-content {
     background-color: var(--surface-color);
     margin: 5vh auto;
-    padding: 30px;
+    padding: 40px;
     border: 1px solid #888;
     width: 90%;
-    max-width: 650px;
+    max-width: 700px;
     border-radius: 12px;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.3);
     animation: fadeIn 0.3s;
     position: relative;
 }
 
+.modal-content h3 {
+    color: var(--primary-color);
+    border-bottom: 2px solid #f0f0f0;
+    padding-bottom: 15px;
+    margin-bottom: 25px;
+    font-size: 1.5rem;
+}
+
 .close-btn {
     position: absolute;
-    top: 15px;
-    right: 20px;
+    top: 20px;
+    right: 25px;
     color: #aaa;
-    font-size: 28px;
+    font-size: 32px;
     font-weight: bold;
     cursor: pointer;
+    transition: color 0.2s;
+    z-index: 100;
 }
+
 .close-btn:hover { color: var(--danger-color); }
+
+/* Bloco de Detalhes da Operação */
+.modal-operation-block {
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    border-left: 5px solid var(--secondary-color);
+    border-radius: 4px;
+    font-size: 1rem;
+    background-color: #fafafa;
+}
 
 /* Modal de Notificação */
 .notification-box {
@@ -934,74 +1043,92 @@ nav ul {
     background: #fff8e1;
     text-align: center;
 }
+
 .notification-box h3 {
     color: #e65100;
     border-bottom: none;
-    font-size: 1.5rem;
+    font-size: 1.8rem;
+    margin-bottom: 10px;
 }
+
 .notification-text {
-    font-size: 1.2rem;
-    margin: 20px 0;
+    font-size: 1.3rem;
+    margin: 25px 0;
     white-space: pre-wrap;
     color: #333;
     font-weight: 500;
-    line-height: 1.5;
+    line-height: 1.6;
 }
 
-/* =============================================================================
-   14. CALENDÁRIO
-   ============================================================================= */
-.calendar-section { margin-top: 20px; }
+/* 15. CALENDÁRIO VISUAL
+   -------------------------------------------------------------------------- */
+.calendar-section { margin-top: 30px; }
+
 .calendar-controls {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 15px;
+    margin-bottom: 20px;
 }
+
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
+    gap: 8px;
     text-align: center;
 }
+
 .day-label {
-    font-weight: 700;
+    font-weight: 800;
     color: var(--primary-color);
-    padding: 10px 0;
+    padding: 15px 0;
     background-color: #e0f2f1;
-    border-radius: 4px 4px 0 0;
+    border-radius: 8px 8px 0 0;
 }
+
 .day-cell {
     padding: 10px 5px;
     background-color: #fff;
     border: 1px solid #f0f0f0;
-    border-radius: 4px;
+    border-radius: 8px;
     position: relative;
     cursor: pointer;
-    min-height: 70px;
-    font-weight: 600;
-    font-size: 0.9rem;
-    transition: background 0.1s;
+    min-height: 90px;
+    font-weight: 700;
+    font-size: 1rem;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
 }
-.day-cell:hover { background-color: #fafafa; border-color: var(--primary-color); }
+
+.day-cell:hover {
+    background-color: #fafafa;
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
 .day-cell.has-operation {
     background-color: #e8f5e9 !important;
-    border-color: #81c784;
+    border: 1px solid #81c784;
     color: #1b5e20;
 }
+
 .event-dot {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
     background-color: var(--warning-color);
     border-radius: 50%;
     position: absolute;
-    top: 8px;
-    right: 8px;
+    top: 10px;
+    right: 10px;
+    box-shadow: 0 0 5px rgba(0,0,0,0.2);
 }
 
-/* =============================================================================
-   15. TELA DE LOGIN
-   ============================================================================= */
+/* 16. TELA DE LOGIN
+   -------------------------------------------------------------------------- */
 .login-body {
     background-color: var(--header-bg);
     display: flex;
@@ -1010,69 +1137,134 @@ nav ul {
     height: 100vh;
     padding: 20px;
 }
+
 .login-container {
     background-color: white;
-    padding: 50px;
-    border-radius: 12px;
-    box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+    padding: 60px;
+    border-radius: 16px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.4);
     width: 100%;
-    max-width: 450px;
+    max-width: 480px;
 }
+
 .login-header {
     text-align: center;
-    margin-bottom: 30px;
-    border-bottom: 2px solid var(--primary-color);
-    padding-bottom: 25px;
+    margin-bottom: 40px;
+    border-bottom: 4px solid var(--primary-color);
+    padding-bottom: 30px;
 }
+
 .login-header h1 {
     color: var(--text-color);
-    font-size: 2.2rem;
-    margin-bottom: 5px;
+    font-size: 2.5rem;
+    margin-bottom: 10px;
 }
+
 .login-header p {
     color: var(--secondary-color);
     font-weight: 600;
-    letter-spacing: 1px;
-    font-size: 0.85rem;
+    letter-spacing: 1.5px;
+    font-size: 0.9rem;
 }
 
-/* =============================================================================
-   16. RESPONSIVIDADE
-   ============================================================================= */
+/* 17. LISTAS E LEMBRETES
+   -------------------------------------------------------------------------- */
+.reminder-item {
+    background: #fff3e0;
+    border: 1px solid #ffe0b2;
+    padding: 20px;
+    margin-bottom: 15px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.reminder-info strong {
+    color: #e65100;
+    display: block;
+    margin-bottom: 5px;
+    font-size: 1.1rem;
+}
+
+.reminder-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.simple-list {
+    list-style: none;
+    margin-top: 10px;
+    padding: 0;
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.simple-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    border-bottom: 1px solid #eee;
+    font-size: 0.95rem;
+}
+
+.simple-list li:last-child {
+    border-bottom: none;
+}
+
+/* 18. RESPONSIVIDADE (MEDIA QUERIES)
+   -------------------------------------------------------------------------- */
 @media (max-width: 768px) {
     .mobile-nav { display: flex; }
     
     .sidebar {
         transform: translateX(-100%);
-        top: 60px;
-        height: calc(100% - 60px);
-        width: 250px;
+        top: var(--header-height);
+        height: calc(100% - var(--header-height));
+        width: 280px;
     }
+    
     .sidebar.active { transform: translateX(0); }
 
     .content {
         margin-left: 0;
-        margin-top: 60px;
+        margin-top: var(--header-height);
         padding: 20px;
     }
 
+    /* Cards e Grids em Coluna Única */
     .form-grid, .card-grid { grid-template-columns: 1fr; }
+    
+    /* Modais Ocupam mais espaço */
     .modal-content { width: 95%; margin: 10% auto; padding: 20px; }
     
-    /* Força formulários em coluna no mobile */
+    /* Formulários Verticalizados */
     .form-row { flex-direction: column; gap: 15px; }
     .form-col { width: 100%; }
     .col-sm, .col-md, .col-lg, .col-xl { flex: 1 1 100%; }
     
     .ef-row { flex-direction: column; gap: 15px; }
     
-    /* Ajuste de botões */
+    /* Botões Full Width */
     .form-actions { justify-content: center; }
     .form-actions button { width: 100%; }
+    
+    .reminder-item { flex-direction: column; align-items: flex-start; }
+    .reminder-actions { width: 100%; justify-content: flex-end; margin-top: 10px; }
+    
+    .calendar-grid { gap: 2px; }
+    .day-cell { min-height: 50px; font-size: 0.8rem; padding: 5px; }
+    .event-dot { width: 6px; height: 6px; top: 4px; right: 4px; }
 }
 
 @media print {
-    .no-print { display: none !important; }
-    .sidebar { display: none !important; }
+    .no-print, .sidebar, .mobile-nav { display: none !important; }
     .content { margin: 0 !important; padding: 0 !important; }
+    .card { box-shadow: none; border: 1px solid #ccc; }
+    .btn-primary, .btn-secondary, .form-actions { display: none !important; }
 }
