@@ -2088,3 +2088,167 @@ document.addEventListener('DOMContentLoaded', () => {
     // Inicializa Handlers de Formulário
     if (typeof setupFormHandlers === 'function') setupFormHandlers();
 });
+// =============================================================================
+// CORREÇÃO E OTIMIZAÇÃO: CALENDÁRIO + LISTA DE OPERAÇÕES
+// COPIE E COLE NO FINAL DO ARQUIVO SCRIPT.JS
+// =============================================================================
+
+// 1. CALENDÁRIO OTIMIZADO (CARREGAMENTO RÁPIDO)
+window.renderCalendar = () => {
+    const grid = document.getElementById('calendarGrid');
+    const title = document.getElementById('currentMonthYear');
+
+    if (!grid || !title) return;
+
+    grid.innerHTML = ''; 
+
+    // Garante que existe data selecionada, senão usa hoje
+    if (!window.currentDate) window.currentDate = new Date();
+
+    const year = window.currentDate.getFullYear();
+    const month = window.currentDate.getMonth();
+
+    const monthNames = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
+    title.textContent = `${monthNames[month]} ${year}`;
+
+    const weekDays = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+    weekDays.forEach(day => {
+        const d = document.createElement('div');
+        d.className = 'day-label';
+        d.textContent = day;
+        grid.appendChild(d);
+    });
+
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const lastDay = new Date(year, month + 1, 0).getDate();
+
+    // Padding inicial (dias vazios)
+    for (let i = 0; i < firstDayIndex; i++) {
+        const empty = document.createElement('div');
+        empty.className = 'day-cell empty';
+        grid.appendChild(empty);
+    }
+
+    // --- OTIMIZAÇÃO DE PERFORMANCE ---
+    // Cria um Índice (Mapa) das operações do mês para não filtrar 30 vezes
+    const ops = loadData(DB_KEYS.OPERACOES) || [];
+    const opsMap = {};
+
+    ops.forEach(op => {
+        if (op.status === 'CANCELADA') return;
+        // Chave do mapa é a data YYYY-MM-DD
+        if (!opsMap[op.data]) opsMap[op.data] = [];
+        opsMap[op.data].push(op);
+    });
+
+    // Renderiza Dias
+    for (let i = 1; i <= lastDay; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'day-cell';
+        cell.textContent = i;
+
+        // Formata data do loop (YYYY-MM-DD)
+        const mesFmt = (month + 1).toString().padStart(2, '0');
+        const diaFmt = i.toString().padStart(2, '0');
+        const dataLoop = `${year}-${mesFmt}-${diaFmt}`;
+
+        // Busca instantânea no mapa
+        const opsDoDia = opsMap[dataLoop] || [];
+
+        if (opsDoDia.length > 0) {
+            cell.classList.add('has-operation');
+            
+            const dot = document.createElement('div');
+            dot.className = 'event-dot';
+            cell.appendChild(dot);
+
+            const info = document.createElement('span');
+            info.style.fontSize = '0.65rem';
+            info.style.marginTop = 'auto';
+            info.style.color = '#1b5e20';
+            info.innerText = `${opsDoDia.length} VIAGEM(NS)`;
+            cell.appendChild(info);
+
+            cell.onclick = () => window.openDayDetails(dataLoop, opsDoDia);
+        }
+
+        grid.appendChild(cell);
+    }
+};
+
+window.changeMonth = (delta) => {
+    window.currentDate.setMonth(window.currentDate.getMonth() + delta);
+    window.renderCalendar();
+    if(typeof window.updateDashboardStats === 'function') window.updateDashboardStats();
+};
+
+// 2. RENDERIZAÇÃO DA TABELA DE OPERAÇÕES (HISTÓRICO)
+window.renderOperacaoTable = () => {
+    const tbody = document.querySelector('#tabelaOperacoes tbody');
+    if (!tbody) return;
+
+    // Carrega e Clona o array para ordenar sem afetar o cache
+    let ops = (loadData(DB_KEYS.OPERACOES) || []).slice();
+
+    // Ordena: Mais recente primeiro
+    ops.sort((a, b) => new Date(b.data) - new Date(a.data) || b.id - a.id);
+
+    if (ops.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:#999;">NENHUMA OPERAÇÃO LANÇADA.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = ops.map(op => {
+        // Formatação de Dados
+        const dataFmt = op.data ? op.data.split('-').reverse().join('/') : '-';
+        
+        // Busca nome do motorista seguro
+        let nomeMotorista = '---';
+        if (op.motoristaId) {
+            const m = window.getFuncionario(op.motoristaId);
+            nomeMotorista = m ? m.nome : '(Excluído)';
+        }
+
+        // Estilização do Status
+        let statusClass = 'pill-blocked'; // cor vermelha padrão
+        let statusLabel = op.status;
+        
+        if (op.status === 'CONFIRMADA') {
+            statusClass = 'pill-active'; // verde
+        } else if (op.status === 'AGENDADA') {
+            statusClass = ''; 
+            statusLabel = `<span style="color:var(--warning-color); font-weight:bold;">AGENDADA</span>`;
+        } else if (op.status === 'EM_ANDAMENTO') {
+            statusClass = '';
+            statusLabel = `<span style="color:var(--info-color); font-weight:bold;">EM ANDAMENTO</span>`;
+        }
+
+        const htmlStatus = statusClass ? `<span class="status-pill ${statusClass}">${statusLabel}</span>` : statusLabel;
+
+        // Botões de Ação
+        // Note: Usamos aspas simples nos IDs strings para evitar erro de JS
+        const btns = `
+            <button class="btn-mini btn-primary" title="Ver Detalhes Financeiros" onclick="viewOperacaoDetails(${op.id})">
+                <i class="fas fa-eye"></i>
+            </button>
+            ${!window.IS_READ_ONLY ? `
+            <button class="btn-mini edit-btn" title="Editar Operação" onclick="editOperacaoItem(${op.id})">
+                <i class="fas fa-edit"></i>
+            </button>
+            <button class="btn-mini delete-btn" title="Excluir" onclick="deleteItem('${DB_KEYS.OPERACOES}', ${op.id})">
+                <i class="fas fa-trash"></i>
+            </button>
+            ` : ''}
+        `;
+
+        return `
+            <tr>
+                <td>${dataFmt}</td>
+                <td>${nomeMotorista}</td>
+                <td>${htmlStatus}</td>
+                <td>${window.formatCurrency(op.faturamento || 0)}</td>
+                <td>${btns}</td>
+            </tr>
+        `;
+    }).join('');
+};
