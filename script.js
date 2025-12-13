@@ -1467,6 +1467,150 @@ window.editOperacaoItem = (id) => {
     
     alert("Operação carregada para edição.");
 };
+
+// =============================================================================
+// LÓGICA DO CALENDÁRIO (CÓDIGO ADICIONAL CORRETIVO)
+// =============================================================================
+
+// Função para navegar entre os meses
+window.changeMonth = (delta) => {
+    // window.currentDate já foi definido no início do script.js
+    window.currentDate.setMonth(window.currentDate.getMonth() + delta);
+    
+    // Re-renderiza o calendário e atualiza os dados do dashboard
+    window.renderCalendar();
+    if(typeof window.updateDashboardStats === 'function') window.updateDashboardStats();
+};
+
+// Função principal de renderização do calendário
+window.renderCalendar = () => {
+    const grid = document.getElementById('calendarGrid');
+    const title = document.getElementById('currentMonthYear');
+
+    // Se não estiver na tela de dashboard (elementos não existem), para a execução
+    if (!grid || !title) return;
+
+    grid.innerHTML = ''; // Limpa o grid anterior
+
+    const year = window.currentDate.getFullYear();
+    const month = window.currentDate.getMonth();
+
+    // Nomes dos Meses em Português
+    const monthNames = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
+    
+    // Atualiza o Título
+    title.textContent = `${monthNames[month]} ${year}`;
+
+    // 1. Renderiza Cabeçalho (DOM, SEG, TER...)
+    const weekDays = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+    weekDays.forEach(day => {
+        const d = document.createElement('div');
+        d.className = 'day-label';
+        d.textContent = day;
+        grid.appendChild(d);
+    });
+
+    // 2. Cálculos de Dias
+    const firstDayIndex = new Date(year, month, 1).getDay(); // Dia da semana que começa o mês (0-6)
+    const lastDay = new Date(year, month + 1, 0).getDate(); // Total de dias no mês (28-31)
+
+    // 3. Renderiza Células Vazias (Padding inicial)
+    for (let i = 0; i < firstDayIndex; i++) {
+        const empty = document.createElement('div');
+        empty.className = 'day-cell empty';
+        grid.appendChild(empty);
+    }
+
+    // Carrega operações para marcar no calendário
+    const ops = loadData(DB_KEYS.OPERACOES) || [];
+
+    // 4. Renderiza Dias do Mês
+    for (let i = 1; i <= lastDay; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'day-cell';
+        cell.textContent = i;
+
+        // Formata data atual do loop para YYYY-MM-DD para comparar com o banco
+        const mesFmt = (month + 1).toString().padStart(2, '0');
+        const diaFmt = i.toString().padStart(2, '0');
+        const dataLoop = `${year}-${mesFmt}-${diaFmt}`;
+
+        // Filtra operações deste dia específico
+        const opsDoDia = ops.filter(o => o.data === dataLoop && o.status !== 'CANCELADA');
+
+        // Se houver operações, adiciona estilo e evento de clique
+        if (opsDoDia.length > 0) {
+            cell.classList.add('has-operation');
+            
+            // Adiciona bolinha indicadora
+            const dot = document.createElement('div');
+            dot.className = 'event-dot';
+            cell.appendChild(dot);
+
+            // Contador de viagens
+            const info = document.createElement('span');
+            info.style.fontSize = '0.65rem';
+            info.style.marginTop = 'auto';
+            info.style.color = '#1b5e20';
+            info.innerText = `${opsDoDia.length} VIAGEM(NS)`;
+            cell.appendChild(info);
+
+            // Clique abre o modal do dia
+            cell.onclick = () => window.openDayDetails(dataLoop, opsDoDia);
+        }
+
+        grid.appendChild(cell);
+    }
+};
+
+// Função para abrir o Modal de Detalhes do Dia (Necessária para o clique no calendário)
+window.openDayDetails = (dataStr, ops) => {
+    const modal = document.getElementById('modalDayOperations');
+    if(!modal) return;
+    
+    const body = document.getElementById('modalDayBody');
+    const title = document.getElementById('modalDayTitle');
+    
+    title.textContent = `OPERAÇÕES DO DIA: ${dataStr.split('-').reverse().join('/')}`;
+    
+    if(ops.length === 0) {
+        body.innerHTML = '<p style="padding:20px; text-align:center;">Nenhuma operação registrada.</p>';
+    } else {
+        const listaHtml = ops.map(o => {
+            const motorista = window.getMotorista(o.motoristaId);
+            const nomeMot = motorista ? motorista.nome : 'MOTORISTA NÃO ENCONTRADO';
+            
+            // Define cor do status
+            let corStatus = 'gray';
+            if (o.status === 'CONFIRMADA') corStatus = 'var(--success-color)';
+            if (o.status === 'AGENDADA') corStatus = 'var(--warning-color)';
+            if (o.status === 'EM_ANDAMENTO') corStatus = 'var(--info-color)';
+
+            return `
+                <div style="border:1px solid #eee; padding:15px; border-radius:8px; margin-bottom:10px; background:#fff; border-left:4px solid ${corStatus}; display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <strong style="color:#333; font-size:1rem;">VIAGEM #${o.id}</strong><br>
+                        <span style="color:#666; font-size:0.85rem;"><i class="fas fa-truck"></i> ${o.veiculoPlaca} | <i class="fas fa-user"></i> ${nomeMot}</span>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="font-weight:bold; color:${corStatus};">${o.status}</span><br>
+                        <strong style="color:#333;">${window.formatCurrency(o.faturamento)}</strong>
+                    </div>
+                    <div style="margin-left:15px;">
+                         <button class="btn-mini btn-primary" title="Editar" 
+                            onclick="document.getElementById('modalDayOperations').style.display='none'; editOperacaoItem(${o.id})">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        body.innerHTML = listaHtml;
+    }
+    
+    modal.style.display = 'block';
+};
 // =============================================================================
 // ARQUIVO: script.js
 // VERSÃO: 8.0
