@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>LOGIMASTER | SISTEMA DE GESTÃO DE FROTAS</title>
+    <title>LOGIMASTER | GESTÃO DE FROTAS E LOGÍSTICA</title>
     
     <link rel="stylesheet" href="style.css">
     
@@ -52,7 +52,7 @@
                 </li>
                 <li class="nav-item" data-page="access-management">
                     <i class="fas fa-users-cog"></i> EQUIPE & AVISOS 
-                    <span id="badgeAccess" style="background:orange; color:white; padding:2px 8px; border-radius:12px; font-size:0.7rem; margin-left:auto; display:none;">!</span>
+                    <span id="badgeAccess" style="display:none; background:orange; color:white; padding:2px 6px; border-radius:4px; font-size:0.7rem; margin-left:5px;">!</span>
                 </li>
                 <li class="nav-item" data-page="despesas">
                     <i class="fas fa-file-invoice-dollar"></i> DESPESAS GERAIS
@@ -97,7 +97,7 @@
             <button onclick="logoutSystem()" class="btn-danger" style="width: 100%;">
                 <i class="fas fa-sign-out-alt"></i> SAIR DO SISTEMA
             </button>
-            <p>&copy; LOGIMASTER 2025</p>
+            <p style="text-align:center; font-size:0.7rem; color:#888; margin-top:10px;">&copy; LOGIMASTER 2025</p>
         </div>
     </header>
 
@@ -140,12 +140,14 @@
 
         <section id="graficos" class="page">
             <h2>ANÁLISE GRÁFICA</h2>
+            
             <div class="card-grid">
                  <div class="card stat-card success">
-                    <p>RECEITA TOTAL ACUMULADA</p>
+                    <p>RECEITA TOTAL ACUMULADA (ANO)</p>
                     <h3 id="receitaTotalHistorico">R$ 0,00</h3>
                 </div>
             </div>
+            
             <div class="card">
                 <h3>PERFORMANCE FINANCEIRA ANUAL</h3>
                 <div class="chart-container" style="position: relative; height:400px; width:100%;">
@@ -161,13 +163,13 @@
                 <form id="formOperacao">
                     <input type="hidden" id="operacaoId">
                     
-                    <div style="background: #e3f2fd; padding: 15px; border-radius: 6px; margin-bottom: 25px; border: 1px solid #90caf9; display:flex; align-items:flex-start; gap:10px;">
-                        <input type="checkbox" id="operacaoIsAgendamento" style="width: 20px; height: 20px; margin-top: 2px;"> 
+                    <div style="background: #e3f2fd; padding: 20px; border-radius: 6px; margin-bottom: 30px; border: 1px solid #90caf9; display:flex; align-items:flex-start; gap:15px;">
+                        <input type="checkbox" id="operacaoIsAgendamento" style="width: 25px; height: 25px; margin-top: 2px; cursor:pointer;"> 
                         <div>
-                            <label for="operacaoIsAgendamento" style="font-weight:bold; color:var(--primary-color); font-size:1rem; cursor:pointer;">
+                            <label for="operacaoIsAgendamento" style="font-weight:bold; color:var(--primary-color); font-size:1.1rem; cursor:pointer;">
                                 AGENDAR OPERAÇÃO (DISPONIBILIZAR PARA CHECK-IN)
                             </label>
-                            <div style="font-size:0.85rem; color:#546e7a; margin-top: 5px;">
+                            <div style="font-size:0.9rem; color:#546e7a; margin-top: 5px;">
                                 Se marcado, a viagem aparecerá no celular do motorista para ele iniciar e finalizar.
                                 <br>Se desmarcado, a operação será salva como <strong>CONFIRMADA</strong> imediatamente.
                             </div>
@@ -280,7 +282,7 @@
                                     <select id="selectAjudantesOperacao" style="flex-grow: 1;">
                                         <option value="">AGUARDE...</option>
                                     </select>
-                                    <button type="button" id="btnManualAddAjudante" class="btn-primary" style="height: 48px; width: 60px; display: flex; justify-content: center; align-items: center;" title="Adicionar Ajudante">
+                                    <button type="button" id="btnManualAddAjudante" class="btn-primary" style="height: 48px; width: 60px; display: flex; justify-content: center; align-items: center;" title="Adicionar Ajudante Manualmente">
                                         <i class="fas fa-plus"></i>
                                     </button>
                                 </div>
@@ -306,7 +308,7 @@
                 </form>
 
                 <div class="card" style="margin-top: 30px;">
-                    <h3>HISTÓRICO RECENTE DE OPERAÇÕES</h3>
+                    <h3><i class="fas fa-history"></i> HISTÓRICO DE OPERAÇÕES RECENTES</h3>
                     <div class="table-responsive">
                         <table id="tabelaOperacoes" class="data-table">
                             <thead>
@@ -351,16 +353,16 @@
                 <form id="formAdminMessage">
                     <div class="form-row">
                         <div class="form-col col-lg">
-                            <label>DESTINATÁRIO:</label>
+                            <label>DESTINATÁRIO (SELECIONE):</label>
                             <select id="msgRecipientSelect">
                                 <option value="all">TODOS OS FUNCIONÁRIOS</option>
-                            </select>
+                                </select>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-col col-full">
                             <label>MENSAGEM:</label>
-                            <textarea id="msgTextAdmin" rows="3" required placeholder="Escreva o aviso aqui..."></textarea>
+                            <textarea id="msgTextAdmin" rows="4" required placeholder="Escreva o aviso aqui..."></textarea>
                         </div>
                     </div>
                     <div class="form-actions">
@@ -817,14 +819,18 @@
         <section id="config" class="page">
             <h2>CONFIGURAÇÕES DO SISTEMA</h2>
             <div class="card">
-                <h3>BACKUP E RESTAURAÇÃO</h3>
-                <p>Salve todos os dados da empresa em um arquivo seguro.</p>
+                <h3>MANUTENÇÃO E DADOS</h3>
+                <p>Gerencie os backups e a integridade dos dados da empresa.</p>
                 <div class="form-actions">
                     <button class="btn-primary" onclick="exportDataBackup()"><i class="fas fa-download"></i> EXPORTAR DADOS</button>
                     <label class="btn-secondary" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer;">
                         <i class="fas fa-upload"></i> IMPORTAR DADOS
                         <input id="inputImportBackup" type="file" accept="application/json" style="display:none" onchange="importDataBackup(event)">
                     </label>
+                    
+                    <button class="btn-danger" onclick="resetSystemData()" style="margin-left: auto;">
+                        <i class="fas fa-trash-alt"></i> ZERAR SISTEMA
+                    </button>
                 </div>
             </div>
         </section>
@@ -879,7 +885,8 @@
         <section id="employee-profile" class="page">
             <h2>MEUS DADOS CADASTRAIS</h2>
             <div class="card">
-                <div id="employeeProfileView"></div> <div class="form-actions" style="justify-content:center; margin-top:20px;">
+                <div id="employeeProfileView"></div>
+                <div class="form-actions" style="justify-content:center; margin-top:20px;">
                     <button class="btn-warning" onclick="document.getElementById('modalRequestProfileChange').style.display='block'">SOLICITAR ALTERAÇÃO DE DADOS</button>
                 </div>
             </div>
@@ -891,6 +898,14 @@
     
     <div id="viewItemModal" class="modal"><div class="modal-content"><span onclick="closeViewModal()" class="close-btn">&times;</span><h3 id="viewItemTitle">VISUALIZAR</h3><div id="viewItemBody"></div></div></div>
     
+    <div id="modalDayOperations" class="modal">
+        <div class="modal-content">
+            <span onclick="document.getElementById('modalDayOperations').style.display='none'" class="close-btn">&times;</span>
+            <h3 id="modalDayTitle">OPERAÇÕES DO DIA</h3>
+            <div id="modalDayBody" class="table-responsive"></div>
+        </div>
+    </div>
+
     <div id="modalCheckinConfirm" class="modal">
         <div class="modal-content">
             <h3 id="checkinModalTitle">CHECK-IN</h3>
@@ -961,13 +976,13 @@
       const firebaseConfig = { apiKey: "AIzaSyBZjVdcyjbEoR_-X6_lZuTRDMeN2wIntZI", authDomain: "logi-master-dd4cd.firebaseapp.com", projectId: "logi-master-dd4cd", storageBucket: "logi-master-dd4cd.firebasestorage.app", messagingSenderId: "673000154258", appId: "1:673000154258:web:fc9d6fced43e557076324b" };
       const app = initializeApp(firebaseConfig);
       
-      // Secondary App para criação de users sem logout
+      // Instância Secundária para o Admin criar contas sem sair da sua
       const secondaryApp = initializeApp(firebaseConfig, "Secondary");
 
       const db = getFirestore(app);
       const auth = getAuth(app);
       
-      // EXPORTAÇÃO GLOBAL SEGURA
+      // EXPORTAÇÃO GLOBAL PARA O SCRIPT.JS USAR
       window.dbRef = { 
           db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, 
           updateDoc, query, where, deleteDoc, getDocs, addDoc, 
@@ -987,7 +1002,7 @@
                   if(emailElem) emailElem.textContent = userData.email.toUpperCase();
                   if(roleElem) roleElem.textContent = userData.role.toUpperCase();
                   
-                  // Inicia sistema com delay seguro
+                  // Inicia sistema com delay seguro para carregar DB
                   setTimeout(() => { 
                       if (window.initSystemByRole) window.initSystemByRole(userData); 
                   }, 500);
