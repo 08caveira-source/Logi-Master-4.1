@@ -1,11 +1,11 @@
 /* =============================================================================
    LOGIMASTER - SISTEMA DE GESTÃO DE FROTAS
-   VERSÃO: 4.5 (FULL EXPANDED)
+   VERSÃO: 8.0 (ESTILO COMPLETO E CORRIGIDO)
    ============================================================================= */
 
 /* 1. IMPORTAÇÕES E VARIÁVEIS GLOBAIS
    -------------------------------------------------------------------------- */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@300;400;600;700&display=swap');
 
 :root {
     /* --- PALETA DE CORES PRINCIPAL (IDENTIDADE CORPORATIVA) --- */
@@ -28,19 +28,17 @@
     --border-color: #cfd8dc;        /* Bordas de Inputs e Tabelas */
     
     /* --- CORES SEMÂNTICAS (STATUS) --- */
-    --success-color: #4caf50;       /* Verde (Confirmado/Pago/Lucro) */
+    --success-color: #2e7d32;       /* Verde (Confirmado/Pago/Lucro) */
     --success-bg: #e8f5e9;          /* Fundo Verde Claro */
     
-    --danger-color: #f44336;        /* Vermelho (Erro/Pendente/Prejuízo) */
+    --danger-color: #c62828;        /* Vermelho (Erro/Pendente/Prejuízo) */
     --danger-bg: #ffebee;           /* Fundo Vermelho Claro */
     
-    --warning-color: #ff9800;       /* Laranja (Aviso/Agendado) */
+    --warning-color: #ef6c00;       /* Laranja (Aviso/Agendado) */
     --warning-bg: #fff3e0;          /* Fundo Laranja Claro */
     
-    --info-color: #0288d1;          /* Azul (Em Andamento/Info) */
+    --info-color: #0277bd;          /* Azul (Em Andamento/Info) */
     --info-bg: #e1f5fe;             /* Fundo Azul Claro */
-    
-    --whatsapp-color: #25D366;      /* Verde Oficial WhatsApp */
 
     /* --- VARIÁVEIS DE UI (LAYOUT) --- */
     --shadow-soft: 0 4px 16px rgba(0, 0, 0, 0.08);
@@ -63,7 +61,7 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
@@ -91,7 +89,7 @@ div {
 input[type="password"], 
 input[type="email"], 
 textarea.message-box,
-.no-caps {
+.normal-case {
     text-transform: none;
 }
 
@@ -120,13 +118,9 @@ ul, ol {
 }
 
 /* Utilitários de Visibilidade */
-.hidden {
-    display: none !important;
-}
-
-.show {
-    display: block !important;
-}
+.hidden { display: none !important; }
+.show { display: block !important; }
+.no-print { } /* Usado apenas em @media print */
 
 /* 3. BARRA DE NAVEGAÇÃO MOBILE (TOPBAR)
    -------------------------------------------------------------------------- */
@@ -289,6 +283,18 @@ nav ul {
     color: var(--primary-light);
 }
 
+/* Badge de Notificação */
+.notification-badge {
+    background-color: var(--danger-color);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    margin-left: auto;
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
 /* Rodapé da Sidebar */
 .sidebar-footer {
     padding: 20px 25px;
@@ -382,7 +388,6 @@ nav ul {
 
 .card:hover {
     box-shadow: var(--shadow-medium);
-    transform: translateY(-2px);
 }
 
 .card h3 {
@@ -503,6 +508,7 @@ nav ul {
     flex-direction: column;
     width: 100%;
     position: relative;
+    margin-bottom: 5px;
 }
 
 .form-group label {
@@ -511,11 +517,13 @@ nav ul {
     margin-bottom: 8px;
     color: var(--secondary-color);
     letter-spacing: 0.5px;
+    display: block;
 }
 
 .form-group input, 
 .form-group select, 
-.form-group textarea {
+.form-group textarea,
+input[type="text"], input[type="number"], input[type="date"], input[type="email"], select, textarea {
     padding: 12px 16px;
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius-sm);
@@ -529,7 +537,8 @@ nav ul {
 
 .form-group input:focus,
 .form-group select:focus,
-.form-group textarea:focus {
+.form-group textarea:focus,
+input:focus, select:focus, textarea:focus {
     border-color: var(--primary-color);
     outline: none;
     box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.15);
@@ -585,36 +594,26 @@ nav ul {
 
 /* Cores dos Botões */
 .btn-primary { background-color: var(--primary-color); }
-.btn-primary:hover { background-color: var(--primary-hover); box-shadow: 0 4px 8px rgba(0, 121, 107, 0.3); }
+.btn-primary:hover { background-color: var(--primary-dark); box-shadow: 0 4px 8px rgba(0, 121, 107, 0.3); }
 
 .btn-secondary { background-color: var(--secondary-color); }
-.btn-secondary:hover { background-color: var(--secondary-hover); box-shadow: 0 4px 8px rgba(84, 110, 122, 0.3); }
+.btn-secondary:hover { background-color: var(--secondary-dark); box-shadow: 0 4px 8px rgba(84, 110, 122, 0.3); }
 
 .btn-danger { background-color: var(--danger-color); }
-.btn-danger:hover { background-color: var(--danger-hover); box-shadow: 0 4px 8px rgba(244, 67, 54, 0.3); }
+.btn-danger:hover { background-color: #b71c1c; box-shadow: 0 4px 8px rgba(244, 67, 54, 0.3); }
 
 .btn-success { background-color: var(--success-color); }
 .btn-success:hover { background-color: #388e3c; }
 
 .btn-warning { background-color: var(--warning-color); }
-.btn-warning:hover { background-color: #f57c00; }
+.btn-warning:hover { background-color: #e65100; }
 
 /* Botões Pequenos (Para Tabelas) */
-.btn-action {
-    padding: 6px 12px;
-    margin: 0 2px;
-    font-size: 0.8rem;
-    border-radius: 4px;
-}
-.edit-btn { background-color: var(--warning-color); }
-.delete-btn { background-color: var(--danger-color); }
-
-/* Botões Mini (Ícones Quadrados) */
 .btn-mini {
     padding: 6px;
-    width: 32px;
-    height: 32px;
-    font-size: 0.8rem;
+    width: 34px;
+    height: 34px;
+    font-size: 0.9rem;
     border-radius: 4px;
     border: 1px solid #ddd;
     background-color: #f5f5f5;
@@ -628,10 +627,14 @@ nav ul {
 }
 .btn-mini:hover { background-color: #e0e0e0; }
 
-.btn-mini.btn-danger { border-color: var(--danger-color); background-color: var(--danger-color); color: white; }
-.btn-mini.btn-warning { border-color: var(--warning-color); background-color: var(--warning-color); color: white; }
-.btn-mini.btn-success { border-color: var(--success-color); background-color: var(--success-color); color: white; }
-.btn-mini.btn-primary { border-color: var(--primary-color); background-color: var(--primary-color); color: white; }
+.edit-btn { color: var(--warning-color); border-color: var(--warning-color); }
+.edit-btn:hover { background: var(--warning-bg); }
+
+.delete-btn { color: var(--danger-color); border-color: var(--danger-color); }
+.delete-btn:hover { background: var(--danger-bg); }
+
+.btn-primary.btn-mini { color: var(--primary-color); border-color: var(--primary-color); }
+.btn-primary.btn-mini:hover { background: #e0f2f1; }
 
 /* 9. TABELAS DE DADOS
    -------------------------------------------------------------------------- */
@@ -678,6 +681,19 @@ nav ul {
 .data-table tbody tr:last-child td {
     border-bottom: none;
 }
+
+/* Status Labels dentro das tabelas */
+.status-pill {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.pill-active { background-color: var(--success-color); }
+.pill-blocked { background-color: var(--danger-color); }
 
 /* 10. ABAS DE NAVEGAÇÃO INTERNA (TABS)
    -------------------------------------------------------------------------- */
@@ -745,7 +761,6 @@ nav ul {
     margin-top: 20px;
 }
 
-/* Bloco da Empresa */
 .domain-block {
     border: 1px solid #e0e0e0;
     border-radius: 8px;
@@ -762,98 +777,21 @@ nav ul {
     justify-content: space-between;
     align-items: center;
     cursor: pointer;
-    border-bottom: 1px solid transparent;
-    transition: background 0.2s;
+    border-bottom: 1px solid #eee;
 }
 
-.domain-header:hover {
-    background-color: #f0f0f0;
-}
-
-.domain-title {
-    font-weight: 800;
-    color: var(--text-color);
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    font-size: 1.2rem;
-}
-
-.domain-title i {
-    color: var(--primary-color);
-    font-size: 1.4rem;
-}
-
-.domain-actions {
-    display: flex;
-    gap: 12px;
-}
-
-/* Conteúdo Expansível */
 .domain-content {
-    display: none;
-    padding: 30px;
-    background-color: #fff;
-    border-top: 1px solid #e0e0e0;
-}
-
-.domain-content.open {
     display: block;
-    animation: fadeIn 0.3s;
-}
-
-/* Seções de Admins e Funcionários */
-.admin-section {
-    background-color: #e3f2fd;
     padding: 20px;
-    border-left: 5px solid #2196f3;
-    margin-bottom: 25px;
-    border-radius: 6px;
 }
 
-.employee-section {
-    padding-left: 25px;
-    border-left: 4px solid #f5f5f5;
-}
-
-/* Lista de Usuários */
 .user-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 15px 0;
     border-bottom: 1px solid #f0f0f0;
-    flex-wrap: wrap;
-    gap: 20px;
 }
-
-.user-row:last-child {
-    border-bottom: none;
-}
-
-.user-info-box {
-    display: flex;
-    flex-direction: column;
-}
-
-.user-email-text {
-    font-size: 0.9rem;
-    color: #666;
-    text-transform: lowercase;
-    margin-top: 4px;
-}
-
-.status-pill {
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-size: 0.75rem;
-    font-weight: 800;
-    color: white;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-.pill-active { background-color: var(--success-color); }
-.pill-blocked { background-color: var(--danger-color); }
 
 /* 12. PERFIL DO FUNCIONÁRIO (FICHA VISUAL)
    -------------------------------------------------------------------------- */
@@ -893,12 +831,6 @@ nav ul {
     font-size: 2rem;
 }
 
-.profile-info-main p {
-    color: #666;
-    font-size: 1.1rem;
-    font-weight: 500;
-}
-
 .profile-data-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -927,53 +859,77 @@ nav ul {
     display: block;
 }
 
-/* 13. FILTROS DE FUNCIONÁRIO (MOBILE FRIENDLY)
+/* 13. CALENDÁRIO VISUAL (CORRIGIDO PARA APARECER)
    -------------------------------------------------------------------------- */
-.employee-filter-container {
-    background-color: #f8f9fa;
-    padding: 25px;
-    border-radius: 12px;
-    border: 1px solid #e0e0e0;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
+.calendar-section { margin-top: 30px; }
 
-.ef-row {
+.calendar-controls {
     display: flex;
-    gap: 20px;
-    width: 100%;
-}
-
-.ef-col {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-}
-
-.ef-input {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    font-size: 1rem;
-    height: 48px;
-}
-
-.ef-btn {
-    flex: 1;
-    height: 48px;
-    display: flex;
+    justify-content: space-between;
     align-items: center;
-    justify-content: center;
-    gap: 12px;
-    font-size: 1rem;
-    font-weight: 700;
-    border: none;
-    border-radius: 6px;
+    margin-bottom: 20px;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+    text-align: center;
+}
+
+.day-label {
+    font-weight: 800;
+    color: var(--primary-color);
+    padding: 15px 0;
+    background-color: #e0f2f1;
+    border-radius: 8px 8px 0 0;
+}
+
+.day-cell {
+    padding: 10px 5px;
+    background-color: #fff;
+    border: 1px solid #f0f0f0;
+    border-radius: 8px;
+    position: relative;
     cursor: pointer;
-    text-transform: uppercase;
-    color: white;
+    min-height: 90px; /* Garante altura para aparecer */
+    font-weight: 700;
+    font-size: 1rem;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+}
+
+.day-cell:hover {
+    background-color: #fafafa;
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.day-cell.has-operation {
+    background-color: #e8f5e9 !important;
+    border: 1px solid #81c784;
+    color: #1b5e20;
+}
+
+.event-dot {
+    width: 10px;
+    height: 10px;
+    background-color: var(--warning-color);
+    border-radius: 50%;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    box-shadow: 0 0 5px rgba(0,0,0,0.2);
+}
+
+.day-cell.empty {
+    background-color: #f5f5f5;
+    cursor: default;
+    border: none;
 }
 
 /* 14. MODAIS E POPUPS
@@ -1026,29 +982,14 @@ nav ul {
 
 .close-btn:hover { color: var(--danger-color); }
 
-/* Bloco de Detalhes da Operação */
-.modal-operation-block {
-    margin-bottom: 20px;
-    padding: 15px;
-    border: 1px solid #e0e0e0;
-    border-left: 5px solid var(--secondary-color);
-    border-radius: 4px;
-    font-size: 1rem;
-    background-color: #fafafa;
-}
-
-/* Modal de Notificação */
+/* Modal de Notificação (Z-Index Alto) */
 .notification-box {
-    border: 2px solid var(--warning-color);
+    border-left: 6px solid var(--warning-color);
     background: #fff8e1;
     text-align: center;
-}
-
-.notification-box h3 {
-    color: #e65100;
-    border-bottom: none;
-    font-size: 1.8rem;
-    margin-bottom: 10px;
+    max-width: 450px;
+    margin-top: 15vh;
+    border-radius: 8px;
 }
 
 .notification-text {
@@ -1056,144 +997,11 @@ nav ul {
     margin: 25px 0;
     white-space: pre-wrap;
     color: #333;
-    font-weight: 500;
-    line-height: 1.6;
-}
-
-/* 15. CALENDÁRIO VISUAL
-   -------------------------------------------------------------------------- */
-.calendar-section { margin-top: 30px; }
-
-.calendar-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.calendar-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 8px;
-    text-align: center;
-}
-
-.day-label {
-    font-weight: 800;
-    color: var(--primary-color);
-    padding: 15px 0;
-    background-color: #e0f2f1;
-    border-radius: 8px 8px 0 0;
-}
-
-.day-cell {
-    padding: 10px 5px;
-    background-color: #fff;
-    border: 1px solid #f0f0f0;
-    border-radius: 8px;
-    position: relative;
-    cursor: pointer;
-    min-height: 90px;
-    font-weight: 700;
-    font-size: 1rem;
-    transition: all 0.2s;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: flex-start;
-}
-
-.day-cell:hover {
-    background-color: #fafafa;
-    border-color: var(--primary-color);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-}
-
-.day-cell.has-operation {
-    background-color: #e8f5e9 !important;
-    border: 1px solid #81c784;
-    color: #1b5e20;
-}
-
-.event-dot {
-    width: 10px;
-    height: 10px;
-    background-color: var(--warning-color);
-    border-radius: 50%;
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    box-shadow: 0 0 5px rgba(0,0,0,0.2);
-}
-
-/* 16. TELA DE LOGIN
-   -------------------------------------------------------------------------- */
-.login-body {
-    background-color: var(--header-bg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    padding: 20px;
-}
-
-.login-container {
-    background-color: white;
-    padding: 60px;
-    border-radius: 16px;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.4);
-    width: 100%;
-    max-width: 480px;
-}
-
-.login-header {
-    text-align: center;
-    margin-bottom: 40px;
-    border-bottom: 4px solid var(--primary-color);
-    padding-bottom: 30px;
-}
-
-.login-header h1 {
-    color: var(--text-color);
-    font-size: 2.5rem;
-    margin-bottom: 10px;
-}
-
-.login-header p {
-    color: var(--secondary-color);
     font-weight: 600;
-    letter-spacing: 1.5px;
-    font-size: 0.9rem;
+    line-height: 1.5;
 }
 
-/* 17. LISTAS E LEMBRETES
-   -------------------------------------------------------------------------- */
-.reminder-item {
-    background: #fff3e0;
-    border: 1px solid #ffe0b2;
-    padding: 20px;
-    margin-bottom: 15px;
-    border-radius: 8px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 15px;
-}
-
-.reminder-info strong {
-    color: #e65100;
-    display: block;
-    margin-bottom: 5px;
-    font-size: 1.1rem;
-}
-
-.reminder-actions {
-    display: flex;
-    gap: 10px;
-}
-
+/* 15. LISTAS SIMPLES */
 .simple-list {
     list-style: none;
     margin-top: 10px;
@@ -1217,7 +1025,7 @@ nav ul {
     border-bottom: none;
 }
 
-/* 18. RESPONSIVIDADE (MEDIA QUERIES)
+/* 16. RESPONSIVIDADE (MEDIA QUERIES)
    -------------------------------------------------------------------------- */
 @media (max-width: 768px) {
     .mobile-nav { display: flex; }
@@ -1248,14 +1056,9 @@ nav ul {
     .form-col { width: 100%; }
     .col-sm, .col-md, .col-lg, .col-xl { flex: 1 1 100%; }
     
-    .ef-row { flex-direction: column; gap: 15px; }
-    
     /* Botões Full Width */
     .form-actions { justify-content: center; }
     .form-actions button { width: 100%; }
-    
-    .reminder-item { flex-direction: column; align-items: flex-start; }
-    .reminder-actions { width: 100%; justify-content: flex-end; margin-top: 10px; }
     
     .calendar-grid { gap: 2px; }
     .day-cell { min-height: 50px; font-size: 0.8rem; padding: 5px; }
@@ -1267,4 +1070,9 @@ nav ul {
     .content { margin: 0 !important; padding: 0 !important; }
     .card { box-shadow: none; border: 1px solid #ccc; }
     .btn-primary, .btn-secondary, .form-actions { display: none !important; }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
 }

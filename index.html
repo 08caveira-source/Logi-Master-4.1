@@ -1,21 +1,28 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LOGIMASTER | GESTÃO E CONTROLE DE FROTAS</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>LOGIMASTER | SISTEMA DE GESTÃO DE FROTAS</title>
     
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
-<body style="display:none;"> <div class="mobile-nav">
+
+<body style="display:none;"> 
+    
+    <div class="mobile-nav">
         <button id="mobileMenuBtn">
             <i class="fas fa-bars"></i>
         </button>
-        <span class="logo-mobile">LOGI<span style="color:var(--primary-color);">MASTER</span></span>
+        <span class="logo-mobile">
+            LOGI<span style="color:var(--primary-color);">MASTER</span>
+        </span>
     </div>
 
     <header class="sidebar" id="sidebar">
@@ -24,49 +31,52 @@
         </div>
         
         <div class="user-profile-section">
-            <p><i class="fas fa-user-circle"></i> <span id="userEmailDisplay">CARREGANDO...</span></p>
-            <p id="userRoleDisplay"></p>
+            <p>
+                <i class="fas fa-user-circle"></i> 
+                <span id="userEmailDisplay">CARREGANDO...</span>
+            </p>
+            <p id="userRoleDisplay">CARREGANDO FUNÇÃO...</p>
         </div>
 
         <nav>
             <ul id="menu-admin" style="display:none;">
                 <li class="nav-item active" data-page="home">
-                    <i class="fas fa-calendar-alt"></i> DASHBOARD
+                    <i class="fas fa-chart-line"></i> DASHBOARD
                 </li>
                 <li class="nav-item" data-page="operacoes">
-                    <i class="fas fa-route"></i> LANÇAR OPERAÇÃO
+                    <i class="fas fa-shipping-fast"></i> LANÇAR OPERAÇÃO
                 </li> 
                 <li class="nav-item" data-page="checkins-pendentes">
-                    <i class="fas fa-bell"></i> CHECK-INS 
-                    <span id="badgeCheckins" style="background:red; color:white; padding:2px 6px; border-radius:10px; font-size:0.7rem; margin-left:auto; display:none;">0</span>
+                    <i class="fas fa-tasks"></i> STATUS / CHECK-INS 
+                    <span id="badgeCheckins" class="notification-badge" style="display:none;">0</span>
                 </li>
                 <li class="nav-item" data-page="access-management">
-                    <i class="fas fa-users-cog"></i> EQUIPE / AVISOS 
-                    <span id="badgeAccess" style="background:orange; color:white; padding:2px 6px; border-radius:10px; font-size:0.7rem; margin-left:auto; display:none;">!</span>
+                    <i class="fas fa-users-cog"></i> EQUIPE & AVISOS 
+                    <span id="badgeAccess" style="background:orange; color:white; padding:2px 8px; border-radius:12px; font-size:0.7rem; margin-left:auto; display:none;">!</span>
                 </li>
                 <li class="nav-item" data-page="despesas">
-                    <i class="fas fa-money-check-alt"></i> DESPESAS GERAIS
+                    <i class="fas fa-file-invoice-dollar"></i> DESPESAS GERAIS
                 </li> 
                 <li class="nav-item" data-page="cadastros">
-                    <i class="fas fa-truck"></i> CADASTROS
+                    <i class="fas fa-database"></i> CADASTROS
                 </li>
                 <li class="nav-item" data-page="relatorios">
-                    <i class="fas fa-chart-bar"></i> RELATÓRIOS
+                    <i class="fas fa-file-alt"></i> RELATÓRIOS
                 </li>
                 <li class="nav-item" data-page="graficos">
                     <i class="fas fa-chart-pie"></i> GRÁFICOS
                 </li>
                 <li class="nav-item" data-page="recibos">
-                    <i class="fas fa-file-pdf"></i> RECIBOS
+                    <i class="fas fa-receipt"></i> RECIBOS
                 </li>
                 <li class="nav-item" data-page="config">
-                    <i class="fas fa-cog"></i> CONFIGURAÇÕES
+                    <i class="fas fa-cogs"></i> CONFIGURAÇÕES
                 </li>
             </ul>
 
             <ul id="menu-super-admin" style="display:none;">
                 <li class="nav-item active" data-page="super-admin">
-                    <i class="fas fa-globe"></i> PAINEL MASTER
+                    <i class="fas fa-globe-americas"></i> PAINEL MASTER
                 </li>
             </ul>
 
@@ -96,36 +106,35 @@
     <main class="content">
         
         <section id="home" class="page">
-            <h2>VISÃO GERAL DO MÊS</h2>
+            <h2>DASHBOARD GERENCIAL</h2>
             
             <div class="card-grid">
                 <div class="card stat-card success">
-                    <p>FATURAMENTO BRUTO</p>
+                    <p>FATURAMENTO (MÊS)</p>
                     <h3 id="faturamentoMes">R$ 0,00</h3>
                 </div>
                 <div class="card stat-card danger">
-                    <p>TOTAL DE CUSTOS</p>
+                    <p>TOTAL DE CUSTOS (MÊS)</p>
                     <h3 id="despesasMes">R$ 0,00</h3>
                 </div>
                 <div class="card stat-card primary">
-                    <p>RECEITA LÍQUIDA</p>
+                    <p>LUCRO LÍQUIDO (MÊS)</p>
                     <h3 id="receitaMes">R$ 0,00</h3>
                 </div>
             </div>
 
             <div class="calendar-section card">
-                <h3>CALENDÁRIO DE OPERAÇÕES</h3>
+                <h3><i class="far fa-calendar-alt"></i> CALENDÁRIO DE OPERAÇÕES</h3>
                 <div class="calendar-controls">
                     <button class="btn-secondary" onclick="changeMonth(-1)">
-                        <i class="fas fa-chevron-left"></i> ANTERIOR
+                        <i class="fas fa-chevron-left"></i> MÊS ANTERIOR
                     </button>
                     <h4 id="currentMonthYear">CARREGANDO...</h4>
                     <button class="btn-secondary" onclick="changeMonth(1)">
-                        PRÓXIMO <i class="fas fa-chevron-right"></i>
+                        PRÓXIMO MÊS <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
-                <div id="calendarGrid" class="calendar-grid">
-                    </div>
+                <div id="calendarGrid" class="calendar-grid"></div>
             </div>
         </section>
 
@@ -133,13 +142,13 @@
             <h2>ANÁLISE GRÁFICA</h2>
             <div class="card-grid">
                  <div class="card stat-card success">
-                    <p>RECEITA TOTAL (HISTÓRICO)</p>
+                    <p>RECEITA TOTAL ACUMULADA</p>
                     <h3 id="receitaTotalHistorico">R$ 0,00</h3>
                 </div>
             </div>
             <div class="card">
-                <h3>PERFORMANCE FINANCEIRA E OPERACIONAL</h3>
-                <div class="chart-container">
+                <h3>PERFORMANCE FINANCEIRA ANUAL</h3>
+                <div class="chart-container" style="position: relative; height:400px; width:100%;">
                     <canvas id="mainChart"></canvas>
                 </div>
             </div>
@@ -152,28 +161,31 @@
                 <form id="formOperacao">
                     <input type="hidden" id="operacaoId">
                     
-                    <div style="background: #e3f2fd; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #90caf9; display:flex; align-items:center; gap:10px;">
-                        <input type="checkbox" id="operacaoIsAgendamento" style="width: 20px; height: 20px;"> 
+                    <div style="background: #e3f2fd; padding: 15px; border-radius: 6px; margin-bottom: 25px; border: 1px solid #90caf9; display:flex; align-items:flex-start; gap:10px;">
+                        <input type="checkbox" id="operacaoIsAgendamento" style="width: 20px; height: 20px; margin-top: 2px;"> 
                         <div>
                             <label for="operacaoIsAgendamento" style="font-weight:bold; color:var(--primary-color); font-size:1rem; cursor:pointer;">
-                                DISPONIBILIZAR PARA CHECK-IN (AGENDAR)
+                                AGENDAR OPERAÇÃO (DISPONIBILIZAR PARA CHECK-IN)
                             </label>
-                            <div style="font-size:0.8rem; color:#666;">Se marcado, a viagem aparecerá no celular do motorista para ele iniciar.</div>
+                            <div style="font-size:0.85rem; color:#546e7a; margin-top: 5px;">
+                                Se marcado, a viagem aparecerá no celular do motorista para ele iniciar e finalizar.
+                                <br>Se desmarcado, a operação será salva como <strong>CONFIRMADA</strong> imediatamente.
+                            </div>
                         </div>
                     </div>
 
                     <div class="form-row">
                         <div class="form-col col-sm">
                             <div class="form-group">
-                                <label>DATA DA OPERAÇÃO:</label>
+                                <label>DATA DA VIAGEM:</label>
                                 <input type="date" id="operacaoData" required>
                             </div>
                         </div>
                          <div class="form-col col-lg">
                             <div class="form-group">
-                                <label>MOTORISTA RESPONSÁVEL:</label>
+                                <label>MOTORISTA:</label>
                                 <select id="selectMotoristaOperacao" required>
-                                    <option value="">CARREGANDO...</option>
+                                    <option value="">AGUARDE, CARREGANDO...</option>
                                 </select>
                             </div>
                         </div>
@@ -181,7 +193,7 @@
                             <div class="form-group">
                                 <label>VEÍCULO (PLACA):</label>
                                 <select id="selectVeiculoOperacao" required>
-                                    <option value="">CARREGANDO...</option>
+                                    <option value="">AGUARDE...</option>
                                 </select>
                             </div>
                         </div>
@@ -192,7 +204,7 @@
                             <div class="form-group">
                                 <label>CLIENTE / CONTRATANTE:</label>
                                 <select id="selectContratanteOperacao" required>
-                                    <option value="">CARREGANDO...</option>
+                                    <option value="">AGUARDE...</option>
                                 </select>
                             </div>
                         </div>
@@ -200,14 +212,17 @@
                             <div class="form-group">
                                 <label>TIPO DE ATIVIDADE:</label>
                                 <select id="selectAtividadeOperacao" required>
-                                    <option value="">CARREGANDO...</option>
+                                    <option value="">AGUARDE...</option>
                                 </select>
                             </div>
                         </div>
                     </div>
 
-                    <hr style="margin: 25px 0; border:0; border-top:1px solid #eee;">
-                    <h4 style="margin-bottom: 20px; color: var(--secondary-color);">DADOS FINANCEIROS & CUSTOS</h4>
+                    <hr style="margin: 30px 0; border:0; border-top:2px solid #eee;">
+                    
+                    <h4 style="margin-bottom: 20px; color: var(--secondary-color); font-weight: 700;">
+                        <i class="fas fa-coins"></i> DADOS FINANCEIROS & CUSTOS
+                    </h4>
 
                     <div class="form-row">
                         <div class="form-col col-sm">
@@ -251,7 +266,7 @@
                         </div>
                         <div class="form-col col-sm">
                             <div class="form-group">
-                                <label>KM RODADO (TOTAL):</label>
+                                <label>KM RODADO TOTAL:</label>
                                 <input type="number" id="operacaoKmRodado" min="0" step="any" placeholder="0">
                             </div>
                         </div>
@@ -260,12 +275,12 @@
                     <div class="form-row" style="align-items: flex-end;">
                         <div class="form-col col-lg">
                             <div class="form-group">
-                                <label>ADICIONAR AJUDANTE À EQUIPE:</label>
+                                <label>SELECIONAR AJUDANTE DA LISTA:</label>
                                 <div style="display: flex; gap: 10px;">
                                     <select id="selectAjudantesOperacao" style="flex-grow: 1;">
-                                        <option value="">SELECIONE UM AJUDANTE...</option>
+                                        <option value="">AGUARDE...</option>
                                     </select>
-                                    <button type="button" id="btnManualAddAjudante" class="btn-primary" style="height: 46px; width: 60px; display: flex; justify-content: center; align-items: center;">
+                                    <button type="button" id="btnManualAddAjudante" class="btn-primary" style="height: 48px; width: 60px; display: flex; justify-content: center; align-items: center;" title="Adicionar Ajudante">
                                         <i class="fas fa-plus"></i>
                                     </button>
                                 </div>
@@ -274,7 +289,7 @@
                         <div class="form-col col-lg">
                             <div class="form-group">
                                 <label>EQUIPE ESCALADA:</label>
-                                <ul id="listaAjudantesAdicionados" class="simple-list" style="margin-top:0; min-height: 46px; border: 1px solid #ddd;">
+                                <ul id="listaAjudantesAdicionados" class="simple-list" style="margin-top:0; min-height: 48px; border: 1px solid #ddd;">
                                     </ul>
                             </div>
                         </div>
@@ -285,7 +300,7 @@
                              <i class="fas fa-save"></i> SALVAR OPERAÇÃO
                          </button>
                          <button type="reset" class="btn-secondary">
-                             <i class="fas fa-undo"></i> LIMPAR FORMULÁRIO
+                             <i class="fas fa-undo"></i> LIMPAR
                          </button>
                     </div>
                 </form>
@@ -312,10 +327,10 @@
         </section>
 
         <section id="checkins-pendentes" class="page">
-            <h2>STATUS EM TEMPO REAL</h2>
+            <h2>STATUS E MONITORAMENTO</h2>
             <div class="card">
-                <p style="color:var(--secondary-color); margin-bottom:15px;">
-                    Acompanhe aqui o status das viagens enviadas para os motoristas.
+                <p style="color:var(--secondary-color); margin-bottom:20px;">
+                    Acompanhe aqui o status das viagens enviadas para os motoristas (Agendadas e Em Andamento).
                 </p>
                 <div class="table-responsive">
                     <table id="tabelaCheckinsPendentes" class="data-table">
@@ -349,7 +364,9 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button type="submit" class="btn-primary"><i class="fas fa-paper-plane"></i> ENVIAR MENSAGEM</button>
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-paper-plane"></i> ENVIAR MENSAGEM
+                        </button>
                     </div>
                 </form>
             </div>
@@ -522,7 +539,7 @@
             <div class="tab-controls">
                 <button class="cadastro-tab-btn active" data-tab="funcionarios">FUNCIONÁRIOS</button>
                 <button class="cadastro-tab-btn" data-tab="veiculos">VEÍCULOS</button>
-                <button class="cadastro-tab-btn" data-tab="contratantes">CLIENTES</button>
+                <button class="cadastro-tab-btn" data-tab="contratantes">CONTRATANTES</button>
                 <button class="cadastro-tab-btn" data-tab="minhaEmpresa">MINHA EMPRESA</button>
                 <button class="cadastro-tab-btn" data-tab="atividades">ATIVIDADES</button>
             </div>
@@ -673,7 +690,7 @@
             </div>
 
             <div id="contratantes" class="cadastro-form card">
-                <h3>CADASTRO DE CLIENTES/CONTRATANTES</h3>
+                <h3>CADASTRO DE CONTRATANTES</h3>
                 <form id="formContratante">
                     <input type="hidden" id="contratanteId">
                     <div class="form-row">
@@ -681,7 +698,7 @@
                         <div class="form-col col-md"><div class="form-group"><label>CNPJ:</label><input type="text" id="contratanteCNPJ" required></div></div>
                         <div class="form-col col-md"><div class="form-group"><label>TELEFONE:</label><input type="text" id="contratanteTelefone"></div></div>
                     </div>
-                    <div class="form-actions"><button type="submit" class="btn-primary">SALVAR CLIENTE</button></div>
+                    <div class="form-actions"><button type="submit" class="btn-primary">SALVAR CONTRATANTE</button></div>
                 </form>
                 <div class="table-responsive" style="margin-top:20px;">
                     <table id="tabelaContratantes" class="data-table">
@@ -739,18 +756,22 @@
                         <div class="form-col col-sm"><div class="form-group"><label>DATA FINAL:</label><input type="date" id="dataFimRelatorio" required></div></div>
                         <div class="form-col"><div class="form-group"><label>MOTORISTA:</label><select id="selectMotoristaRelatorio"><option value="">TODOS</option></select></div></div>
                         <div class="form-col"><div class="form-group"><label>VEÍCULO:</label><select id="selectVeiculoRelatorio"><option value="">TODOS</option></select></div></div>
-                        <div class="form-col"><div class="form-group"><label>CLIENTE:</label><select id="selectContratanteRelatorio"><option value="">TODOS</option></select></div></div>
+                        <div class="form-col"><div class="form-group"><label>CONTRATANTE:</label><select id="selectContratanteRelatorio"><option value="">TODOS</option></select></div></div>
                     </div>
                     <div class="form-actions">
-                        <button type="submit" class="btn-primary"><i class="fas fa-file-alt"></i> GERAR RELATÓRIO</button>
-                        <button type="button" class="btn-secondary" onclick="exportReportToPDF()"><i class="fas fa-file-pdf"></i> EXPORTAR PDF</button>
+                        <button type="button" class="btn-primary" onclick="generateGeneralReport()">
+                            <i class="fas fa-file-alt"></i> RELATÓRIO GERAL
+                        </button>
+                        <button type="button" class="btn-warning" onclick="generateBillingReport()">
+                            <i class="fas fa-file-invoice-dollar"></i> RELATÓRIO DE COBRANÇA
+                        </button>
+                        <button type="button" class="btn-secondary" onclick="exportReportToPDF()">
+                            <i class="fas fa-file-pdf"></i> PDF
+                        </button>
                     </div>
                 </form>
             </div>
             <div id="reportResults" class="card" style="margin-top: 20px; display:none;">
-                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; margin-bottom:15px;">
-                    <h3>RESULTADOS DA PESQUISA</h3>
-                </div>
                 <div id="reportContent"></div>
             </div>
         </section>
@@ -774,7 +795,7 @@
                         </div>
                         <div class="form-col col-lg">
                             <div class="form-group">
-                                <label>CLIENTE (OPCIONAL):</label>
+                                <label>CONTRATANTE (OPCIONAL):</label>
                                 <select id="selectContratanteRecibo"><option value="">TODOS</option></select>
                             </div>
                         </div>
@@ -784,10 +805,11 @@
                         <div class="form-col col-sm"><div class="form-group"><label>DATA FINAL:</label><input type="date" id="dataFimRecibo"></div></div>
                     </div>
                     <div class="form-actions">
-                        <button type="button" id="btnGerarRecibo" class="btn-primary"><i class="fas fa-file-invoice"></i> GERAR RECIBO</button>
+                        <button type="button" id="btnGerarRecibo" class="btn-primary" onclick="generateReceipt()">
+                            <i class="fas fa-file-invoice"></i> GERAR RECIBO
+                        </button>
                     </div>
                 </form>
-                <div id="reciboTitle" style="display:none; margin-top:20px;"><h3>PRÉ-VISUALIZAÇÃO DO RECIBO</h3></div>
                 <div id="reciboContent" class="receipt-preview"></div>
             </div>
         </section>
@@ -805,78 +827,27 @@
                     </label>
                 </div>
             </div>
-            <div class="card" style="margin-top: 20px; border: 1px solid var(--danger-color);">
-                <h3 style="color: var(--danger-color);">ZONA DE PERIGO</h3>
-                <p>Esta ação apagará todos os dados da empresa. Use com extrema cautela.</p>
-                <button class="btn-danger" onclick="fullSystemReset()"><i class="fas fa-bomb"></i> RESETAR TUDO (FÁBRICA)</button>
-            </div>
         </section>
 
         <section id="super-admin" class="page">
             <h2>PAINEL MASTER (GESTÃO GLOBAL)</h2>
-            
             <div class="card" style="border-left: 5px solid var(--primary-color);">
                 <h3><i class="fas fa-plus-circle"></i> CRIAR NOVA EMPRESA (ADMIN)</h3>
-                <p>Crie um usuário administrador para uma nova empresa. Ele poderá cadastrar sua própria equipe.</p>
                 <form id="formCreateCompany">
                     <div class="form-row">
-                        <div class="form-col">
-                            <div class="form-group">
-                                <label>NOME DA EMPRESA (Domínio Único):</label>
-                                <input type="text" id="newCompanyDomain" placeholder="ex: transportesrapido.com" required>
-                            </div>
-                        </div>
-                        <div class="form-col">
-                            <div class="form-group">
-                                <label>EMAIL DO ADMIN:</label>
-                                <input type="email" id="newAdminEmail" required placeholder="admin@transportesrapido.com">
-                            </div>
-                        </div>
-                        <div class="form-col">
-                            <div class="form-group">
-                                <label>SENHA PROVISÓRIA:</label>
-                                <input type="text" id="newAdminPassword" required>
-                            </div>
-                        </div>
+                        <div class="form-col"><div class="form-group"><label>DOMÍNIO:</label><input type="text" id="newCompanyDomain" placeholder="ex: empresa.com" required></div></div>
+                        <div class="form-col"><div class="form-group"><label>EMAIL:</label><input type="email" id="newAdminEmail" required placeholder="admin@empresa.com"></div></div>
+                        <div class="form-col"><div class="form-group"><label>SENHA:</label><input type="text" id="newAdminPassword" required></div></div>
                     </div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn-success">CRIAR EMPRESA</button>
-                    </div>
+                    <div class="form-actions"><button type="submit" class="btn-success">CRIAR EMPRESA</button></div>
                 </form>
             </div>
-
-            <div class="card">
-                <h3><i class="fas fa-envelope"></i> ENVIAR AVISO PARA ADMINS</h3>
-                <form id="formSuperMessage">
-                    <div class="form-row">
-                        <div class="form-col">
-                            <div class="form-group">
-                                <label>DESTINO:</label>
-                                <input type="text" id="superMsgTarget" placeholder="Email do Admin ou 'TODOS'">
-                            </div>
-                        </div>
-                        <div class="form-col col-xl">
-                            <div class="form-group">
-                                <label>MENSAGEM:</label>
-                                <input type="text" id="superMsgText" required placeholder="Escreva o aviso...">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn-primary">ENVIAR</button>
-                    </div>
-                </form>
-            </div>
-
             <div class="card">
                 <div class="super-search-box">
                     <i class="fas fa-search" style="color:var(--secondary-color);"></i>
-                    <input type="text" id="superAdminSearch" placeholder="BUSCAR EMPRESAS OU USUÁRIOS..." onkeyup="filterGlobalUsers()" style="border:none; width:90%; margin-left:10px; outline:none; font-size:1rem;">
+                    <input type="text" id="superAdminSearch" placeholder="BUSCAR..." onkeyup="filterGlobalUsers()" style="border:none; width:90%; margin-left:10px; outline:none; font-size:1rem;">
                 </div>
-                
-                <div id="superAdminContainer" class="hierarchy-container">
-                    <p style="text-align:center; color:#666;">CARREGANDO DADOS GLOBAIS...</p>
-                </div>
+                <div id="superAdminContainer" class="hierarchy-container"></div>
             </div>
         </section>
 
@@ -891,39 +862,16 @@
             <h2>MEUS SERVIÇOS E FINANCEIRO</h2>
             <div class="card">
                 <div class="form-row">
-                    <div class="form-col">
-                        <div class="form-group">
-                            <label>DATA INICIAL:</label>
-                            <input type="date" id="empDataInicio">
-                        </div>
-                    </div>
-                    <div class="form-col">
-                        <div class="form-group">
-                            <label>DATA FINAL:</label>
-                            <input type="date" id="empDataFim">
-                        </div>
-                    </div>
+                    <div class="form-col"><div class="form-group"><label>INÍCIO:</label><input type="date" id="empDataInicio"></div></div>
+                    <div class="form-col"><div class="form-group"><label>FIM:</label><input type="date" id="empDataFim"></div></div>
                 </div>
                 <div class="form-actions">
                     <button class="btn-primary" onclick="filtrarHistoricoFuncionario()">BUSCAR SERVIÇOS</button>
                     <button class="btn-secondary" onclick="exportEmployeeHistoryToPDF()">BAIXAR PDF</button>
                 </div>
-                
                 <h3 id="empTotalReceber" style="text-align:center; margin-top:30px; color:var(--success-color); font-size:2rem;">R$ 0,00</h3>
-                
                 <div class="table-responsive" style="margin-top:20px;">
-                    <table id="tabelaHistoricoCompleto" class="data-table">
-                        <thead>
-                            <tr>
-                                <th>DATA/HORA</th>
-                                <th>VEÍCULO</th>
-                                <th>CLIENTE</th>
-                                <th>VALOR (R$)</th>
-                                <th>STATUS</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
+                    <table id="tabelaHistoricoCompleto" class="data-table"><thead><tr><th>DATA</th><th>VEÍCULO</th><th>CONTRATANTE</th><th>VALOR</th><th>STATUS</th></tr></thead><tbody></tbody></table>
                 </div>
             </div>
         </section>
@@ -931,76 +879,39 @@
         <section id="employee-profile" class="page">
             <h2>MEUS DADOS CADASTRAIS</h2>
             <div class="card">
-                <div id="employeeProfileView"></div>
-                <div class="form-actions" style="justify-content:center; margin-top:20px;">
-                    <button class="btn-warning" onclick="openRequestProfileChangeModal()">SOLICITAR ALTERAÇÃO DE DADOS</button>
+                <div id="employeeProfileView"></div> <div class="form-actions" style="justify-content:center; margin-top:20px;">
+                    <button class="btn-warning" onclick="document.getElementById('modalRequestProfileChange').style.display='block'">SOLICITAR ALTERAÇÃO DE DADOS</button>
                 </div>
             </div>
         </section>
 
     </main>
 
-    <div id="operationDetailsModal" class="modal">
-        <div class="modal-content">
-            <span onclick="closeModal()" class="close-btn">&times;</span>
-            <h3 id="modalTitle">DETALHES</h3>
-            <div id="modalBodyContent"></div>
-        </div>
-    </div>
-
-    <div id="viewItemModal" class="modal">
-        <div class="modal-content">
-            <span onclick="closeViewModal()" class="close-btn">&times;</span>
-            <h3 id="viewItemTitle">VISUALIZAR</h3>
-            <div id="viewItemBody"></div>
-        </div>
-    </div>
+    <div id="operationDetailsModal" class="modal"><div class="modal-content"><span onclick="closeModal()" class="close-btn">&times;</span><h3 id="modalTitle">DETALHES</h3><div id="modalBodyContent"></div></div></div>
+    
+    <div id="viewItemModal" class="modal"><div class="modal-content"><span onclick="closeViewModal()" class="close-btn">&times;</span><h3 id="viewItemTitle">VISUALIZAR</h3><div id="viewItemBody"></div></div></div>
     
     <div id="modalCheckinConfirm" class="modal">
         <div class="modal-content">
             <h3 id="checkinModalTitle">CHECK-IN</h3>
             <span class="close-btn" onclick="closeCheckinConfirmModal()">&times;</span>
             <form id="formCheckinConfirm">
-                <input type="hidden" id="checkinOpId">
-                <input type="hidden" id="checkinStep">
-                
+                <input type="hidden" id="checkinOpId"><input type="hidden" id="checkinStep">
                 <div style="background:#f0f4f8; padding:15px; border-radius:6px; margin-bottom:20px;">
                     <p><strong>DATA:</strong> <span id="checkinDisplayData"></span></p>
-                    <p><strong>CLIENTE:</strong> <span id="checkinDisplayContratante"></span></p>
+                    <p><strong>CONTRATANTE:</strong> <span id="checkinDisplayContratante"></span></p>
                     <p><strong>VEÍCULO:</strong> <span id="checkinDisplayVeiculo"></span></p>
                 </div>
-
                 <div id="checkinDriverFields" style="display:none; border-top:1px dashed #ccc; padding-top:15px;">
-                    <div id="divKmInicial">
-                        <div class="form-group">
-                            <label style="color:var(--primary-color);">KM INICIAL (ODÔMETRO):</label>
-                            <input type="number" id="checkinKmInicial" placeholder="Ex: 15000">
-                        </div>
-                    </div>
+                    <div id="divKmInicial"><div class="form-group"><label style="color:var(--primary-color);">KM INICIAL:</label><input type="number" id="checkinKmInicial"></div></div>
                     <div id="divKmFinal" style="display:none;">
-                        <div class="form-group">
-                            <label>KM INICIAL REGISTRADO:</label>
-                            <input type="number" id="checkinKmInicialReadonly" readonly style="background:#eee;">
-                        </div>
-                        <div class="form-group">
-                            <label style="color:var(--danger-color);">KM FINAL (ODÔMETRO):</label>
-                            <input type="number" id="checkinKmFinal" placeholder="Ex: 15400">
-                        </div>
-                        <div class="form-group">
-                            <label>VALOR ABASTECIDO (R$):</label>
-                            <input type="number" id="checkinValorAbastecido" step="0.01" placeholder="0,00">
-                        </div>
-                        <div class="form-group">
-                            <label>PREÇO DO LITRO (R$):</label>
-                            <input type="number" id="checkinPrecoLitroConfirm" step="0.001" placeholder="0,000">
-                        </div>
+                        <div class="form-group"><label>KM REGISTRADO:</label><input type="number" id="checkinKmInicialReadonly" readonly style="background:#eee;"></div>
+                        <div class="form-group"><label style="color:var(--danger-color);">KM FINAL:</label><input type="number" id="checkinKmFinal"></div>
+                        <div class="form-group"><label>VALOR ABASTECIDO (R$):</label><input type="number" id="checkinValorAbastecido" step="0.01"></div>
+                        <div class="form-group"><label>PREÇO LITRO (R$):</label><input type="number" id="checkinPrecoLitroConfirm" step="0.001"></div>
                     </div>
                 </div>
-
-                <div class="form-actions" style="justify-content:space-between;">
-                    <button type="submit" id="btnConfirmCheckin" class="btn-primary" style="flex:1;">CONFIRMAR</button>
-                    <button type="button" class="btn-secondary" onclick="closeCheckinConfirmModal()">CANCELAR</button>
-                </div>
+                <div class="form-actions"><button type="submit" id="btnConfirmCheckin" class="btn-primary" style="width:100%;">CONFIRMAR</button></div>
             </form>
         </div>
     </div>
@@ -1010,35 +921,15 @@
             <span class="close-btn" onclick="closeAdicionarAjudanteModal()">&times;</span>
             <h3>ADICIONAR AJUDANTE</h3>
             <p id="modalAjudanteNome" style="font-weight:bold; margin-bottom:15px; font-size:1.1rem; text-align:center;"></p>
-            
-            <div class="form-group">
-                <label>VALOR DA DIÁRIA (R$):</label>
-                <input id="modalDiariaInput" type="number" step="0.01" placeholder="0,00">
-            </div>
-
-            <div class="form-actions">
-                <button id="modalAjudanteAddBtn" class="btn-primary" style="width:100%;">CONFIRMAR ADIÇÃO</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="reminderModal" class="modal">
-        <div class="modal-content">
-            <span class="close-btn" onclick="closeReminderModal()">&times;</span>
-            <h3 style="color:var(--danger-color);"><i class="fas fa-bell"></i> CONTAS A PAGAR VENCIDAS</h3>
-            <div id="reminderList" style="max-height:300px; overflow-y:auto; margin-bottom:20px;"></div>
-            <div class="text-right">
-                <button onclick="closeReminderModal()" class="btn-secondary">FECHAR</button>
-            </div>
+            <div class="form-group"><label>VALOR DA DIÁRIA (R$):</label><input id="modalDiariaInput" type="number" step="0.01"></div>
+            <div class="form-actions"><button id="modalAjudanteAddBtn" class="btn-primary" style="width:100%;">CONFIRMAR</button></div>
         </div>
     </div>
 
     <div id="modalRequestProfileChange" class="modal">
         <div class="modal-content">
             <span class="close-btn" onclick="document.getElementById('modalRequestProfileChange').style.display='none'">&times;</span>
-            <h3>SOLICITAR ALTERAÇÃO DE DADOS</h3>
-            <p style="font-size:0.9rem; color:#666; margin-bottom:15px;">Altere apenas os campos desejados.</p>
-            
+            <h3>SOLICITAR ALTERAÇÃO</h3>
             <form id="formRequestProfileChange">
                 <div class="form-row">
                     <div class="form-col"><div class="form-group"><label>TELEFONE:</label><input type="text" id="reqEmpTelefone"></div></div>
@@ -1048,24 +939,22 @@
                     <div class="form-col"><div class="form-group"><label>CNH:</label><input type="text" id="reqEmpCNH"></div></div>
                     <div class="form-col"><div class="form-group"><label>VALIDADE CNH:</label><input type="date" id="reqEmpValidadeCNH"></div></div>
                 </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn-primary">ENVIAR SOLICITAÇÃO</button>
-                </div>
+                <div class="form-actions"><button type="submit" class="btn-primary">ENVIAR</button></div>
             </form>
         </div>
     </div>
     
-    <div id="modalNotification" class="modal" style="z-index: 2000;">
+    <div id="modalNotification" class="modal" style="z-index: 3000;">
         <div class="modal-content notification-box">
-            <h3 style="color:#e65100; border-bottom: none;"><i class="fas fa-bell"></i> NOVA MENSAGEM IMPORTANTE</h3>
-            <p id="notificationMessageText" class="notification-text"></p>
+            <h3 style="color:#e65100; border-bottom: none;"><i class="fas fa-bell"></i> NOVA MENSAGEM</h3>
+            <p id="notificationMessageText" class="notification-text" style="font-size:1.2rem; margin:20px 0; font-weight:bold;"></p>
             <small id="notificationSender" style="color:#666; display:block; margin-bottom:20px; font-weight:bold;"></small>
-            <button onclick="confirmReadNotification()" class="btn-primary" style="width:100%; justify-content:center; padding: 15px;">ENTENDIDO, MARCAR COMO LIDO</button>
+            <button onclick="document.getElementById('modalNotification').style.display='none'" class="btn-primary" style="width:100%; justify-content:center; padding: 15px;">ENTENDIDO</button>
         </div>
     </div>
 
     <script type="module">
-      import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
       import { getFirestore, collection, setDoc, doc, onSnapshot, getDoc, updateDoc, query, where, deleteDoc, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
       import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
       
@@ -1113,6 +1002,6 @@
           window.location.href = "login.html";
       }
     </script>
-    <script src="script.js" type="module" defer></script>
+    <script src="script.js" defer></script>
 </body>
 </html>
