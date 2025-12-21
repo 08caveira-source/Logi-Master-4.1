@@ -47,7 +47,7 @@
                     <i class="fas fa-shipping-fast"></i> LANÇAR OPERAÇÃO
                 </li> 
                 <li class="nav-item" data-page="checkins-pendentes">
-                    <i class="fas fa-tasks"></i> STATUS / CHECK-INS 
+                    <i class="fas fa-tasks"></i> MONITORAMENTO & CHECK-INS 
                     <span id="badgeCheckins" class="notification-badge" style="display:none;">0</span>
                 </li>
                 <li class="nav-item" data-page="access-management">
@@ -64,7 +64,7 @@
                     <i class="fas fa-file-alt"></i> RELATÓRIOS
                 </li>
                 <li class="nav-item" data-page="graficos">
-                    <i class="fas fa-chart-pie"></i> GRÁFICOS
+                    <i class="fas fa-chart-pie"></i> GRÁFICOS DETALHADOS
                 </li>
                 <li class="nav-item" data-page="recibos">
                     <i class="fas fa-receipt"></i> RECIBOS
@@ -97,7 +97,7 @@
             <button onclick="logoutSystem()" class="btn-danger" style="width: 100%;">
                 <i class="fas fa-sign-out-alt"></i> SAIR DO SISTEMA
             </button>
-            <p style="text-align:center; font-size:0.7rem; color:#888; margin-top:10px;">&copy; LOGIMASTER 2025</p>
+            <p style="text-align:center; font-size:0.7rem; color:#888; margin-top:10px;">&copy; LOGIMASTER 9.0</p>
         </div>
     </header>
 
@@ -139,18 +139,22 @@
         </section>
 
         <section id="graficos" class="page">
-            <h2>ANÁLISE GRÁFICA</h2>
+            <h2>ANÁLISE GRÁFICA FINANCEIRA</h2>
             
             <div class="card-grid">
                  <div class="card stat-card success">
                     <p>RECEITA TOTAL ACUMULADA (ANO)</p>
                     <h3 id="receitaTotalHistorico">R$ 0,00</h3>
                 </div>
+                 <div class="card stat-card warning">
+                    <p>MARGEM DE LUCRO MÉDIA</p>
+                    <h3 id="margemLucroMedia">% 0.00</h3>
+                </div>
             </div>
             
             <div class="card">
-                <h3>PERFORMANCE FINANCEIRA ANUAL</h3>
-                <div class="chart-container" style="position: relative; height:400px; width:100%;">
+                <h3>PERFORMANCE: RECEITAS x DESPESAS x COMBUSTÍVEL</h3>
+                <div class="chart-container" style="position: relative; height:450px; width:100%;">
                     <canvas id="mainChart"></canvas>
                 </div>
             </div>
@@ -329,10 +333,10 @@
         </section>
 
         <section id="checkins-pendentes" class="page">
-            <h2>STATUS E MONITORAMENTO</h2>
+            <h2>STATUS E MONITORAMENTO DE ROTAS</h2>
             <div class="card">
                 <p style="color:var(--secondary-color); margin-bottom:20px;">
-                    Acompanhe aqui o status das viagens enviadas para os motoristas (Agendadas e Em Andamento).
+                    Monitoramento em tempo real dos Check-ins de Motoristas e Ajudantes.
                 </p>
                 <div class="table-responsive">
                     <table id="tabelaCheckinsPendentes" class="data-table">
@@ -902,6 +906,7 @@
         <div class="modal-content">
             <span onclick="document.getElementById('modalDayOperations').style.display='none'" class="close-btn">&times;</span>
             <h3 id="modalDayTitle">OPERAÇÕES DO DIA</h3>
+            <div id="modalDaySummary" class="daily-finance-summary"></div>
             <div id="modalDayBody" class="table-responsive"></div>
         </div>
     </div>
@@ -944,17 +949,35 @@
     <div id="modalRequestProfileChange" class="modal">
         <div class="modal-content">
             <span class="close-btn" onclick="document.getElementById('modalRequestProfileChange').style.display='none'">&times;</span>
-            <h3>SOLICITAR ALTERAÇÃO</h3>
+            <h3>SOLICITAR ALTERAÇÃO DE DADOS</h3>
+            <p style="margin-bottom:20px; color:#666;">Selecione o dado que deseja alterar e informe o novo valor. A alteração será enviada para aprovação.</p>
             <form id="formRequestProfileChange">
                 <div class="form-row">
-                    <div class="form-col"><div class="form-group"><label>TELEFONE:</label><input type="text" id="reqEmpTelefone"></div></div>
-                    <div class="form-col"><div class="form-group"><label>CHAVE PIX:</label><input type="text" id="reqEmpPix"></div></div>
+                    <div class="form-col col-lg">
+                        <div class="form-group">
+                            <label>DADO A ALTERAR:</label>
+                            <select id="reqFieldType" required>
+                                <option value="">SELECIONE...</option>
+                                <option value="TELEFONE">TELEFONE</option>
+                                <option value="ENDERECO">ENDEREÇO</option>
+                                <option value="PIX">CHAVE PIX</option>
+                                <option value="CNH">NÚMERO DA CNH</option>
+                                <option value="VALIDADE_CNH">VALIDADE DA CNH</option>
+                                <option value="EMAIL">EMAIL DE CONTATO</option>
+                                <option value="OUTRO">OUTRO (Descreva)</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
-                <div id="reqDriverFields" class="form-row" style="display:none;">
-                    <div class="form-col"><div class="form-group"><label>CNH:</label><input type="text" id="reqEmpCNH"></div></div>
-                    <div class="form-col"><div class="form-group"><label>VALIDADE CNH:</label><input type="date" id="reqEmpValidadeCNH"></div></div>
+                <div class="form-row">
+                    <div class="form-col col-full">
+                        <div class="form-group">
+                            <label>NOVO VALOR:</label>
+                            <input type="text" id="reqNewValue" required placeholder="Digite o novo valor correto">
+                        </div>
+                    </div>
                 </div>
-                <div class="form-actions"><button type="submit" class="btn-primary">ENVIAR</button></div>
+                <div class="form-actions"><button type="submit" class="btn-primary">ENVIAR SOLICITAÇÃO</button></div>
             </form>
         </div>
     </div>
@@ -975,14 +998,10 @@
       
       const firebaseConfig = { apiKey: "AIzaSyBZjVdcyjbEoR_-X6_lZuTRDMeN2wIntZI", authDomain: "logi-master-dd4cd.firebaseapp.com", projectId: "logi-master-dd4cd", storageBucket: "logi-master-dd4cd.firebasestorage.app", messagingSenderId: "673000154258", appId: "1:673000154258:web:fc9d6fced43e557076324b" };
       const app = initializeApp(firebaseConfig);
-      
-      // Instância Secundária para o Admin criar contas sem sair da sua
       const secondaryApp = initializeApp(firebaseConfig, "Secondary");
-
       const db = getFirestore(app);
       const auth = getAuth(app);
       
-      // EXPORTAÇÃO GLOBAL PARA O SCRIPT.JS USAR
       window.dbRef = { 
           db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, 
           updateDoc, query, where, deleteDoc, getDocs, addDoc, 
@@ -1002,7 +1021,6 @@
                   if(emailElem) emailElem.textContent = userData.email.toUpperCase();
                   if(roleElem) roleElem.textContent = userData.role.toUpperCase();
                   
-                  // Inicia sistema com delay seguro para carregar DB
                   setTimeout(() => { 
                       if (window.initSystemByRole) window.initSystemByRole(userData); 
                   }, 500);
