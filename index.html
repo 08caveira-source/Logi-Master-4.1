@@ -334,16 +334,32 @@
 
         <section id="checkins-pendentes" class="page">
             <h2>STATUS E MONITORAMENTO DE ROTAS</h2>
+            
             <div class="card">
-                <p style="color:var(--secondary-color); margin-bottom:20px;">
-                    Monitoramento em tempo real dos Check-ins de Motoristas e Ajudantes.
-                </p>
+                <h3 style="color:var(--info-color);"><i class="fas fa-satellite-dish"></i> ROTAS ATIVAS E PENDENTES</h3>
                 <div class="table-responsive">
                     <table id="tabelaCheckinsPendentes" class="data-table">
+                        <thead></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card" style="border-top: 5px solid var(--danger-color); margin-top: 30px; background: #fff5f5;">
+                <h3 style="color:var(--danger-color);"><i class="fas fa-exclamation-triangle"></i> REGISTRO DE FALTAS E OCORRÊNCIAS</h3>
+                <p style="color:#666; margin-bottom:15px;">Histórico de faltas registradas. Estes valores não serão contabilizados nos pagamentos.</p>
+                <div class="table-responsive">
+                    <table id="tabelaFaltas" class="data-table">
                         <thead>
-                            </thead>
-                        <tbody>
-                            </tbody>
+                            <tr>
+                                <th>DATA</th>
+                                <th>FUNCIONÁRIO</th>
+                                <th>FUNÇÃO</th>
+                                <th>MOTIVO/STATUS</th>
+                                <th>AÇÃO</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
                     </table>
                 </div>
             </div>
