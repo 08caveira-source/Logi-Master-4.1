@@ -1,12 +1,12 @@
 // =============================================================================
 // ARQUIVO: script.js
-// VERSÃO: 10.0 (RECONSTRUÇÃO COMPLETA E DETALHADA)
-// PARTE 1: INFRAESTRUTURA, VARIÁVEIS GLOBAIS, FORMATADORES E CÁLCULOS
+// VERSÃO: 11.0 (CÓDIGO COMPLETO - SEM ABREVIAÇÕES)
+// PARTE 1: INFRAESTRUTURA, DADOS E CÁLCULOS
 // =============================================================================
 
 /**
- * 1. MAPEAMENTO DE CHAVES DO BANCO DE DADOS (LOCAL STORAGE E FIREBASE)
- * Estas constantes definem onde cada tipo de dado é salvo.
+ * 1. MAPEAMENTO DE CHAVES DO BANCO DE DADOS
+ * Define as chaves usadas no LocalStorage e no Firebase.
  */
 const DB_KEYS = {
     FUNCIONARIOS: 'db_funcionarios',
@@ -16,127 +16,104 @@ const DB_KEYS = {
     MINHA_EMPRESA: 'db_minha_empresa',
     DESPESAS_GERAIS: 'db_despesas_gerais',
     ATIVIDADES: 'db_atividades',
-    CHECKINS: 'db_checkins',            // Armazena logs específicos de check-in
-    PROFILE_REQUESTS: 'db_profile_requests' // Armazena pedidos de alteração de dados
+    CHECKINS: 'db_checkins',
+    PROFILE_REQUESTS: 'db_profile_requests'
 };
 
 /**
  * 2. CACHE GLOBAL (ESTADO DA APLICAÇÃO)
- * Carregamos os dados do LocalStorage imediatamente ao iniciar o script
- * para evitar que a tela pisque ou apareça vazia enquanto o Firebase carrega.
+ * Inicializa lendo do LocalStorage para garantir performance imediata.
  */
-const APP_CACHE = {
-    [DB_KEYS.FUNCIONARIOS]: [],
-    [DB_KEYS.VEICULOS]: [],
-    [DB_KEYS.CONTRATANTES]: [],
-    [DB_KEYS.OPERACOES]: [],
-    [DB_KEYS.MINHA_EMPRESA]: {},
-    [DB_KEYS.DESPESAS_GERAIS]: [],
-    [DB_KEYS.ATIVIDADES]: [],
-    [DB_KEYS.CHECKINS]: [],
-    [DB_KEYS.PROFILE_REQUESTS]: []
-};
+const APP_CACHE = {};
 
-// Inicialização do Cache Local
-Object.keys(DB_KEYS).forEach(keyName => {
-    const key = DB_KEYS[keyName];
-    const savedData = localStorage.getItem(key);
+// Carregamento inicial síncrono
+Object.values(DB_KEYS).forEach(key => {
+    const saved = localStorage.getItem(key);
+    // Se for 'minha empresa' o padrão é objeto {}, para os outros é array []
+    const defaultVal = (key === DB_KEYS.MINHA_EMPRESA) ? {} : [];
     
-    if (savedData) {
+    if (saved) {
         try {
-            APP_CACHE[key] = JSON.parse(savedData);
+            APP_CACHE[key] = JSON.parse(saved);
         } catch (e) {
-            console.error(`Erro ao ler cache local para ${key}:`, e);
-            // Se der erro, define o padrão
-            APP_CACHE[key] = (key === DB_KEYS.MINHA_EMPRESA) ? {} : [];
+            console.error(`Erro ao parsear cache para ${key}`, e);
+            APP_CACHE[key] = defaultVal;
         }
     } else {
-        // Se não existir, define o padrão
-        APP_CACHE[key] = (key === DB_KEYS.MINHA_EMPRESA) ? {} : [];
+        APP_CACHE[key] = defaultVal;
     }
 });
 
-// Variáveis de Controle de Sessão e Interface
-window.IS_READ_ONLY = false; // Define se o usuário pode editar ou apenas ver
-window.CURRENT_USER = null;  // Armazena os dados do usuário logado
-window.currentDate = new Date(); // Data base para o calendário (Mês Atual)
-
+// Variáveis Globais de Controle
+window.IS_READ_ONLY = false;
+window.CURRENT_USER = null;
+window.currentDate = new Date(); // Data base para o calendário
 
 // =============================================================================
-// 3. FUNÇÕES DE ENTRADA E SAÍDA DE DADOS (I/O)
+// 3. FUNÇÕES DE ENTRADA E SAÍDA (I/O)
 // =============================================================================
 
 /**
- * Função para carregar dados do Cache.
- * Garante que sempre retorne um Array (ou Objeto para Empresa), nunca null.
+ * Carrega dados do cache.
+ * Retorna sempre o tipo de dado correto (Array ou Objeto) para evitar erros de .map ou .filter
  */
 function loadData(key) {
     if (key === DB_KEYS.MINHA_EMPRESA) {
         return APP_CACHE[key] || {};
     }
-    // Para todas as outras chaves, retorna Array
-    if (!Array.isArray(APP_CACHE[key])) {
-        return [];
+    // Garante retorno de array
+    if (Array.isArray(APP_CACHE[key])) {
+        return APP_CACHE[key];
     }
-    return APP_CACHE[key];
+    return [];
 }
 
 /**
- * Função Principal de Salvamento.
- * Salva no LocalStorage (Instantâneo) e no Firebase (Se houver conexão).
+ * Salva dados no Cache Local e no Firebase.
  */
 async function saveData(key, value) {
-    // 1. Atualiza a memória e o armazenamento local do navegador
+    // 1. Atualiza Cache e LocalStorage (Instantâneo)
     APP_CACHE[key] = value;
     localStorage.setItem(key, JSON.stringify(value));
 
-    // 2. Sincronização com Nuvem (Firebase)
-    // Só tenta salvar na nuvem se o sistema de banco de dados estiver carregado
-    if (window.dbRef && window.CURRENT_USER) {
-        
-        // Regra de Segurança: Super Admin não altera dados da empresa visualizada
-        if (window.CURRENT_USER.email === 'admin@logimaster.com') {
-            return; 
-        }
-
+    // 2. Sincroniza com Firebase (Se estiver logado e online)
+    // Admin Global não salva dados na empresa para evitar corrupção
+    if (window.dbRef && window.CURRENT_USER && window.CURRENT_USER.email !== 'admin@logimaster.com') {
         const { db, doc, setDoc } = window.dbRef;
         const companyDomain = window.CURRENT_USER.company; 
 
         if (companyDomain) {
             try {
-                // Salva dentro da coleção da empresa específica
+                // Salva no caminho: companies/{dominio}/data/{colecao}
                 await setDoc(doc(db, 'companies', companyDomain, 'data', key), { 
                     items: value,
                     lastUpdate: new Date().toISOString()
                 });
-                // Console log removido para produção, mas o salvamento ocorre aqui.
             } catch (e) {
-                console.error(`[ERRO DE SINCRONIZAÇÃO] Falha ao salvar ${key} no Firebase:`, e);
+                console.error(`Erro de sincronização em ${key}:`, e);
             }
         }
     }
 }
 
-
 // =============================================================================
-// 4. FORMATADORES DE TEXTO E MÁSCARAS
+// 4. FORMATADORES (UTILS)
 // =============================================================================
 
-// Remove tudo que não é dígito
+// Remove formatação, mantendo apenas números
 const onlyDigits = (v) => (v || '').toString().replace(/\D/g, '');
 
-// Formata valor monetário (Ex: R$ 1.200,50)
+// Formata Moeda (R$)
 window.formatCurrency = (value) => {
-    if (value === undefined || value === null || isNaN(value)) {
-        return 'R$ 0,00';
-    }
+    let val = Number(value);
+    if (isNaN(val)) val = 0;
     return new Intl.NumberFormat('pt-BR', {
         style: 'currency',
         currency: 'BRL'
-    }).format(value);
+    }).format(val);
 };
 
-// Formata Data e Hora Brasileira (Ex: 25/12/2023 14:30)
+// Formata Data e Hora (dd/mm/aaaa hh:mm)
 window.formatDateTimeBr = (isoString) => {
     if (!isoString) return '-';
     const d = new Date(isoString);
@@ -147,44 +124,29 @@ window.formatDateTimeBr = (isoString) => {
     });
 };
 
-// Formata CPF ou CNPJ
+// Formata CPF ou CNPJ (apenas uppercase para visualização simples)
 window.formatCPF_CNPJ = (value) => {
-    // Retorna em caixa alta para padronizar
     return (value || '').toUpperCase();
 };
 
-// Formata Telefone (Celular e Fixo)
+// Formata Telefone
 window.formatPhoneBr = (value) => {
-    const d = onlyDigits(value);
-    if (d.length > 10) { // Celular (11 dígitos)
-        return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7, 11)}`;
-    } else if (d.length > 6) { // Fixo (10 dígitos)
-        return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
-    }
+    const v = onlyDigits(value);
+    if (v.length > 10) return `(${v.slice(0, 2)}) ${v.slice(2, 7)}-${v.slice(7, 11)}`;
+    if (v.length > 6) return `(${v.slice(0, 2)}) ${v.slice(2, 6)}-${v.slice(6)}`;
     return value;
 };
 
-// Copiar para área de transferência
-window.copyToClipboard = (text) => {
-    if (!text) return;
-    navigator.clipboard.writeText(text).then(
-        () => alert('Copiado para a área de transferência!'),
-        () => alert('Erro ao copiar.')
-    );
-};
-
-
 // =============================================================================
-// 5. FUNÇÕES DE BUSCA (GETTERS)
-// Funções auxiliares para buscar dados completos a partir de IDs
+// 5. GETTERS (BUSCA DE DADOS)
 // =============================================================================
 
-// Helper para converter ID em string segura para comparação
-const safeIdStr = (id) => String(id || '').trim();
+// Helper para converter ID em string segura
+const safeStr = (v) => String(v || '').trim();
 
 window.getFuncionario = (id) => {
-    const lista = loadData(DB_KEYS.FUNCIONARIOS);
-    return lista.find(f => safeIdStr(f.id) === safeIdStr(id));
+    const list = loadData(DB_KEYS.FUNCIONARIOS);
+    return list.find(f => safeStr(f.id) === safeStr(id));
 };
 
 window.getMotorista = (id) => {
@@ -198,45 +160,36 @@ window.getAjudante = (id) => {
 };
 
 window.getVeiculo = (placa) => {
-    const lista = loadData(DB_KEYS.VEICULOS);
-    return lista.find(v => v.placa === placa);
+    const list = loadData(DB_KEYS.VEICULOS);
+    return list.find(v => v.placa === placa);
 };
 
 window.getContratante = (cnpj) => {
-    const lista = loadData(DB_KEYS.CONTRATANTES);
-    return lista.find(c => safeIdStr(c.cnpj) === safeIdStr(cnpj));
+    const list = loadData(DB_KEYS.CONTRATANTES);
+    return list.find(c => safeStr(c.cnpj) === safeStr(cnpj));
 };
 
 window.getAtividade = (id) => {
-    const lista = loadData(DB_KEYS.ATIVIDADES);
-    return lista.find(a => safeIdStr(a.id) === safeIdStr(id));
+    const list = loadData(DB_KEYS.ATIVIDADES);
+    return list.find(a => safeStr(a.id) === safeStr(id));
 };
 
 window.getMinhaEmpresa = () => {
     return loadData(DB_KEYS.MINHA_EMPRESA);
 };
 
-
 // =============================================================================
-// 6. CÁLCULOS MATEMÁTICOS DE FROTA E CUSTOS
-// Lógica crítica para garantir precisão financeira
+// 6. CÁLCULOS FINANCEIROS E DE FROTA
 // =============================================================================
 
 /**
- * OBTER ÚLTIMO KM VÁLIDO:
- * Percorre todas as operações do veículo para achar a maior quilometragem final registrada.
- * Usado para impedir que o motorista digite um KM menor que o anterior.
+ * Retorna o maior KM Final registrado para um veículo.
+ * Impede que o motorista registre um KM menor que o anterior.
  */
 window.obterUltimoKmFinal = (placa) => {
     if (!placa) return 0;
-    const todasOps = loadData(DB_KEYS.OPERACOES);
-    
-    // Filtra apenas operações deste veículo que tenham KM Final registrado
-    const opsVeiculo = todasOps.filter(op => 
-        op.veiculoPlaca === placa && 
-        op.kmFinal && 
-        Number(op.kmFinal) > 0
-    );
+    const ops = loadData(DB_KEYS.OPERACOES);
+    const opsVeiculo = ops.filter(op => op.veiculoPlaca === placa && Number(op.kmFinal) > 0);
     
     if (opsVeiculo.length === 0) return 0;
     
@@ -245,104 +198,90 @@ window.obterUltimoKmFinal = (placa) => {
 };
 
 /**
- * CALCULAR MÉDIA HISTÓRICA DO VEÍCULO (KM/L):
- * Baseado em todo o histórico de abastecimentos válidos.
+ * Calcula a média histórica de consumo (KM/L) do veículo.
  */
 window.calcularMediaHistoricaVeiculo = (placa) => {
     if (!placa) return 0;
-    const todasOps = loadData(DB_KEYS.OPERACOES);
+    const ops = loadData(DB_KEYS.OPERACOES);
+    // Usa apenas operações confirmadas para a média
+    const opsVeiculo = ops.filter(op => op.veiculoPlaca === placa && op.status === 'CONFIRMADA');
     
-    // Considera apenas operações CONFIRMADAS
-    const opsVeiculo = todasOps.filter(op => op.veiculoPlaca === placa && op.status === 'CONFIRMADA');
-    
-    let totalKmAcumulado = 0;
-    let totalLitrosAbastecidos = 0;
+    let totalKm = 0;
+    let totalLitros = 0;
 
     opsVeiculo.forEach(op => {
-        if(op.kmRodado && Number(op.kmRodado) > 0) {
-            totalKmAcumulado += Number(op.kmRodado);
+        if (op.kmRodado && Number(op.kmRodado) > 0) {
+            totalKm += Number(op.kmRodado);
         }
-        
         const vlrCombustivel = Number(op.combustivel) || 0;
         const vlrPreco = Number(op.precoLitro) || 0;
         
-        // Se houve abastecimento (Valor > 0 e Preço > 0), calcula litros
         if (vlrCombustivel > 0 && vlrPreco > 0) {
-            totalLitrosAbastecidos += (vlrCombustivel / vlrPreco);
+            totalLitros += (vlrCombustivel / vlrPreco);
         }
     });
 
-    if (totalLitrosAbastecidos <= 0) return 0; 
-    
-    // Retorna média (Ex: 3.5 km/l)
-    return totalKmAcumulado / totalLitrosAbastecidos; 
+    if (totalLitros <= 0) return 3.5; // Retorna uma média padrão segura se não tiver histórico
+    return totalKm / totalLitros;
 };
 
 /**
- * OBTER ÚLTIMO PREÇO DO COMBUSTÍVEL:
- * Útil para estimar custos quando não houve abastecimento no dia.
+ * Obtém o último preço de combustível pago por este veículo.
  */
 window.obterUltimoPrecoCombustivel = (placa) => {
     if (!placa) return 0;
-    const todasOps = loadData(DB_KEYS.OPERACOES);
-    
-    // Filtra ops com preço de litro válido
-    const opsComPreco = todasOps.filter(op => 
-        op.veiculoPlaca === placa && op.precoLitro && Number(op.precoLitro) > 0
-    );
+    const ops = loadData(DB_KEYS.OPERACOES);
+    const opsComPreco = ops.filter(op => op.veiculoPlaca === placa && Number(op.precoLitro) > 0);
     
     if (opsComPreco.length === 0) return 0;
     
-    // Ordena da mais recente para a mais antiga
+    // Ordena por data decrescente
     opsComPreco.sort((a, b) => new Date(b.data) - new Date(a.data));
-    
-    return Number(opsComPreco[0].precoLitro) || 0;
+    return Number(opsComPreco[0].precoLitro);
 };
 
 /**
- * CUSTO ESTIMADO DA VIAGEM (DIESEL):
- * Se o motorista abasteceu no dia, usa o valor real.
- * Se não abasteceu, estima baseado no KM rodado e na média do veículo.
+ * Calcula o Custo da Viagem (Diesel).
+ * Se o valor foi informado manualmente, usa ele. Se não, estima pela média.
  */
 window.calcularCustoConsumoViagem = (op) => {
-    if (!op || !op.veiculoPlaca) return 0;
-    if (op.status !== 'CONFIRMADA') return 0;
-    
-    // 1. Prioridade: Valor Real abastecido na operação
+    if (!op || op.status !== 'CONFIRMADA') return 0;
+
+    // 1. Se tem valor real de abastecimento, usa ele
     if (op.combustivel && Number(op.combustivel) > 0) {
         return Number(op.combustivel);
     }
     
-    // 2. Estimativa: Baseado em KM Rodado / Média do Veículo
-    const kmRodado = Number(op.kmRodado) || 0;
-    if (kmRodado <= 0) return 0;
-    
-    const mediaKmL = window.calcularMediaHistoricaVeiculo(op.veiculoPlaca);
-    if (mediaKmL <= 0) return 0;
+    // 2. Se não, estima pelo KM Rodado
+    const km = Number(op.kmRodado) || 0;
+    if (km <= 0) return 0;
 
-    // Busca preço do litro (do dia ou histórico)
-    let precoParaCalculo = Number(op.precoLitro) || 0;
-    if (precoParaCalculo <= 0) {
-        precoParaCalculo = window.obterUltimoPrecoCombustivel(op.veiculoPlaca);
+    const media = window.calcularMediaHistoricaVeiculo(op.veiculoPlaca);
+    let preco = Number(op.precoLitro) || 0;
+    
+    if (preco <= 0) {
+        preco = window.obterUltimoPrecoCombustivel(op.veiculoPlaca);
+    }
+    
+    if (media > 0 && preco > 0) {
+        return (km / media) * preco;
     }
 
-    if (precoParaCalculo <= 0) return 0;
-
-    const litrosTeoricos = kmRodado / mediaKmL;
-    return litrosTeoricos * precoParaCalculo;
+    return 0;
 };
 // =============================================================================
 // ARQUIVO: script.js
-// VERSÃO: 10.0
-// PARTE 2: INTERFACE DE USUÁRIO (UI) E RENDERIZAÇÃO DE TABELAS
+// VERSÃO: 11.0 (CÓDIGO COMPLETO - SEM ABREVIAÇÕES)
+// PARTE 2: INTERFACE DE USUÁRIO (UI) E TABELAS
 // =============================================================================
 
-// --- 7. RENDERIZAÇÃO DE TABELAS DE CADASTRO (FUNCIONÁRIOS, VEÍCULOS, ETC.) ---
+// --- 7. RENDERIZAÇÃO DE TABELAS DE CADASTRO (GENÉRICA) ---
+// Preenche as tabelas de Funcionários, Veículos e Contratantes
 
 window.renderCadastroTable = (key) => {
     const data = loadData(key);
     let tabelaId = '';
-    let idKey = 'id'; // Chave padrão para identificação
+    let idKey = 'id'; // Chave padrão
 
     // Define qual tabela HTML preencher baseado na chave do banco
     if (key === DB_KEYS.FUNCIONARIOS) {
@@ -368,8 +307,9 @@ window.renderCadastroTable = (key) => {
 
     // Gera as linhas da tabela
     let htmlContent = '';
+    
     data.forEach(item => {
-        // CONVERSÃO DE SEGURANÇA: Garante que o ID seja string para evitar erros no HTML
+        // SEGURANÇA: Converte ID para string para evitar erros no HTML
         const safeId = String(item[idKey]);
         
         let col1 = '-', col2 = '-', col3 = '-';
@@ -389,9 +329,10 @@ window.renderCadastroTable = (key) => {
         }
 
         // Botões de Ação (Editar / Excluir)
-        // Só aparecem se o usuário NÃO for apenas leitura (funcionário comum)
         let actionButtons = '';
+        
         if (!window.IS_READ_ONLY) {
+            // Admin vê Editar e Excluir
             actionButtons = `
                 <button class="btn-mini edit-btn" onclick="editCadastroItem('${key}', '${safeId}')" title="Editar">
                     <i class="fas fa-edit"></i>
@@ -401,12 +342,8 @@ window.renderCadastroTable = (key) => {
                 </button>
             `;
         } else {
-            // Funcionário pode apenas visualizar detalhes
-            actionButtons = `
-                <button class="btn-mini btn-primary" onclick="viewCadastro('${key}', '${safeId}')" title="Ver Detalhes">
-                    <i class="fas fa-eye"></i>
-                </button>
-            `;
+            // Funcionário vê apenas Visualizar (exceto em dados sensíveis)
+            actionButtons = `<button class="btn-mini btn-primary" onclick="alert('Acesso restrito.')"><i class="fas fa-lock"></i></button>`;
         }
 
         htmlContent += `
@@ -422,7 +359,7 @@ window.renderCadastroTable = (key) => {
     tbody.innerHTML = htmlContent;
 };
 
-// Tabela de Atividades (Separada por ser simples)
+// Tabela de Atividades (Simples)
 window.renderAtividadesTable = () => {
     const data = loadData(DB_KEYS.ATIVIDADES);
     const tbody = document.querySelector('#tabelaAtividades tbody');
@@ -447,9 +384,9 @@ window.renderAtividadesTable = () => {
 };
 
 
-// --- 8. RENDERIZAÇÃO DA TABELA DE HISTÓRICO DE OPERAÇÕES ---
+// --- 8. RENDERIZAÇÃO DO HISTÓRICO DE OPERAÇÕES ---
 // Exibe apenas: AGENDADA, EM_ANDAMENTO e CONFIRMADA.
-// Oculta FALTAS (que vão para outra lista) e CANCELADAS.
+// Faltas e Canceladas NÃO aparecem aqui.
 
 window.renderOperacaoTable = () => {
     const tbody = document.querySelector('#tabelaOperacoes tbody');
@@ -458,27 +395,24 @@ window.renderOperacaoTable = () => {
     // 1. Carrega dados
     const todasOps = loadData(DB_KEYS.OPERACOES);
     
-    // 2. Filtra Status permitidos
+    // 2. Filtra Status permitidos (Esconde Faltas e Cancelados)
     const statusPermitidos = ['AGENDADA', 'EM_ANDAMENTO', 'CONFIRMADA'];
-    
     const opsFiltradas = todasOps.filter(o => statusPermitidos.includes(o.status));
 
     // 3. Ordena por Data (Mais recente primeiro)
     opsFiltradas.sort((a, b) => new Date(b.data) - new Date(a.data));
 
     if (opsFiltradas.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:15px; color:#999;">Nenhuma operação no histórico recente.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:15px; color:#999;">Nenhuma operação ativa.</td></tr>';
         return;
     }
 
     // 4. Gera HTML
     let html = '';
     opsFiltradas.forEach(op => {
-        // Busca nome do motorista para exibir (em vez do ID)
         const motoristaObj = window.getMotorista(op.motoristaId);
         const nomeMot = motoristaObj ? motoristaObj.nome : '(Motorista não encontrado)';
         
-        // Cria o Badge colorido de status
         let statusBadge = '';
         if (op.status === 'CONFIRMADA') {
             statusBadge = '<span class="status-pill pill-active">CONFIRMADA</span>';
@@ -488,9 +422,9 @@ window.renderOperacaoTable = () => {
             statusBadge = '<span class="status-pill" style="background:var(--info-color)">EM ANDAMENTO</span>';
         }
 
-        // Botões
+        // Botões de Ação
+        // Ver Detalhes sempre disponível. Editar/Excluir apenas para Admin.
         const btnView = `<button class="btn-mini btn-primary" onclick="viewOperacaoDetails('${op.id}')" title="Ver Detalhes"><i class="fas fa-eye"></i></button>`;
-        
         let btnEdit = '';
         let btnDel = '';
         
@@ -517,8 +451,8 @@ window.renderOperacaoTable = () => {
 };
 
 
-// --- 9. MONITORAMENTO DE ROTAS E LISTA DE FALTAS ---
-// Esta é a função complexa que divide a visualização em duas tabelas.
+// --- 9. MONITORAMENTO DE ROTAS (ATIVAS + FALTAS) ---
+// Divide a tela em: Rotas em Curso e Lista de Faltas (no rodapé)
 
 window.renderCheckinsTable = () => {
     const tbodyAtivos = document.querySelector('#tabelaCheckinsPendentes tbody');
@@ -526,29 +460,28 @@ window.renderCheckinsTable = () => {
     
     if (!tbodyAtivos) return;
 
-    // Carrega todas as operações
     const ops = loadData(DB_KEYS.OPERACOES).filter(o => o.status !== 'CANCELADA');
     
     // =========================================================================
     // PARTE A: ROTAS ATIVAS (AGENDADAS / EM ANDAMENTO / CONFIRMADAS RECENTES)
     // =========================================================================
     
-    // Filtro de tempo: Não mostrar confirmadas muito antigas (ex: > 5 dias) no monitoramento
-    const dataLimiteAntigas = new Date();
-    dataLimiteAntigas.setDate(dataLimiteAntigas.getDate() - 5);
-    const strDataLimite = dataLimiteAntigas.toISOString().split('T')[0];
+    // Filtro de tempo: Esconde confirmadas antigas (> 5 dias) para limpar a visão
+    const dataLimite = new Date();
+    dataLimite.setDate(dataLimite.getDate() - 5);
+    const strDataLimite = dataLimite.toISOString().split('T')[0];
 
     const rotasAtivas = ops.filter(op => {
-        // Se já foi confirmada e é antiga, esconde
+        // Se confirmada e antiga, esconde
         if (op.status === 'CONFIRMADA' && op.data < strDataLimite) return false;
         
-        // Se o MOTORISTA faltou, esta rota não está ativa, está na lista de faltas
+        // Se o MOTORISTA faltou, não é ativa, vai para lista de faltas
         if (op.checkins && op.checkins.faltaMotorista) return false;
 
         return true;
     });
 
-    // Ordena: Em Andamento > Agendada > Confirmada
+    // Ordenação: Em Andamento > Agendada > Confirmada
     rotasAtivas.sort((a, b) => {
         const peso = { 'EM_ANDAMENTO': 3, 'AGENDADA': 2, 'CONFIRMADA': 1 };
         return (peso[b.status] || 0) - (peso[a.status] || 0) || new Date(b.data) - new Date(a.data);
@@ -569,11 +502,11 @@ window.renderCheckinsTable = () => {
             statusMot = '<span class="status-pill pill-active">FINALIZADO</span>';
         }
 
-        // Botões de Intervenção (Admin)
+        // Botões Admin (Forçar / Marcar Falta)
         let botoesAdmin = '';
         if (!window.IS_READ_ONLY && op.status !== 'CONFIRMADA') {
             botoesAdmin = `
-                <button class="btn-mini btn-success" title="Forçar Início/Presença" onclick="forceCheckin('${op.id}', 'motorista', '${op.motoristaId}')">
+                <button class="btn-mini btn-success" title="Forçar Início" onclick="forceCheckin('${op.id}', 'motorista', '${op.motoristaId}')">
                     <i class="fas fa-play"></i>
                 </button>
                 <button class="btn-mini btn-danger" title="Marcar Falta" onclick="markAbsent('${op.id}', 'motorista', '${op.motoristaId}')">
@@ -585,10 +518,7 @@ window.renderCheckinsTable = () => {
         htmlAtivos += `
             <tr style="border-left: 4px solid var(--primary-color); background-color: #fcfcfc;">
                 <td><strong>${op.data.split('-').reverse().join('/')}</strong></td>
-                <td>
-                    Op #${op.id}<br>
-                    <small>${op.veiculoPlaca}</small>
-                </td>
+                <td>Op #${op.id}<br><small>${op.veiculoPlaca}</small></td>
                 <td>${nomeMot} <small style="color:#666">(MOTORISTA)</small></td>
                 <td>${op.status}</td>
                 <td>${statusMot}</td>
@@ -599,9 +529,9 @@ window.renderCheckinsTable = () => {
         // --- 2. LINHAS DOS AJUDANTES ---
         if (op.ajudantes && op.ajudantes.length > 0) {
             op.ajudantes.forEach(aj => {
-                // Verifica se este ajudante específico faltou. Se sim, não mostra aqui (vai pra lista de faltas)
+                // Se o ajudante faltou, não mostra aqui, mostra na lista de faltas
                 if (op.checkins && op.checkins.faltasAjudantes && op.checkins.faltasAjudantes.includes(String(aj.id))) {
-                    return; // Pula este ajudante nesta lista
+                    return; 
                 }
 
                 const funcAj = window.getFuncionario(aj.id);
@@ -641,7 +571,6 @@ window.renderCheckinsTable = () => {
     if (rotasAtivas.length === 0) {
         htmlAtivos = '<tr><td colspan="6" style="text-align:center; padding:20px;">Nenhuma rota ativa no momento.</td></tr>';
     }
-
     tbodyAtivos.innerHTML = htmlAtivos;
 
 
@@ -654,7 +583,7 @@ window.renderCheckinsTable = () => {
         let contagemFaltas = 0;
 
         ops.forEach(op => {
-            // Verifica Falta do Motorista
+            // 1. Falta Motorista
             if (op.checkins && op.checkins.faltaMotorista) {
                 const mot = window.getMotorista(op.motoristaId)?.nome || 'Motorista';
                 contagemFaltas++;
@@ -671,7 +600,7 @@ window.renderCheckinsTable = () => {
                 `;
             }
 
-            // Verifica Faltas de Ajudantes
+            // 2. Faltas Ajudantes
             if (op.checkins && op.checkins.faltasAjudantes && op.checkins.faltasAjudantes.length > 0) {
                 op.checkins.faltasAjudantes.forEach(ajId => {
                     const func = window.getFuncionario(ajId)?.nome || 'Ajudante';
@@ -713,7 +642,7 @@ window.renderDespesasTable = () => {
     }
 
     tbody.innerHTML = dados.map(d => {
-        const btnDel = !window.IS_READ_ONLY ? `<button class="btn-mini delete-btn" onclick="deleteItem('${DB_KEYS.DESPESAS_GERAIS}', ${d.id})"><i class="fas fa-trash"></i></button>` : '';
+        const btnDel = !window.IS_READ_ONLY ? `<button class="btn-mini delete-btn" onclick="deleteItem('${DB_KEYS.DESPESAS_GERAIS}', '${d.id}')"><i class="fas fa-trash"></i></button>` : '';
         return `
             <tr>
                 <td>${d.data.split('-').reverse().join('/')}</td>
@@ -727,44 +656,66 @@ window.renderDespesasTable = () => {
     }).join('');
 };
 
-// --- 11. ATUALIZAÇÃO DE SELECTS (Dropdowns) ---
-// Preenche todas as listas suspensas do sistema
+// --- 11. TABELA DE SOLICITAÇÕES DE PERFIL ---
+window.renderProfileRequestsTable = () => {
+    const tbody = document.querySelector('#tabelaProfileRequests tbody');
+    if(!tbody) return;
+    
+    const reqs = loadData(DB_KEYS.PROFILE_REQUESTS).filter(r => r.status === 'PENDENTE');
+    
+    if(reqs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Nenhuma solicitação pendente.</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = reqs.map(r => `
+        <tr>
+            <td>${window.formatDateTimeBr(r.dataSolicitacao)}</td>
+            <td>${window.getFuncionario(r.funcionarioId)?.nome || '-'}</td>
+            <td>${r.campo}</td>
+            <td style="font-weight:bold; color:var(--primary-color);">${r.novoValor}</td>
+            <td>
+                <button class="btn-mini btn-success" onclick="approveProfileRequest('${r.id}')"><i class="fas fa-check"></i></button>
+                <button class="btn-mini btn-danger" onclick="rejectProfileRequest('${r.id}')"><i class="fas fa-times"></i></button>
+            </td>
+        </tr>
+    `).join('');
+};
+
+// --- 12. POPULAR MENUS (SELECTS) ---
 window.populateAllSelects = () => {
-    // Carrega dados
     const motoristas = loadData(DB_KEYS.FUNCIONARIOS).filter(f => f.funcao === 'motorista');
     const ajudantes = loadData(DB_KEYS.FUNCIONARIOS).filter(f => f.funcao === 'ajudante');
     const veiculos = loadData(DB_KEYS.VEICULOS);
     const contratantes = loadData(DB_KEYS.CONTRATANTES);
     const atividades = loadData(DB_KEYS.ATIVIDADES);
 
-    // Função auxiliar para preencher um select
-    const fill = (id, dataArray, valKey, textKey, defaultOption) => {
-        const el = document.getElementById(id); 
-        if(el) { 
-            const currentVal = el.value;
-            el.innerHTML = `<option value="">${defaultOption}</option>` + 
-                           dataArray.map(i => `<option value="${i[valKey]}">${i[textKey]}</option>`).join(''); 
-            if(currentVal) el.value = currentVal; // Tenta manter seleção
+    const fill = (id, list, val, txt, def) => {
+        const el = document.getElementById(id);
+        if(el) {
+            const oldVal = el.value;
+            el.innerHTML = `<option value="">${def}</option>` + list.map(i => `<option value="${i[val]}">${i[txt]}</option>`).join('');
+            if(oldVal) el.value = oldVal;
         }
     };
 
-    // Preenchimento
     fill('selectMotoristaOperacao', motoristas, 'id', 'nome', 'SELECIONE O MOTORISTA...');
     fill('selectVeiculoOperacao', veiculos, 'placa', 'placa', 'SELECIONE O VEÍCULO...');
     fill('selectContratanteOperacao', contratantes, 'cnpj', 'razaoSocial', 'SELECIONE O CLIENTE...');
     fill('selectAtividadeOperacao', atividades, 'id', 'nome', 'SELECIONE A ATIVIDADE...');
     fill('selectAjudantesOperacao', ajudantes, 'id', 'nome', 'SELECIONE UM AJUDANTE...');
     
+    // Outros selects
     fill('selectVeiculoDespesaGeral', veiculos, 'placa', 'placa', 'VINCULAR PLACA (OPCIONAL)...');
     fill('selectMotoristaRelatorio', motoristas, 'id', 'nome', 'TODOS OS MOTORISTAS');
     fill('selectVeiculoRelatorio', veiculos, 'placa', 'placa', 'TODOS OS VEÍCULOS');
     fill('selectContratanteRelatorio', contratantes, 'cnpj', 'razaoSocial', 'TODOS OS CLIENTES');
 
-    // Select de Recibos (Todos os funcionários)
+    // Recibos (Todos)
+    const allFuncs = loadData(DB_KEYS.FUNCIONARIOS);
     const selRecibo = document.getElementById('selectMotoristaRecibo');
     if (selRecibo) {
-        const allFuncs = loadData(DB_KEYS.FUNCIONARIOS);
-        selRecibo.innerHTML = '<option value="">SELECIONE O FUNCIONÁRIO...</option>';
+        selRecibo.innerHTML = '<option value="">SELECIONE...</option>';
         allFuncs.forEach(f => {
             const opt = document.createElement('option');
             opt.value = f.id;
@@ -773,7 +724,7 @@ window.populateAllSelects = () => {
         });
     }
 
-    // Atualiza visualização das tabelas
+    // Atualiza todas as tabelas
     window.renderCadastroTable(DB_KEYS.FUNCIONARIOS);
     window.renderCadastroTable(DB_KEYS.VEICULOS);
     window.renderCadastroTable(DB_KEYS.CONTRATANTES);
@@ -786,8 +737,8 @@ window.populateAllSelects = () => {
 };
 // =============================================================================
 // ARQUIVO: script.js
-// VERSÃO: 10.0
-// PARTE 3: CALENDÁRIO, AÇÕES DE EDIÇÃO (CRUD) E GESTÃO DE EQUIPE
+// VERSÃO: 11.0 (CÓDIGO COMPLETO)
+// PARTE 3: CALENDÁRIO, AÇÕES DE CRUD E GESTÃO DE EQUIPE
 // =============================================================================
 
 // --- 10. LÓGICA DO CALENDÁRIO VISUAL ---
@@ -836,7 +787,7 @@ window.renderCalendar = () => {
         if (opsDia.length > 0) {
             cell.classList.add('has-operation');
             
-            // Calcula faturamento total do dia para exibir no calendário
+            // Calcula faturamento total do dia para exibir no quadradinho
             const totalFaturamentoDia = opsDia.reduce((acc, op) => acc + (Number(op.faturamento) || 0), 0);
             
             cell.innerHTML += `<div class="event-dot"></div>`;
@@ -855,7 +806,7 @@ window.renderCalendar = () => {
 window.changeMonth = (delta) => {
     window.currentDate.setMonth(window.currentDate.getMonth() + delta);
     window.renderCalendar();
-    window.updateDashboardStats(); // Atualiza gráficos ao mudar o mês
+    if(window.updateDashboardStats) window.updateDashboardStats(); 
 };
 
 // Abre o Modal com o Resumo Financeiro do Dia
@@ -944,7 +895,7 @@ window.openDayDetails = (dataStr) => {
         }).join('');
     }
 
-    document.getElementById('modalDayTitle').textContent = `DIA ${dataStr.split('-').reverse().join('/')}`;
+    document.getElementById('modalDayTitle').textContent = `DETALHES DO DIA ${dataStr.split('-').reverse().join('/')}`;
     document.getElementById('modalDayOperations').style.display = 'block';
 };
 
@@ -1074,7 +1025,7 @@ window.editOperacaoItem = (id) => {
 
 // Desfazer Falta (Restaura o funcionário para a operação)
 window.undoFalta = (opId, type, userId) => {
-    if(!confirm("Deseja remover esta falta? O funcionário voltará a ter direito ao pagamento desta operação.")) return;
+    if(!confirm("Deseja remover esta falta e permitir que o funcionário receba/trabalhe?")) return;
     
     let ops = loadData(DB_KEYS.OPERACOES).slice();
     let idx = ops.findIndex(o => String(o.id) === String(opId));
@@ -1174,8 +1125,8 @@ window.markAbsent = (opId, type, userId) => {
 };
 // =============================================================================
 // ARQUIVO: script.js
-// VERSÃO: 10.0
-// PARTE 4: FORMULÁRIOS, RELATÓRIOS, GRÁFICOS E INICIALIZAÇÃO
+// VERSÃO: 11.0 (CÓDIGO COMPLETO)
+// PARTE 4: FORMULÁRIOS, RELATÓRIOS, DASHBOARD E INICIALIZAÇÃO
 // =============================================================================
 
 // --- 13. GERENCIAMENTO DE FORMULÁRIOS (SALVAR DADOS) ---
@@ -1185,13 +1136,11 @@ function setupFormHandlers() {
     // --- A. SALVAR FUNCIONÁRIO ---
     const formFunc = document.getElementById('formFuncionario');
     if (formFunc) {
-        formFunc.addEventListener('submit', async (e) => {
+        formFunc.onsubmit = async (e) => {
             e.preventDefault();
-            
-            const btnSubmit = formFunc.querySelector('button[type="submit"]');
-            const originalText = btnSubmit.innerText;
-            btnSubmit.innerText = "SALVANDO...";
-            btnSubmit.disabled = true;
+            const btn = formFunc.querySelector('button[type="submit"]');
+            const originalText = btn.innerText;
+            btn.innerText = "SALVANDO..."; btn.disabled = true;
 
             try {
                 const idHidden = document.getElementById('funcionarioId').value;
@@ -1199,48 +1148,35 @@ function setupFormHandlers() {
                 const senha = document.getElementById('funcSenha').value;
                 const funcao = document.getElementById('funcFuncao').value;
                 
-                // Carrega lista atual
-                let listaFuncionarios = loadData(DB_KEYS.FUNCIONARIOS);
+                let lista = loadData(DB_KEYS.FUNCIONARIOS);
                 
-                // Verifica duplicidade de e-mail (se for novo)
-                if (!idHidden && listaFuncionarios.some(f => f.email === email)) {
-                    throw new Error("Este e-mail já está cadastrado para outro funcionário.");
+                // Validação de Email Único
+                if (!idHidden && lista.some(f => f.email === email)) {
+                    throw new Error("E-mail já cadastrado.");
                 }
 
                 let newId = idHidden ? idHidden : String(Date.now());
                 let novoUid = null;
 
-                // --- CRIAÇÃO DE USUÁRIO NO FIREBASE (AUTH) ---
+                // Integração Firebase Auth (se houver senha e for novo/atualização de senha)
                 if (window.dbRef && !idHidden && senha) {
-                    if (senha.length < 6) throw new Error("A senha deve ter no mínimo 6 dígitos.");
-                    
+                    if (senha.length < 6) throw new Error("Senha muito curta (min 6).");
                     const { getAuth, createUserWithEmailAndPassword, secondaryApp, setDoc, doc, db, signOut } = window.dbRef;
-                    
-                    // Usa app secundário para não deslogar o admin atual
                     const auth2 = getAuth(secondaryApp);
-                    const userCredential = await createUserWithEmailAndPassword(auth2, email, senha);
-                    novoUid = userCredential.user.uid;
+                    const cred = await createUserWithEmailAndPassword(auth2, email, senha);
+                    novoUid = cred.user.uid;
                     
-                    // Salva perfil de acesso na coleção 'users'
+                    // Salva metadados de acesso
                     await setDoc(doc(db, "users", novoUid), {
-                        uid: novoUid,
-                        name: document.getElementById('funcNome').value.toUpperCase(),
-                        email: email,
-                        role: funcao,
-                        company: window.CURRENT_USER.company,
-                        approved: true,
-                        createdAt: new Date().toISOString()
+                        uid: novoUid, name: document.getElementById('funcNome').value.toUpperCase(),
+                        email: email, role: funcao, company: window.CURRENT_USER.company, approved: true
                     });
-                    
-                    await signOut(auth2); // Desloga o secundário
+                    await signOut(auth2);
                 }
 
-                // Monta o objeto Funcionário
-                const objFuncionario = {
+                const obj = {
                     id: newId,
-                    // Se for edição, mantém o UID antigo. Se novo, usa o criado.
-                    uid: novoUid || (idHidden ? (listaFuncionarios.find(f => String(f.id) === String(idHidden))?.uid || '') : ''),
-                    
+                    uid: novoUid || (idHidden ? (lista.find(f => safeStr(f.id) === safeStr(idHidden))?.uid || '') : ''),
                     nome: document.getElementById('funcNome').value.toUpperCase(),
                     funcao: funcao,
                     email: email,
@@ -1248,57 +1184,43 @@ function setupFormHandlers() {
                     telefone: document.getElementById('funcTelefone').value,
                     pix: document.getElementById('funcPix').value,
                     endereco: document.getElementById('funcEndereco').value.toUpperCase(),
-                    
-                    // Campos exclusivos de Motorista
                     cnh: document.getElementById('funcCNH').value.toUpperCase(),
                     validadeCNH: document.getElementById('funcValidadeCNH').value,
                     categoriaCNH: document.getElementById('funcCategoriaCNH').value,
                     cursoDescricao: document.getElementById('funcCursoDescricao').value.toUpperCase()
                 };
 
-                // Atualiza (se existir) ou Adiciona (se novo)
                 if (idHidden) {
-                    const index = listaFuncionarios.findIndex(f => String(f.id) === String(idHidden));
-                    if (index >= 0) listaFuncionarios[index] = objFuncionario;
+                    const idx = lista.findIndex(f => safeStr(f.id) === safeStr(idHidden));
+                    if (idx >= 0) lista[idx] = obj;
                 } else {
-                    listaFuncionarios.push(objFuncionario);
+                    lista.push(obj);
                 }
 
-                await saveData(DB_KEYS.FUNCIONARIOS, listaFuncionarios);
-                
-                // Limpa e reseta
-                formFunc.reset();
-                document.getElementById('funcionarioId').value = '';
-                window.populateAllSelects(); // Atualiza listas
+                await saveData(DB_KEYS.FUNCIONARIOS, lista);
+                formFunc.reset(); document.getElementById('funcionarioId').value = '';
+                window.populateAllSelects();
                 alert("Funcionário salvo com sucesso!");
 
-            } catch (err) {
-                console.error(err);
-                alert("Erro ao salvar: " + err.message);
-            } finally {
-                btnSubmit.innerText = originalText;
-                btnSubmit.disabled = false;
-            }
-        });
+            } catch (err) { alert("Erro: " + err.message); } 
+            finally { btn.innerText = originalText; btn.disabled = false; }
+        };
     }
 
     // --- B. SALVAR VEÍCULO ---
     const formVeic = document.getElementById('formVeiculo');
     if (formVeic) {
-        formVeic.addEventListener('submit', (e) => {
+        formVeic.onsubmit = (e) => {
             e.preventDefault();
             const placa = document.getElementById('veiculoPlaca').value.toUpperCase();
-            if (!placa) return alert("A Placa é obrigatória.");
+            if(!placa) return alert("Placa obrigatória.");
 
-            let listaVeiculos = loadData(DB_KEYS.VEICULOS);
+            let lista = loadData(DB_KEYS.VEICULOS);
             const idHidden = document.getElementById('veiculoId').value;
 
-            // Se mudou a placa na edição, remove a antiga para não duplicar
-            if (idHidden && idHidden !== placa) {
-                listaVeiculos = listaVeiculos.filter(v => v.placa !== idHidden);
-            }
-            
-            const objVeiculo = {
+            if (idHidden && idHidden !== placa) lista = lista.filter(v => v.placa !== idHidden);
+
+            const obj = {
                 placa: placa,
                 modelo: document.getElementById('veiculoModelo').value.toUpperCase(),
                 ano: document.getElementById('veiculoAno').value,
@@ -1306,33 +1228,29 @@ function setupFormHandlers() {
                 chassi: document.getElementById('veiculoChassi').value
             };
 
-            const index = listaVeiculos.findIndex(v => v.placa === placa);
-            if (index >= 0) listaVeiculos[index] = objVeiculo;
-            else listaVeiculos.push(objVeiculo);
+            const idx = lista.findIndex(v => v.placa === placa);
+            if (idx >= 0) lista[idx] = obj; else lista.push(obj);
 
-            saveData(DB_KEYS.VEICULOS, listaVeiculos).then(() => {
-                formVeic.reset();
-                document.getElementById('veiculoId').value = '';
+            saveData(DB_KEYS.VEICULOS, lista).then(() => {
+                formVeic.reset(); document.getElementById('veiculoId').value = '';
                 window.populateAllSelects();
-                alert("Veículo salvo com sucesso!");
+                alert("Veículo salvo!");
             });
-        });
+        };
     }
 
     // --- C. SALVAR CONTRATANTE ---
     const formCli = document.getElementById('formContratante');
     if (formCli) {
-        formCli.addEventListener('submit', (e) => {
+        formCli.onsubmit = (e) => {
             e.preventDefault();
-            const cnpj = document.getElementById('contratanteCNPJ').value.replace(/\D/g, '');
-            if (!cnpj) return alert("CNPJ é obrigatório.");
+            const cnpj = document.getElementById('contratanteCNPJ').value.replace(/\D/g,'');
+            if(!cnpj) return alert("CNPJ obrigatório.");
 
             let lista = loadData(DB_KEYS.CONTRATANTES);
             const idHidden = document.getElementById('contratanteId').value;
 
-            if (idHidden && String(idHidden) !== String(cnpj)) {
-                lista = lista.filter(c => String(c.cnpj) !== String(idHidden));
-            }
+            if (idHidden && String(idHidden) !== String(cnpj)) lista = lista.filter(c => String(c.cnpj) !== String(idHidden));
 
             const obj = {
                 cnpj: cnpj,
@@ -1340,49 +1258,43 @@ function setupFormHandlers() {
                 telefone: document.getElementById('contratanteTelefone').value
             };
             
-            const index = lista.findIndex(c => String(c.cnpj) === String(cnpj));
-            if (index >= 0) lista[index] = obj;
-            else lista.push(obj);
+            const idx = lista.findIndex(c => String(c.cnpj) === String(cnpj));
+            if (idx >= 0) lista[idx] = obj; else lista.push(obj);
 
             saveData(DB_KEYS.CONTRATANTES, lista).then(() => {
-                formCli.reset();
-                document.getElementById('contratanteId').value = '';
+                formCli.reset(); document.getElementById('contratanteId').value = '';
                 window.populateAllSelects();
                 alert("Contratante salvo!");
             });
-        });
+        };
     }
 
-    // --- D. SALVAR OPERAÇÃO (LANÇAMENTO PRINCIPAL) ---
+    // --- D. SALVAR OPERAÇÃO (LANÇAMENTO) ---
     const formOp = document.getElementById('formOperacao');
     if (formOp) {
-        formOp.addEventListener('submit', (e) => {
+        formOp.onsubmit = (e) => {
             e.preventDefault();
             
             const motId = document.getElementById('selectMotoristaOperacao').value;
             const veicPlaca = document.getElementById('selectVeiculoOperacao').value;
             
-            if (!motId || !veicPlaca) return alert("Selecione obrigatoriamente um Motorista e um Veículo.");
+            if (!motId || !veicPlaca) return alert("Selecione Motorista e Veículo.");
             
-            // Verifica CNH
-            window.verificarValidadeCNH(motId);
+            // Verifica validade CNH (apenas alerta)
+            window.verificarValidadeCNH && window.verificarValidadeCNH(motId);
 
             const idHidden = document.getElementById('operacaoId').value;
-            let listaOps = loadData(DB_KEYS.OPERACOES);
-            
-            // Verifica se é edição e recupera dados antigos para não perder histórico
-            let opExistente = idHidden ? listaOps.find(o => String(o.id) === String(idHidden)) : null;
+            let lista = loadData(DB_KEYS.OPERACOES);
+            let opAntiga = idHidden ? lista.find(o => String(o.id) === String(idHidden)) : null;
 
-            // Define Status
+            // Define Status (Agendada ou Confirmada)
             const isAgendamento = document.getElementById('operacaoIsAgendamento').checked;
-            let novoStatus = isAgendamento ? 'AGENDADA' : 'CONFIRMADA';
+            let status = isAgendamento ? 'AGENDADA' : 'CONFIRMADA';
             
-            // Se estava em andamento, mantém em andamento para não travar o motorista
-            if (opExistente && opExistente.status === 'EM_ANDAMENTO') {
-                novoStatus = 'EM_ANDAMENTO';
-            }
+            // Se já estava em andamento, mantém para não quebrar fluxo do motorista
+            if (opAntiga && opAntiga.status === 'EM_ANDAMENTO') status = 'EM_ANDAMENTO';
 
-            const objOperacao = {
+            const obj = {
                 id: idHidden ? Number(idHidden) : Date.now(),
                 data: document.getElementById('operacaoData').value,
                 
@@ -1391,21 +1303,19 @@ function setupFormHandlers() {
                 contratanteCNPJ: document.getElementById('selectContratanteOperacao').value,
                 atividadeId: document.getElementById('selectAtividadeOperacao').value,
                 
-                // Financeiro
                 faturamento: Number(document.getElementById('operacaoFaturamento').value),
                 adiantamento: Number(document.getElementById('operacaoAdiantamento').value),
                 comissao: Number(document.getElementById('operacaoComissao').value),
                 despesas: Number(document.getElementById('operacaoDespesas').value),
                 
-                // Dados de Rodagem
                 combustivel: Number(document.getElementById('operacaoCombustivel').value),
                 precoLitro: Number(document.getElementById('operacaoPrecoLitro').value),
                 kmRodado: Number(document.getElementById('operacaoKmRodado').value),
 
-                status: novoStatus,
+                status: status,
                 
-                // Preserva a estrutura de Check-in ou cria nova
-                checkins: opExistente ? opExistente.checkins : { 
+                // Preserva Check-ins e Faltas anteriores
+                checkins: opAntiga ? opAntiga.checkins : { 
                     motorista: false, 
                     ajudantes: [], 
                     faltasAjudantes: [], 
@@ -1413,29 +1323,23 @@ function setupFormHandlers() {
                     ajudantesLog: {} 
                 },
                 
-                // Preserva KM Inicial/Final se já existiam
-                kmInicial: opExistente ? opExistente.kmInicial : 0,
-                kmFinal: opExistente ? opExistente.kmFinal : 0,
-                dataHoraInicio: opExistente ? opExistente.dataHoraInicio : null,
+                kmInicial: opAntiga ? opAntiga.kmInicial : 0,
+                kmFinal: opAntiga ? opAntiga.kmFinal : 0,
+                dataHoraInicio: opAntiga ? opAntiga.dataHoraInicio : null,
 
-                // Salva a lista de ajudantes que está na tela (array temporário)
+                // Salva Equipe da Tela
                 ajudantes: window._operacaoAjudantesTempList || []
             };
 
-            // Remove a antiga se for edição
-            if (idHidden) {
-                listaOps = listaOps.filter(o => String(o.id) !== String(idHidden));
-            }
-            // Adiciona a nova
-            listaOps.push(objOperacao);
+            if (idHidden) lista = lista.filter(o => String(o.id) !== String(idHidden));
+            lista.push(obj);
 
-            saveData(DB_KEYS.OPERACOES, listaOps).then(() => {
+            saveData(DB_KEYS.OPERACOES, lista).then(() => {
                 formOp.reset(); 
                 document.getElementById('operacaoId').value = ''; 
-                window._operacaoAjudantesTempList = []; // Limpa lista temp
+                window._operacaoAjudantesTempList = [];
                 document.getElementById('listaAjudantesAdicionados').innerHTML = '';
                 
-                // Atualiza tudo
                 window.renderOperacaoTable();
                 window.renderCheckinsTable();
                 window.updateDashboardStats();
@@ -1443,48 +1347,42 @@ function setupFormHandlers() {
                 
                 alert("Operação lançada com sucesso!");
             });
-        });
+        };
     }
 
-    // --- E. SALVAR CHECK-IN (MODAL) ---
+    // --- E. SALVAR CHECK-IN (APP DO MOTORISTA) ---
     const formCheck = document.getElementById('formCheckinConfirm');
     if (formCheck) {
-        formCheck.addEventListener('submit', (e) => {
+        formCheck.onsubmit = (e) => {
             e.preventDefault();
-            
             const opId = document.getElementById('checkinOpId').value;
-            const step = document.getElementById('checkinStep').value; // 'start' ou 'end'
+            const step = document.getElementById('checkinStep').value;
             
-            let listaOps = loadData(DB_KEYS.OPERACOES);
-            let index = listaOps.findIndex(o => String(o.id) === String(opId));
+            let lista = loadData(DB_KEYS.OPERACOES);
+            let index = lista.findIndex(o => String(o.id) === String(opId));
+            if (index < 0) return alert("Erro: Operação não encontrada.");
             
-            if (index < 0) return alert("Operação não encontrada ou removida.");
-            
-            let op = listaOps[index];
-            
-            // Identifica o funcionário logado
+            let op = lista[index];
             const user = loadData(DB_KEYS.FUNCIONARIOS).find(f => 
                 f.uid === window.CURRENT_USER.uid || f.email === window.CURRENT_USER.email
             );
-            
-            if (!user) return alert("Erro de perfil de usuário.");
 
-            // Lógica para MOTORISTA
+            if (!user) return alert("Usuário não identificado.");
+
+            // Motorista
             if (user.funcao === 'motorista') {
                 if (step === 'start') {
                     const kmIni = Number(document.getElementById('checkinKmInicial').value);
-                    if (!kmIni) return alert("Informe o KM do painel.");
-                    
                     const ultimo = window.obterUltimoKmFinal(op.veiculoPlaca);
-                    if (kmIni < ultimo) return alert(`KM inválido! O odômetro não pode ser menor que ${ultimo}.`);
-
+                    if (!kmIni || kmIni < ultimo) return alert(`KM Inválido. Deve ser maior que ${ultimo}.`);
+                    
                     op.kmInicial = kmIni;
                     op.status = 'EM_ANDAMENTO';
                     op.checkins.motorista = true;
                     op.dataHoraInicio = new Date().toISOString();
                 } else {
                     const kmFim = Number(document.getElementById('checkinKmFinal').value);
-                    if (!kmFim || kmFim <= op.kmInicial) return alert("KM Final deve ser maior que o Inicial.");
+                    if (!kmFim || kmFim <= op.kmInicial) return alert("KM Final inválido.");
                     
                     op.kmFinal = kmFim;
                     op.kmRodado = kmFim - (op.kmInicial || 0);
@@ -1493,413 +1391,313 @@ function setupFormHandlers() {
                     op.status = 'CONFIRMADA';
                 }
             } 
-            // Lógica para AJUDANTE
+            // Ajudante
             else {
                 if (!op.checkins.ajudantes) op.checkins.ajudantes = [];
-                // Evita duplicar ID
                 if (!op.checkins.ajudantes.includes(String(user.id))) {
                     op.checkins.ajudantes.push(String(user.id));
-                    if (!op.checkins.ajudantesLog) op.checkins.ajudantesLog = {};
+                    if(!op.checkins.ajudantesLog) op.checkins.ajudantesLog = {};
                     op.checkins.ajudantesLog[user.id] = new Date().toISOString();
                 }
             }
             
-            saveData(DB_KEYS.OPERACOES, listaOps).then(() => {
+            saveData(DB_KEYS.OPERACOES, lista).then(() => {
                 window.closeCheckinConfirmModal();
                 if(window.renderCheckinsTable) window.renderCheckinsTable();
-                alert("Registro salvo com sucesso!");
+                alert("Check-in realizado com sucesso!");
             });
-        });
+        };
+    }
+
+    // --- F. SALVAR DESPESA GERAL ---
+    const formDesp = document.getElementById('formDespesaGeral');
+    if (formDesp) {
+        formDesp.onsubmit = (e) => {
+            e.preventDefault();
+            let lista = loadData(DB_KEYS.DESPESAS_GERAIS);
+            
+            const obj = {
+                id: Date.now(),
+                data: document.getElementById('despesaGeralData').value,
+                veiculoRef: document.getElementById('selectVeiculoDespesaGeral').value || 'GERAL',
+                descricao: document.getElementById('despesaGeralDescricao').value.toUpperCase(),
+                valor: Number(document.getElementById('despesaGeralValor').value),
+                formaPagamento: document.getElementById('despesaFormaPagamento').value
+            };
+            
+            lista.push(obj);
+            saveData(DB_KEYS.DESPESAS_GERAIS, lista).then(() => {
+                formDesp.reset();
+                window.renderDespesasTable();
+                window.updateDashboardStats();
+                alert("Despesa lançada!");
+            });
+        };
+    }
+    
+    // --- G. SALVAR ATIVIDADE ---
+    const formAtiv = document.getElementById('formAtividade');
+    if (formAtiv) {
+        formAtiv.onsubmit = (e) => {
+            e.preventDefault();
+            let lista = loadData(DB_KEYS.ATIVIDADES);
+            const obj = { id: Date.now(), nome: document.getElementById('atividadeNome').value.toUpperCase() };
+            lista.push(obj);
+            saveData(DB_KEYS.ATIVIDADES, lista).then(() => {
+                formAtiv.reset();
+                window.populateAllSelects();
+                alert("Atividade salva.");
+            });
+        };
+    }
+    
+    // --- H. SALVAR MINHA EMPRESA ---
+    const formEmp = document.getElementById('formMinhaEmpresa');
+    if (formEmp) {
+        formEmp.onsubmit = (e) => {
+            e.preventDefault();
+            const obj = {
+                razaoSocial: document.getElementById('minhaEmpresaRazaoSocial').value.toUpperCase(),
+                cnpj: document.getElementById('minhaEmpresaCNPJ').value,
+                telefone: document.getElementById('minhaEmpresaTelefone').value
+            };
+            saveData(DB_KEYS.MINHA_EMPRESA, obj).then(() => alert("Dados da empresa atualizados."));
+        };
     }
 }
 
 
-// --- 14. RELATÓRIOS E RECIBOS ---
+// --- 14. FUNÇÕES DE RELATÓRIOS E GRÁFICOS ---
 
-// GERA RELATÓRIO GERAL (Tabela HTML)
 window.generateGeneralReport = () => {
     const ini = document.getElementById('dataInicioRelatorio').value;
     const fim = document.getElementById('dataFimRelatorio').value;
+    
+    if(!ini || !fim) return alert("Selecione o período.");
+
     const motId = document.getElementById('selectMotoristaRelatorio').value;
     const placa = document.getElementById('selectVeiculoRelatorio').value;
-    const cnpj = document.getElementById('selectContratanteRelatorio').value;
-
-    if (!ini || !fim) return alert("Selecione a Data Inicial e Final.");
-
+    
     const ops = loadData(DB_KEYS.OPERACOES).filter(o => {
         if (o.status !== 'CONFIRMADA') return false;
         if (o.data < ini || o.data > fim) return false;
         if (motId && String(o.motoristaId) !== String(motId)) return false;
         if (placa && o.veiculoPlaca !== placa) return false;
-        if (cnpj && String(o.contratanteCNPJ) !== String(cnpj)) return false;
         return true;
     });
 
-    let html = `
-        <div style="text-align:center; margin-bottom:20px;">
-            <h3>RELATÓRIO GERAL DE OPERAÇÕES</h3>
-            <small>Período: ${ini.split('-').reverse().join('/')} até ${fim.split('-').reverse().join('/')}</small>
-        </div>
-        <table class="data-table" style="width:100%; border-collapse:collapse;">
-            <thead>
-                <tr style="background:#eee;">
-                    <th>DATA</th>
-                    <th>PLACA</th>
-                    <th>CLIENTE</th>
-                    <th>FATURAMENTO</th>
-                    <th>CUSTOS</th>
-                    <th>LUCRO</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
+    let totalFat = 0, totalLucro = 0;
     
-    let totalFat = 0;
-    let totalLucro = 0;
-
+    let html = `<h3>RELATÓRIO GERAL (${ini.split('-').reverse().join('/')} a ${fim.split('-').reverse().join('/')})</h3>`;
+    html += `<table class="data-table"><thead><tr><th>DATA</th><th>PLACA</th><th>FATURAMENTO</th><th>LUCRO EST.</th></tr></thead><tbody>`;
+    
     ops.forEach(o => {
         const fat = Number(o.faturamento) || 0;
+        let custo = window.calcularCustoConsumoViagem(o) + (Number(o.despesas)||0);
         
-        // Calcula custos considerando faltas
-        let custo = window.calcularCustoConsumoViagem(o) + (Number(o.despesas) || 0);
-        
-        if(!o.checkins?.faltaMotorista) custo += (Number(o.comissao) || 0);
-        
-        (o.ajudantes || []).forEach(a => {
-            if(!o.checkins?.faltasAjudantes?.includes(String(a.id))) {
-                custo += (Number(a.diaria) || 0);
-            }
+        if(!o.checkins?.faltaMotorista) custo += (Number(o.comissao)||0);
+        (o.ajudantes||[]).forEach(a => {
+            if(!o.checkins?.faltasAjudantes?.includes(String(a.id))) custo += (Number(a.diaria)||0);
         });
 
         const lucro = fat - custo;
         totalFat += fat;
         totalLucro += lucro;
 
-        html += `
-            <tr style="border-bottom:1px solid #ddd;">
-                <td>${o.data.split('-').reverse().join('/')}</td>
-                <td>${o.veiculoPlaca}</td>
-                <td>${window.getContratante(o.contratanteCNPJ)?.razaoSocial || '-'}</td>
-                <td>${window.formatCurrency(fat)}</td>
-                <td>${window.formatCurrency(custo)}</td>
-                <td style="color:${lucro >= 0 ? 'green' : 'red'}; font-weight:bold;">${window.formatCurrency(lucro)}</td>
-            </tr>
-        `;
+        html += `<tr><td>${o.data.split('-').reverse().join('/')}</td><td>${o.veiculoPlaca}</td><td>${window.formatCurrency(fat)}</td><td>${window.formatCurrency(lucro)}</td></tr>`;
     });
 
-    html += `
-            </tbody>
-            <tfoot>
-                <tr style="background:#263238; color:white; font-weight:bold;">
-                    <td colspan="3" style="padding:10px;">TOTAIS GERAIS</td>
-                    <td>${window.formatCurrency(totalFat)}</td>
-                    <td>-</td>
-                    <td>${window.formatCurrency(totalLucro)}</td>
-                </tr>
-            </tfoot>
-        </table>
-    `;
-
-    document.getElementById('reportContent').innerHTML = html;
-    document.getElementById('reportResults').style.display = 'block';
-};
-
-// GERA RELATÓRIO DE COBRANÇA (Fatura)
-window.generateBillingReport = () => {
-    const ini = document.getElementById('dataInicioRelatorio').value;
-    const fim = document.getElementById('dataFimRelatorio').value;
-    const cnpj = document.getElementById('selectContratanteRelatorio').value;
-    
-    if(!cnpj) return alert("Selecione um Cliente para gerar a cobrança.");
-    if(!ini || !fim) return alert("Selecione o período.");
-    
-    const cliente = window.getContratante(cnpj);
-    const ops = loadData(DB_KEYS.OPERACOES).filter(o => 
-        o.contratanteCNPJ === cnpj && 
-        o.status === 'CONFIRMADA' && 
-        o.data >= ini && o.data <= fim
-    );
-    
-    let total = 0;
-    
-    let html = `
-        <div style="padding:30px; border:1px solid #333;">
-            <h2 style="text-align:center;">DEMONSTRATIVO DE SERVIÇOS PRESTADOS</h2>
-            <hr>
-            <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
-                <div>
-                    <strong>DE:</strong> ${window.getMinhaEmpresa()?.razaoSocial || 'MINHA TRANSPORTADORA'}<br>
-                    <strong>PARA:</strong> ${cliente?.razaoSocial || cnpj}
-                </div>
-                <div style="text-align:right;">
-                    <strong>EMISSÃO:</strong> ${new Date().toLocaleDateString()}<br>
-                    <strong>PERÍODO:</strong> ${ini.split('-').reverse().join('/')} a ${fim.split('-').reverse().join('/')}
-                </div>
-            </div>
-            
-            <table style="width:100%; border-collapse:collapse; margin-top:20px;">
-                <thead>
-                    <tr style="border-bottom:2px solid #000;">
-                        <th style="text-align:left;">DATA</th>
-                        <th style="text-align:left;">VEÍCULO</th>
-                        <th style="text-align:left;">SERVIÇO</th>
-                        <th style="text-align:right;">VALOR</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
-    
-    ops.forEach(o => {
-        total += (Number(o.faturamento) || 0);
-        html += `
-            <tr style="border-bottom:1px solid #ccc;">
-                <td style="padding:8px 0;">${o.data.split('-').reverse().join('/')}</td>
-                <td>${o.veiculoPlaca}</td>
-                <td>${window.getAtividade(o.atividadeId)?.nome || 'FRETE / TRANSPORTE'}</td>
-                <td style="text-align:right;">${window.formatCurrency(o.faturamento)}</td>
-            </tr>
-        `;
-    });
-    
-    html += `
-                </tbody>
-            </table>
-            <h3 style="text-align:right; margin-top:30px;">TOTAL A PAGAR: ${window.formatCurrency(total)}</h3>
-        </div>
-    `;
+    html += `<tr style="font-weight:bold; background:#eee;"><td colspan="2">TOTAIS</td><td>${window.formatCurrency(totalFat)}</td><td>${window.formatCurrency(totalLucro)}</td></tr></tbody></table>`;
     
     document.getElementById('reportContent').innerHTML = html;
     document.getElementById('reportResults').style.display = 'block';
 };
 
-// EXPORTAR PDF
-window.exportReportToPDF = () => {
-    const element = document.getElementById('reportContent');
-    if (!element || element.innerText.trim() === '') return alert("Gere um relatório primeiro.");
-    
-    const opt = {
-        margin: 10,
-        filename: 'relatorio_logimaster.pdf',
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-    html2pdf().set(opt).from(element).save();
-};
-
-// GERA RECIBO DE PAGAMENTO
 window.generateReceipt = () => {
     const funcId = document.getElementById('selectMotoristaRecibo').value;
     const ini = document.getElementById('dataInicioRecibo').value;
     const fim = document.getElementById('dataFimRecibo').value;
     
-    if(!funcId || !ini || !fim) return alert("Preencha funcionário e datas.");
-    
+    if(!funcId || !ini || !fim) return alert("Preencha todos os campos.");
     const func = window.getFuncionario(funcId);
     if (!func) return alert("Funcionário inválido.");
     
-    const ops = loadData(DB_KEYS.OPERACOES).filter(o => 
-        o.status === 'CONFIRMADA' && o.data >= ini && o.data <= fim
-    );
+    const ops = loadData(DB_KEYS.OPERACOES).filter(o => o.status === 'CONFIRMADA' && o.data >= ini && o.data <= fim);
     
     let total = 0;
     let itensHtml = '';
     
     ops.forEach(o => {
-        let valor = 0;
+        let val = 0;
         let obs = '';
         
-        // Verifica se é motorista desta op
         if (func.funcao === 'motorista' && String(o.motoristaId) === String(funcId)) {
-            if (o.checkins && o.checkins.faltaMotorista) {
-                obs = ' <span style="color:red">(FALTA - R$ 0,00)</span>';
-                valor = 0;
-            } else {
-                valor = Number(o.comissao) || 0;
-            }
-        } 
-        // Verifica se é ajudante desta op
-        else if (o.ajudantes) {
+            if (o.checkins?.faltaMotorista) obs = ' (FALTA - R$ 0,00)';
+            else val = Number(o.comissao)||0;
+        } else if (o.ajudantes) {
             const aj = o.ajudantes.find(a => String(a.id) === String(funcId));
             if (aj) {
-                if (o.checkins && o.checkins.faltasAjudantes && o.checkins.faltasAjudantes.includes(String(funcId))) {
-                    obs = ' <span style="color:red">(FALTA - R$ 0,00)</span>';
-                    valor = 0;
-                } else {
-                    valor = Number(aj.diaria) || 0;
-                }
+                if (o.checkins?.faltasAjudantes?.includes(String(funcId))) obs = ' (FALTA - R$ 0,00)';
+                else val = Number(aj.diaria)||0;
             }
         }
         
-        if (valor > 0 || obs !== '') {
-            total += valor;
-            itensHtml += `<li>${o.data.split('-').reverse().join('/')} - Placa ${o.veiculoPlaca}: <strong>${window.formatCurrency(valor)}</strong>${obs}</li>`;
+        if (val > 0 || obs !== '') {
+            total += val;
+            itensHtml += `<li>${o.data.split('-').reverse().join('/')} - Placa ${o.veiculoPlaca}: <strong>${window.formatCurrency(val)}</strong>${obs}</li>`;
         }
     });
     
     const html = `
-        <div style="border:2px dashed #000; padding:40px; background:#fff; margin:20px 0;">
-            <h1 style="text-align:center; margin-bottom:30px;">RECIBO DE PAGAMENTO</h1>
-            <p style="font-size:1.1rem;">
-                Recebi de <strong>${window.getMinhaEmpresa()?.razaoSocial || 'EMPRESA'}</strong> a importância de 
-                <strong style="background:#eee; padding:5px;">${window.formatCurrency(total)}</strong> referente aos serviços prestados abaixo:
-            </p>
-            <ul style="line-height:1.8; margin:20px 0; border-top:1px solid #eee; padding-top:20px;">
-                ${itensHtml || '<li>Nenhum serviço remunerado no período.</li>'}
-            </ul>
-            <div style="text-align:center; margin-top:50px;">
-                ______________________________________<br>
-                <strong>${func.nome}</strong><br>
-                CPF: ${func.documento}<br>
-                Data: ${new Date().toLocaleDateString()}
-            </div>
+        <div style="border:2px dashed #000; padding:30px; background:#fff;">
+            <h2 style="text-align:center;">RECIBO DE PAGAMENTO</h2>
+            <p>Beneficiário: <strong>${func.nome}</strong></p>
+            <ul>${itensHtml || '<li>Nenhum valor no período.</li>'}</ul>
+            <h3 style="text-align:right;">TOTAL LÍQUIDO: ${window.formatCurrency(total)}</h3>
+            <p style="text-align:center; margin-top:40px;">__________________________________<br>Assinatura</p>
         </div>
-        <div style="text-align:center;">
-            <button class="btn-primary" onclick="window.print()"><i class="fas fa-print"></i> IMPRIMIR RECIBO</button>
-        </div>
+        <div style="text-align:center; margin-top:10px;"><button class="btn-primary" onclick="window.print()">IMPRIMIR</button></div>
     `;
     
     document.getElementById('reciboContent').innerHTML = html;
 };
 
-
-// --- 15. DASHBOARD E GRÁFICOS ---
-
+// ATUALIZAÇÃO DO DASHBOARD (GRÁFICOS)
 window.updateDashboardStats = () => {
-    // Apenas Admin vê dashboard
     if (!window.CURRENT_USER || window.CURRENT_USER.role !== 'admin') return;
     
     const ops = loadData(DB_KEYS.OPERACOES);
-    const date = window.currentDate || new Date(); // Data do calendário
+    const date = window.currentDate || new Date();
     
-    // Filtra operações CONFIRMADAS do mês exibido no calendário
     const opsMes = ops.filter(o => {
-        if (o.status !== 'CONFIRMADA') return false;
         const d = new Date(o.data);
-        // Ajuste simples de fuso horário pegando partes da data
-        const [ano, mes, dia] = o.data.split('-');
-        return Number(mes) === (date.getMonth() + 1) && Number(ano) === date.getFullYear();
+        return o.status === 'CONFIRMADA' && d.getMonth() === date.getMonth() && d.getFullYear() === date.getFullYear();
     });
-
-    let fatTotal = 0;
-    let custoTotal = 0;
+    
+    const fat = opsMes.reduce((acc, o) => acc + (Number(o.faturamento)||0), 0);
+    let custo = 0;
     
     opsMes.forEach(o => {
-        fatTotal += (Number(o.faturamento) || 0);
-        
-        let cDiesel = window.calcularCustoConsumoViagem(o);
-        let cOutros = Number(o.despesas) || 0;
-        let cPessoal = 0;
-        
-        if(!o.checkins?.faltaMotorista) cPessoal += (Number(o.comissao) || 0);
-        (o.ajudantes || []).forEach(a => {
-            if(!o.checkins?.faltasAjudantes?.includes(String(a.id))) cPessoal += (Number(a.diaria) || 0);
+        custo += window.calcularCustoConsumoViagem(o) + (Number(o.despesas)||0);
+        if(!o.checkins?.faltaMotorista) custo += (Number(o.comissao)||0);
+        (o.ajudantes||[]).forEach(a => {
+            if(!o.checkins?.faltasAjudantes?.includes(String(a.id))) custo += (Number(a.diaria)||0);
         });
-        
-        custoTotal += (cDiesel + cOutros + cPessoal);
     });
 
-    const lucroLiquido = fatTotal - custoTotal;
+    const lucro = fat - custo;
     
-    // Atualiza cards
-    const elFat = document.getElementById('faturamentoMes');
-    const elDesp = document.getElementById('despesasMes');
-    const elLucro = document.getElementById('receitaMes');
+    document.getElementById('faturamentoMes').textContent = window.formatCurrency(fat);
+    document.getElementById('despesasMes').textContent = window.formatCurrency(custo);
+    document.getElementById('receitaMes').textContent = window.formatCurrency(lucro);
     
-    if(elFat) elFat.textContent = window.formatCurrency(fatTotal);
-    if(elDesp) elDesp.textContent = window.formatCurrency(custoTotal);
-    if(elLucro) {
-        elLucro.textContent = window.formatCurrency(lucroLiquido);
-        elLucro.style.color = lucroLiquido >= 0 ? 'var(--success-color)' : 'var(--danger-color)';
-    }
-
-    // Renderiza Gráfico
     const ctx = document.getElementById('mainChart');
-    if (ctx) {
-        if (window.myChartInstance) window.myChartInstance.destroy();
-
-        window.myChartInstance = new Chart(ctx, {
+    if(ctx) {
+        if(window.myChartInst) window.myChartInst.destroy();
+        window.myChartInst = new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: ['RECEITA', 'CUSTOS', 'LUCRO'],
+                labels: ['Faturamento', 'Custos', 'Lucro'],
                 datasets: [{
-                    label: 'Valores do Mês (R$)',
-                    data: [fatTotal, custoTotal, lucroLiquido],
-                    backgroundColor: [
-                        '#00796b', // Receita (Verde)
-                        '#c62828', // Custo (Vermelho)
-                        lucroLiquido >= 0 ? '#2e7d32' : '#d32f2f' // Lucro
-                    ]
+                    label: 'Resumo do Mês',
+                    data: [fat, custo, lucro],
+                    backgroundColor: ['#00796b', '#c62828', (lucro>=0?'#2e7d32':'#c62828')]
                 }]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: { y: { beginAtZero: true } }
-            }
+            options: { responsive: true, maintainAspectRatio: false }
         });
     }
 };
 
 
-// --- 16. INICIALIZAÇÃO E BOOTSTRAP ---
+// --- 15. INICIALIZAÇÃO E NAVEGAÇÃO ---
 
-/**
- * Função chamada pelo index.html quando o Firebase autentica o usuário.
- * Define o que aparece na tela (Admin vs Funcionário).
- */
+// Configuração do Menu Lateral
+function setupNavigation() {
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach(item => {
+        const newItem = item.cloneNode(true); // Remove listeners antigos
+        item.parentNode.replaceChild(newItem, item);
+        
+        newItem.addEventListener('click', () => {
+            const pageId = newItem.getAttribute('data-page');
+            
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            
+            newItem.classList.add('active');
+            const pageEl = document.getElementById(pageId);
+            if(pageEl) pageEl.classList.add('active');
+            
+            document.getElementById('sidebar').classList.remove('active');
+            document.getElementById('sidebarOverlay')?.classList.remove('active');
+            
+            if(pageId === 'home') { window.renderCalendar(); window.updateDashboardStats(); }
+            if(pageId === 'checkins-pendentes') window.renderCheckinsTable();
+        });
+    });
+    
+    // Abas de Cadastro
+    document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.cadastro-tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.cadastro-form').forEach(f => f.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById(btn.getAttribute('data-tab')).classList.add('active');
+        });
+    });
+}
+
+// Inicializa Sistema (Pós Login)
 window.initSystemByRole = (user) => {
     window.CURRENT_USER = user;
     
-    // Esconde todos os menus primeiro
     document.getElementById('menu-admin').style.display = 'none';
     document.getElementById('menu-employee').style.display = 'none';
     document.getElementById('menu-super-admin').style.display = 'none';
     
-    // Lógica de Perfil
+    let startPage = 'home';
+    
     if (user.email === 'admin@logimaster.com') {
-        // SUPER ADMIN
         document.getElementById('menu-super-admin').style.display = 'block';
-        document.getElementById('super-admin').classList.add('active');
-        
-    } else if (user.role === 'admin') {
-        // ADMINISTRADOR DA EMPRESA
+        startPage = 'super-admin';
+    } 
+    else if (user.role === 'admin') {
         document.getElementById('menu-admin').style.display = 'block';
-        document.getElementById('home').classList.add('active');
-        
-        // Inicializa dados e tela
+        startPage = 'home';
         window.populateAllSelects();
         window.renderCalendar();
         window.updateDashboardStats();
-        window.renderCheckinsTable();
-        
-    } else {
-        // FUNCIONÁRIO (MOTORISTA/AJUDANTE)
+    } 
+    else {
         document.getElementById('menu-employee').style.display = 'block';
-        document.getElementById('employee-home').classList.add('active');
+        startPage = 'employee-home';
         window.IS_READ_ONLY = true;
-        
-        // Funcionário também vê o monitoramento (seus check-ins)
         window.renderCheckinsTable();
-        if(window.renderEmployeeProfileView) window.renderEmployeeProfileView();
     }
+    
+    setupNavigation();
+    
+    // Ativa página inicial
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    const pInicial = document.getElementById(startPage);
+    if(pInicial) pInicial.classList.add('active');
+    
+    const menuLink = document.querySelector(`.nav-item[data-page="${startPage}"]`);
+    if(menuLink) menuLink.classList.add('active');
 
-    // Inicia ouvintes de banco de dados em tempo real (Firebase)
+    // Listeners Firebase
     if (window.dbRef && user.company) {
         const { db, doc, onSnapshot } = window.dbRef;
-        const companyDomain = user.company;
-        
-        Object.values(DB_KEYS).forEach(key => {
-            onSnapshot(doc(db, 'companies', companyDomain, 'data', key), (docSnap) => {
-                if (docSnap.exists()) {
-                    APP_CACHE[key] = docSnap.data().items || [];
-                    
-                    // Reações automáticas a mudanças
-                    if (key === DB_KEYS.OPERACOES) {
-                        window.renderOperacaoTable();
-                        window.renderCheckinsTable();
-                        window.renderCalendar();
-                        window.updateDashboardStats();
+        Object.values(DB_KEYS).forEach(k => {
+            onSnapshot(doc(db, 'companies', user.company, 'data', k), s => {
+                if(s.exists()) {
+                    APP_CACHE[k] = s.data().items || [];
+                    if(k===DB_KEYS.OPERACOES) { 
+                        window.renderOperacaoTable(); 
+                        window.renderCheckinsTable(); 
+                        window.renderCalendar(); 
+                        window.updateDashboardStats(); 
                     } else {
                         window.populateAllSelects();
                     }
@@ -1909,69 +1707,39 @@ window.initSystemByRole = (user) => {
     }
 };
 
-// LISTENERS DE INICIALIZAÇÃO DO DOM
+// DOM Ready
 document.addEventListener('DOMContentLoaded', () => {
-    // Configura os formulários
-    if (typeof setupFormHandlers === 'function') {
-        setupFormHandlers();
-    }
+    if(typeof setupFormHandlers === 'function') setupFormHandlers();
+    setupNavigation();
     
-    // Menu Mobile
-    const btnMobile = document.getElementById('mobileMenuBtn');
-    if(btnMobile) {
-        btnMobile.addEventListener('click', () => {
-            document.getElementById('sidebar').classList.toggle('active');
-            document.getElementById('sidebarOverlay').classList.toggle('active');
-        });
-    }
+    // Mobile
+    document.getElementById('mobileMenuBtn')?.addEventListener('click', () => {
+        document.getElementById('sidebar').classList.add('active');
+        document.getElementById('sidebarOverlay').classList.add('active');
+    });
     
     document.getElementById('sidebarOverlay')?.addEventListener('click', () => {
         document.getElementById('sidebar').classList.remove('active');
         document.getElementById('sidebarOverlay').classList.remove('active');
     });
-
-    // Helper para Adicionar Ajudante Manualmente na Tela de Operação
-    const btnAddAj = document.getElementById('btnManualAddAjudante');
-    if(btnAddAj) {
-        btnAddAj.addEventListener('click', window.handleManualAddAjudante);
-    }
+    
+    // Helper para Ajudante Manual
+    window._operacaoAjudantesTempList = [];
+    document.getElementById('btnManualAddAjudante')?.addEventListener('click', () => {
+        const sel = document.getElementById('selectAjudantesOperacao');
+        const id = sel.value;
+        if (!id) return alert("Selecione um ajudante.");
+        const aj = window.getFuncionario(id);
+        const val = prompt(`Valor da diária para ${aj.nome}?`, "0");
+        if(val !== null) {
+            window._operacaoAjudantesTempList.push({id: id, diaria: Number(val.replace(',','.'))});
+            window.renderAjudantesAdicionadosList();
+            sel.value = '';
+        }
+    });
 });
 
-// Helper: Adicionar Ajudante à Lista Temporária
-window._operacaoAjudantesTempList = [];
-window.handleManualAddAjudante = () => {
-    const sel = document.getElementById('selectAjudantesOperacao');
-    const id = sel.value;
-    if (!id) return alert("Selecione um ajudante na lista.");
-    
-    const func = window.getFuncionario(id);
-    const valor = prompt(`Qual o valor da diária para ${func.nome}?`, "0");
-    
-    if (valor !== null) {
-        window._operacaoAjudantesTempList.push({
-            id: id,
-            diaria: Number(valor.replace(',', '.'))
-        });
-        window.renderAjudantesAdicionadosList();
-        sel.value = ''; // Limpa seleção
-    }
-};
-
 window.renderAjudantesAdicionadosList = () => {
-    const list = document.getElementById('listaAjudantesAdicionados');
-    if (!list) return;
-    
-    list.innerHTML = window._operacaoAjudantesTempList.map(item => {
-        const f = window.getFuncionario(item.id);
-        const nome = f ? f.nome : 'Desconhecido';
-        return `
-            <li>
-                ${nome} (R$ ${window.formatCurrency(item.diaria)})
-                <button type="button" class="btn-mini delete-btn" 
-                    onclick="window._operacaoAjudantesTempList = window._operacaoAjudantesTempList.filter(x => x.id !== '${item.id}'); window.renderAjudantesAdicionadosList();">
-                    <i class="fas fa-times"></i>
-                </button>
-            </li>
-        `;
-    }).join('');
+    const l = document.getElementById('listaAjudantesAdicionados');
+    if(l) l.innerHTML = window._operacaoAjudantesTempList.map(a => `<li>${window.getFuncionario(a.id)?.nome} (R$ ${a.diaria}) <button type="button" class="btn-mini delete-btn" onclick="window._operacaoAjudantesTempList=window._operacaoAjudantesTempList.filter(x=>x.id!='${a.id}');window.renderAjudantesAdicionadosList()">X</button></li>`).join('');
 };
