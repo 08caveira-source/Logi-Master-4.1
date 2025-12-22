@@ -377,50 +377,173 @@ window.changeMonth = function(direction) {
     atualizarDashboard(); // Recalcula totais ao mudar o mês
 };
 
-function abrirModalDetalhesDia(dia, mes, ano, ops) {
-    var modal = document.getElementById('modalDayOperations');
-    var titulo = document.getElementById('modalDayTitle');
-    var corpo = document.getElementById('modalDayBody');
-    var resumo = document.getElementById('modalDaySummary');
-    
-    if(!modal) return;
+// =============================================================================
+// CÁLCULOS AVANÇADOS DE FROTA (GLOBAL)
+// =============================================================================
 
-    titulo.textContent = `OPERAÇÕES DO DIA ${dia}/${mes+1}/${ano}`;
-    
-    var totalFat = 0;
-    var totalLucro = 0;
-    
-    var html = '<table class="data-table" style="width:100%"><thead><tr><th>ID</th><th>CLIENTE</th><th>VEÍCULO</th><th>FATURAMENTO</th><th>STATUS</th></tr></thead><tbody>';
-    
+function calcularMediaGlobalVeiculo(placa) {
+    // Filtra todas as operações deste veículo que tenham KM e Litragem válidos
+    var ops = CACHE_OPERACOES.filter(op => 
+        op.veiculoPlaca === placa && 
+        op.status !== 'CANCELADA' &&
+        Number(op.kmRodado) > 0 && 
+        Number(op.combustivel) > 0 &&
+        Number(op.precoLitro) > 0
+    );
+
+    if (ops.length === 0) return 0;
+
+    var totalKm = 0;
+    var totalLitros = 0;
+
     ops.forEach(op => {
-        var contratante = buscarContratantePorCnpj(op.contratanteCNPJ);
-        var nomeCli = contratante ? contratante.razaoSocial : op.contratanteCNPJ;
-        var custo = (Number(op.combustivel)||0) + (Number(op.despesas)||0) + (Number(op.comissao)||0);
-        if(op.ajudantes) op.ajudantes.forEach(aj => custo += (Number(aj.diaria)||0));
-        
-        totalFat += (Number(op.faturamento)||0);
-        totalLucro += ((Number(op.faturamento)||0) - custo);
-
-        html += `<tr>
-            <td>#${op.id.substr(-4)}</td>
-            <td>${nomeCli}</td>
-            <td>${op.veiculoPlaca}</td>
-            <td>${formatarValorMoeda(op.faturamento)}</td>
-            <td>${op.status}</td>
-        </tr>`;
+        totalKm += Number(op.kmRodado);
+        totalLitros += (Number(op.combustivel) / Number(op.precoLitro));
     });
-    html += '</tbody></table>';
 
-    resumo.innerHTML = `
-        <div style="display:flex; justify-content:space-around; background:#f5f5f5; padding:10px; border-radius:4px; margin-bottom:15px;">
-            <div style="text-align:center"><strong>FATURAMENTO</strong><br><span style="color:green">${formatarValorMoeda(totalFat)}</span></div>
-            <div style="text-align:center"><strong>LUCRO APROX.</strong><br><span style="color:blue">${formatarValorMoeda(totalLucro)}</span></div>
-        </div>
-    `;
-    
-    corpo.innerHTML = html;
-    modal.style.display = 'flex';
+    return totalLitros > 0 ? (totalKm / totalLitros) : 0;
 }
+
+// =============================================================================
+// MODAL DE DETALHES DO DIA (REFORMULADO)
+// =============================================================================
+
+window.abrirModalDetalhesDia = function(dataString) {
+    var listaOperacoes = CACHE_OPERACOES;
+    
+    // Filtra operações do dia
+    var operacoesDoDia = listaOperacoes.filter(function(op) {
+        return op.data === dataString && op.status !== 'CANCELADA';
+    });
+
+    var modalBody = document.getElementById('modalDayBody');
+    var modalTitle = document.getElementById('modalDayTitle');
+    var modalSummary = document.getElementById('modalDaySummary');
+
+    if (!modalBody) return;
+
+    // Título
+    var dataFormatada = formatarDataParaBrasileiro(dataString);
+    if (modalTitle) modalTitle.textContent = 'DETALHES FINANCEIROS: ' + dataFormatada;
+
+    // Totais do Dia
+    var totalFaturamento = 0;
+    var totalLucroOperacional = 0;
+
+    var htmlLista = '<div style="max-height:400px; overflow-y:auto;">';
+    
+    // Cabeçalho da Tabela Detalhada
+    htmlLista += `
+    <table class="data-table" style="width:100%; font-size:0.8rem; margin-bottom:0;">
+        <thead>
+            <tr style="background:#263238; color:white;">
+                <th>ID/CLIENTE</th>
+                <th>VEÍCULO (MÉDIA GLOBAL)</th>
+                <th>FATURAMENTO</th>
+                <th>CUSTOS DA VIAGEM</th>
+                <th>LUCRO OP.</th>
+            </tr>
+        </thead>
+        <tbody>
+    `;
+
+    operacoesDoDia.forEach(function(op) {
+        // 1. Dados Básicos
+        var motorista = buscarFuncionarioPorId(op.motoristaId);
+        var nomeMot = motorista ? motorista.nome.split(' ')[0] : '---';
+        var cliente = buscarContratantePorCnpj(op.contratanteCNPJ);
+        var nomeCli = cliente ? cliente.razaoSocial.substring(0, 15) : 'CLIENTE';
+
+        // 2. Cálculos Financeiros
+        var receita = Number(op.faturamento) || 0;
+        
+        // Custos Diretos da Viagem (Comissão + Pedágios + Abastecimento Realizado na Viagem)
+        var comissao = Number(op.comissao) || 0;
+        var despesasViagem = Number(op.despesas) || 0; 
+        var abastecimentoViagem = Number(op.combustivel) || 0;
+        
+        // Custo Ajudantes
+        var custoAjudantes = 0;
+        if(op.ajudantes) op.ajudantes.forEach(aj => custoAjudantes += (Number(aj.diaria)||0));
+
+        // Custo Total Direto (Saiu do bolso para essa viagem acontecer)
+        var custosDiretos = comissao + despesasViagem + abastecimentoViagem + custoAjudantes;
+        
+        // Lucro da Operação (Receita - Custos Diretos)
+        // Nota: Despesas globais (mensais) não entram aqui conforme solicitado
+        var lucroOp = receita - custosDiretos;
+
+        totalFaturamento += receita;
+        totalLucroOperacional += lucroOp;
+
+        // 3. Dados de Performance (Consumo)
+        var mediaGlobal = calcularMediaGlobalVeiculo(op.veiculoPlaca);
+        var kmRodado = Number(op.kmRodado) || 0;
+        var consumoLitrosEstimado = (mediaGlobal > 0 && kmRodado > 0) ? (kmRodado / mediaGlobal).toFixed(1) : '-';
+        
+        // HTML da Linha
+        htmlLista += `
+            <tr style="border-bottom:1px solid #eee;">
+                <td>
+                    <strong>#${op.id.toString().substr(-4)}</strong><br>
+                    <small>${nomeCli}</small>
+                </td>
+                <td>
+                    <strong>${op.veiculoPlaca}</strong><br>
+                    <small style="color:${mediaGlobal > 0 ? 'blue' : '#ccc'}">
+                        ${mediaGlobal > 0 ? mediaGlobal.toFixed(2) + ' Km/L (G)' : 'Sem média'}
+                    </small>
+                </td>
+                <td style="color:var(--success-color); font-weight:bold;">
+                    ${formatarValorMoeda(receita)}
+                </td>
+                <td>
+                    <span style="color:var(--danger-color)">${formatarValorMoeda(custosDiretos)}</span><br>
+                    <small style="color:#666">Comb: ${formatarValorMoeda(abastecimentoViagem)}</small>
+                </td>
+                <td>
+                    <strong style="color:${lucroOp >= 0 ? 'green' : 'red'}">
+                        ${formatarValorMoeda(lucroOp)}
+                    </strong>
+                </td>
+            </tr>
+            <tr style="background:#f9f9f9; border-bottom:2px solid #ddd;">
+                <td colspan="5" style="padding:5px 10px; font-size:0.75rem; color:#555;">
+                    <i class="fas fa-info-circle"></i> Detalhes: 
+                    Mot: ${nomeMot} | 
+                    Km Rodado: ${kmRodado} | 
+                    Consumo Est.: ${consumoLitrosEstimado} L | 
+                    Status: ${op.status}
+                </td>
+            </tr>
+        `;
+    });
+
+    htmlLista += '</tbody></table></div>';
+
+    // Atualiza o Resumo no topo do modal
+    if (modalSummary) {
+        modalSummary.innerHTML = `
+            <div style="display:flex; justify-content:space-between; background:#e0f2f1; padding:15px; border-radius:6px; margin-bottom:10px; border:1px solid #b2dfdb;">
+                <div style="text-align:center;">
+                    <small style="color:#00695c; font-weight:bold;">FATURAMENTO DO DIA</small><br>
+                    <span style="font-size:1.4rem; color:#004d40; font-weight:800;">${formatarValorMoeda(totalFaturamento)}</span>
+                </div>
+                <div style="width:1px; background:#b2dfdb;"></div>
+                <div style="text-align:center;">
+                    <small style="color:#00695c; font-weight:bold;">LUCRO OPERACIONAL DO DIA</small><br>
+                    <span style="font-size:1.4rem; color:${totalLucroOperacional>=0?'#2e7d32':'#c62828'}; font-weight:800;">${formatarValorMoeda(totalLucroOperacional)}</span>
+                    <br><small style="font-size:0.6rem; color:#555;">(Receita - Custos Diretos da Viagem)</small>
+                </div>
+            </div>
+        `;
+    }
+
+    modalBody.innerHTML = htmlLista || '<p style="text-align:center; padding:20px;">Nenhuma operação registrada neste dia.</p>';
+    
+    // Exibe o modal
+    document.getElementById('modalDayOperations').style.display = 'block';
+};
 // =============================================================================
 // ARQUIVO: script.js
 // PARTE 3: GESTÃO DE CADASTROS (CRUD) E INTERFACE DE FORMULÁRIOS
@@ -1357,6 +1480,156 @@ window.resetSystemData = function() {
         window.location.reload();
     }
 };
+
+// =============================================================================
+// GESTÃO DE EQUIPE E COMUNICAÇÃO (CORREÇÃO DE FUNCIONALIDADE)
+// =============================================================================
+
+// Carrega as tabelas da aba "Equipe e Avisos"
+window.renderizarPainelEquipe = async function() {
+    if (!window.dbRef || !window.USUARIO_ATUAL) return;
+    
+    const { db, collection, query, where, getDocs, doc, updateDoc } = window.dbRef;
+    const empresa = window.USUARIO_ATUAL.company;
+
+    // 1. LISTAR FUNCIONÁRIOS ATIVOS (Com status de Login)
+    const tbodyAtivos = document.querySelector('#tabelaCompanyAtivos tbody');
+    if (tbodyAtivos) {
+        tbodyAtivos.innerHTML = '<tr><td colspan="5" style="text-align:center;">Carregando dados da nuvem...</td></tr>';
+        
+        try {
+            // Busca usuários no Firebase que pertencem a esta empresa
+            const q = query(collection(db, "users"), where("company", "==", empresa), where("approved", "==", true));
+            const querySnapshot = await getDocs(q);
+            
+            tbodyAtivos.innerHTML = '';
+            
+            if (querySnapshot.empty) {
+                tbodyAtivos.innerHTML = '<tr><td colspan="5" style="text-align:center;">Nenhum usuário ativo com login encontrado.</td></tr>';
+            }
+
+            querySnapshot.forEach((docSnap) => {
+                const u = docSnap.data();
+                // Tenta cruzar com dados locais para pegar telefone/detalhes
+                const localData = CACHE_FUNCIONARIOS.find(f => f.email === u.email) || {};
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${u.name}</td>
+                    <td>${u.email}</td>
+                    <td><span class="status-pill pill-active">${u.role}</span></td>
+                    <td>${localData.telefone ? formatarTelefoneBrasil(localData.telefone) : '-'}</td>
+                    <td>
+                        <button class="btn-mini delete-btn" onclick="bloquearAcessoUsuario('${docSnap.id}')" title="Revogar Acesso"><i class="fas fa-ban"></i></button>
+                    </td>
+                `;
+                tbodyAtivos.appendChild(tr);
+            });
+        } catch (e) {
+            console.error("Erro ao listar ativos:", e);
+            tbodyAtivos.innerHTML = '<tr><td colspan="5" style="color:red; text-align:center;">Erro de conexão.</td></tr>';
+        }
+    }
+
+    // 2. LISTAR PENDENTES DE APROVAÇÃO
+    const tbodyPendentes = document.querySelector('#tabelaCompanyPendentes tbody');
+    if (tbodyPendentes) {
+        try {
+            const qP = query(collection(db, "users"), where("company", "==", empresa), where("approved", "==", false));
+            const snapP = await getDocs(qP);
+            
+            tbodyPendentes.innerHTML = '';
+            
+            if (snapP.empty) {
+                tbodyPendentes.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">Nenhuma solicitação pendente.</td></tr>';
+            } else {
+                // Atualiza badge de aviso no menu
+                const badge = document.getElementById('badgeAccess');
+                if(badge) { badge.style.display = 'inline-block'; badge.textContent = snapP.size; }
+            }
+
+            snapP.forEach((docSnap) => {
+                const u = docSnap.data();
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${u.name}</td>
+                    <td>${u.email}</td>
+                    <td>${u.role}</td>
+                    <td>${new Date(u.createdAt).toLocaleDateString()}</td>
+                    <td>
+                        <button class="btn-mini btn-success" onclick="aprovarUsuario('${docSnap.id}')"><i class="fas fa-check"></i></button>
+                        <button class="btn-mini btn-danger" onclick="rejeitarUsuario('${docSnap.id}')"><i class="fas fa-times"></i></button>
+                    </td>
+                `;
+                tbodyPendentes.appendChild(tr);
+            });
+        } catch (e) { console.error(e); }
+    }
+    
+    // 3. RENDERIZAR SOLICITAÇÕES DE MUDANÇA DE PERFIL (Baseado em db_profile_requests)
+    // (Implementação simplificada lendo do cache ou firebase se existir a coleção)
+    // ... (Código mantido simples pois depende de implementação específica de request)
+};
+
+// Funções de Ação
+window.aprovarUsuario = async function(uid) {
+    if(!confirm("Aprovar acesso deste usuário?")) return;
+    try {
+        const { db, doc, updateDoc } = window.dbRef;
+        await updateDoc(doc(db, "users", uid), { approved: true });
+        alert("Usuário aprovado!");
+        renderizarPainelEquipe();
+    } catch(e) { alert("Erro: " + e.message); }
+};
+
+window.bloquearAcessoUsuario = async function(uid) {
+    if(!confirm("Bloquear acesso? O usuário não conseguirá mais logar.")) return;
+    try {
+        const { db, doc, updateDoc } = window.dbRef;
+        await updateDoc(doc(db, "users", uid), { approved: false });
+        alert("Acesso revogado.");
+        renderizarPainelEquipe();
+    } catch(e) { alert("Erro: " + e.message); }
+};
+
+// ENVIO DE MENSAGENS (AVISOS)
+document.addEventListener('submit', async function(e) {
+    if (e.target.id === 'formAdminMessage') {
+        e.preventDefault();
+        
+        var texto = document.getElementById('msgTextAdmin').value;
+        var destinatario = document.getElementById('msgRecipientSelect').value;
+        
+        if (!texto) return;
+
+        try {
+            const { db, collection, addDoc } = window.dbRef;
+            
+            await addDoc(collection(db, "messages"), {
+                company: window.USUARIO_ATUAL.company,
+                from: window.USUARIO_ATUAL.email,
+                to: destinatario, // 'all' ou ID do usuário
+                content: texto,
+                createdAt: new Date().toISOString(),
+                readBy: []
+            });
+            
+            alert("Mensagem enviada com sucesso!");
+            e.target.reset();
+        } catch (err) {
+            alert("Erro ao enviar mensagem: " + err.message);
+        }
+    }
+});
+
+// Listener para carregar a aba de equipe quando clicada
+document.addEventListener('click', function(e) {
+    // Verifica se clicou na aba de Access Management
+    var target = e.target.closest('[data-page="access-management"]');
+    if (target) {
+        setTimeout(renderizarPainelEquipe, 100); // Pequeno delay para garantir transição
+    }
+});
 
 // -----------------------------------------------------------------------------
 // 18. NAVEGAÇÃO E INICIALIZAÇÃO DO SISTEMA
