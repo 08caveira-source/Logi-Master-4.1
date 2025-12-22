@@ -10,7 +10,7 @@ const CHAVE_DB_CONTRATANTES = 'db_contratantes';
 const CHAVE_DB_OPERACOES = 'db_operacoes';
 const CHAVE_DB_MINHA_EMPRESA = 'db_minha_empresa';
 const CHAVE_DB_DESPESAS = 'db_despesas_gerais';
-const CHAVE_DB_ATIVIDADES = 'db_atividades'; // RESTAURADO
+const CHAVE_DB_ATIVIDADES = 'db_atividades';
 const CHAVE_DB_PROFILE_REQUESTS = 'db_profile_requests';
 
 // 2. VARIÁVEIS GLOBAIS DE ESTADO
@@ -27,7 +27,7 @@ var CACHE_CONTRATANTES = [];
 var CACHE_OPERACOES = [];
 var CACHE_MINHA_EMPRESA = {};
 var CACHE_DESPESAS = [];
-var CACHE_ATIVIDADES = []; // RESTAURADO
+var CACHE_ATIVIDADES = [];
 var CACHE_PROFILE_REQUESTS = [];
 
 // 4. FUNÇÕES DE FORMATAÇÃO (HELPERS)
@@ -74,7 +74,7 @@ function carregarTodosDadosLocais() {
     CACHE_OPERACOES = carregarDadosGenerico(CHAVE_DB_OPERACOES, [], []);
     CACHE_MINHA_EMPRESA = carregarDadosGenerico(CHAVE_DB_MINHA_EMPRESA, {}, {});
     CACHE_DESPESAS = carregarDadosGenerico(CHAVE_DB_DESPESAS, [], []);
-    CACHE_ATIVIDADES = carregarDadosGenerico(CHAVE_DB_ATIVIDADES, [], []); // RESTAURADO
+    CACHE_ATIVIDADES = carregarDadosGenerico(CHAVE_DB_ATIVIDADES, [], []);
     CACHE_PROFILE_REQUESTS = carregarDadosGenerico(CHAVE_DB_PROFILE_REQUESTS, [], []);
 }
 
@@ -97,7 +97,6 @@ async function salvarDadosGenerico(chave, dados, atualizarCacheCallback) {
             console.log("Sincronizado com nuvem: " + chave);
         } catch (erro) {
             console.error("Erro ao salvar no Firebase (" + chave + "):", erro);
-            // Não bloqueia o uso se falhar a internet
         }
     }
 }
@@ -350,8 +349,7 @@ window.renderizarCalendario = function() {
             cellContent += `<div style="font-size:0.7em; margin-top:auto; color:var(--primary-dark); font-weight:bold;">${opsDoDia.length} VIAGENS</div>`;
             cellContent += `<div style="font-size:0.65em; color:green;">${formatarValorMoeda(totalDia)}</div>`;
             
-            // --- CORREÇÃO APLICADA AQUI ---
-            // Passa apenas a string da data (dateStr) para o modal abrir corretamente
+            // Evento para abrir o modal
             cell.onclick = (function(ds) {
                 return function() { abrirModalDetalhesDia(ds); };
             })(dateStr);
@@ -407,7 +405,7 @@ function calcularMediaGlobalVeiculo(placa) {
 }
 
 // =============================================================================
-// MODAL DE DETALHES DO DIA (REFORMULADO)
+// MODAL DE DETALHES DO DIA (ATUALIZADO CONFORME PEDIDO)
 // =============================================================================
 
 window.abrirModalDetalhesDia = function(dataString) {
@@ -426,96 +424,92 @@ window.abrirModalDetalhesDia = function(dataString) {
 
     // Título
     var dataFormatada = formatarDataParaBrasileiro(dataString);
-    if (modalTitle) modalTitle.textContent = 'DETALHES FINANCEIROS: ' + dataFormatada;
+    if (modalTitle) modalTitle.textContent = 'DETALHES COMPLETOS: ' + dataFormatada;
 
     // Totais do Dia
     var totalFaturamento = 0;
-    var totalLucroOperacional = 0;
+    var totalCustosGerais = 0; // Despesas + Combustível + Pessoal
+    var totalConsumoCombustivel = 0;
 
     var htmlLista = '<div style="max-height:400px; overflow-y:auto;">';
     
-    // Cabeçalho da Tabela Detalhada
+    // Tabela Expandida
     htmlLista += `
-    <table class="data-table" style="width:100%; font-size:0.8rem; margin-bottom:0;">
+    <table class="data-table" style="width:100%; font-size:0.75rem; margin-bottom:0;">
         <thead>
             <tr style="background:#263238; color:white;">
-                <th>ID/CLIENTE</th>
-                <th>VEÍCULO (MÉDIA GLOBAL)</th>
-                <th>FATURAMENTO</th>
-                <th>CUSTOS DA VIAGEM</th>
-                <th>LUCRO OP.</th>
+                <th width="15%">CLIENTE / ID</th>
+                <th width="15%">VEÍCULO (GLOBAL)</th>
+                <th width="20%">EQUIPE (MOT + AJUD)</th>
+                <th width="30%">FINANCEIRO (FAT / CUSTO / LUCRO)</th>
+                <th width="20%">CONSUMO (R$)</th>
             </tr>
         </thead>
         <tbody>
     `;
 
     operacoesDoDia.forEach(function(op) {
-        // 1. Dados Básicos
+        // 1. Dados Básicos e Equipe
         var motorista = buscarFuncionarioPorId(op.motoristaId);
         var nomeMot = motorista ? motorista.nome.split(' ')[0] : '---';
+        var nomesAjudantes = [];
+        if(op.ajudantes && op.ajudantes.length > 0) {
+            op.ajudantes.forEach(aj => {
+                var funcAj = buscarFuncionarioPorId(aj.id);
+                if(funcAj) nomesAjudantes.push(funcAj.nome.split(' ')[0]);
+            });
+        }
+        var stringEquipe = `<strong>Mot:</strong> ${nomeMot}`;
+        if(nomesAjudantes.length > 0) stringEquipe += `<br><strong>Ajud:</strong> ${nomesAjudantes.join(', ')}`;
+
         var cliente = buscarContratantePorCnpj(op.contratanteCNPJ);
         var nomeCli = cliente ? cliente.razaoSocial.substring(0, 15) : 'CLIENTE';
 
         // 2. Cálculos Financeiros
         var receita = Number(op.faturamento) || 0;
         
-        // Custos Diretos da Viagem (Comissão + Pedágios + Abastecimento Realizado na Viagem)
-        var comissao = Number(op.comissao) || 0;
-        var despesasViagem = Number(op.despesas) || 0; 
-        var abastecimentoViagem = Number(op.combustivel) || 0;
-        
-        // Custo Ajudantes
+        var abastecimento = Number(op.combustivel) || 0;
+        var outrasDespesas = (Number(op.comissao)||0) + (Number(op.despesas)||0);
         var custoAjudantes = 0;
         if(op.ajudantes) op.ajudantes.forEach(aj => custoAjudantes += (Number(aj.diaria)||0));
 
-        // Custo Total Direto (Saiu do bolso para essa viagem acontecer)
-        var custosDiretos = comissao + despesasViagem + abastecimentoViagem + custoAjudantes;
-        
-        // Lucro da Operação (Receita - Custos Diretos)
-        // Nota: Despesas globais (mensais) não entram aqui conforme solicitado
-        var lucroOp = receita - custosDiretos;
+        var custoTotalOp = abastecimento + outrasDespesas + custoAjudantes;
+        var lucroOp = receita - custoTotalOp;
 
         totalFaturamento += receita;
-        totalLucroOperacional += lucroOp;
+        totalCustosGerais += custoTotalOp;
+        totalConsumoCombustivel += abastecimento;
 
-        // 3. Dados de Performance (Consumo)
+        // 3. Dados de Performance
         var mediaGlobal = calcularMediaGlobalVeiculo(op.veiculoPlaca);
-        var kmRodado = Number(op.kmRodado) || 0;
-        var consumoLitrosEstimado = (mediaGlobal > 0 && kmRodado > 0) ? (kmRodado / mediaGlobal).toFixed(1) : '-';
         
         // HTML da Linha
         htmlLista += `
-            <tr style="border-bottom:1px solid #eee;">
+            <tr style="border-bottom:1px solid #ddd;">
                 <td>
-                    <strong>#${op.id.toString().substr(-4)}</strong><br>
-                    <small>${nomeCli}</small>
+                    <span style="font-weight:bold; color:#555;">${nomeCli}</span><br>
+                    <small>#${op.id.toString().substr(-4)}</small>
                 </td>
                 <td>
                     <strong>${op.veiculoPlaca}</strong><br>
-                    <small style="color:${mediaGlobal > 0 ? 'blue' : '#ccc'}">
-                        ${mediaGlobal > 0 ? mediaGlobal.toFixed(2) + ' Km/L (G)' : 'Sem média'}
+                    <small style="color:${mediaGlobal > 0 ? 'blue' : '#999'}">
+                        ${mediaGlobal > 0 ? mediaGlobal.toFixed(2) + ' Km/L' : 'S/ Média'}
                     </small>
                 </td>
-                <td style="color:var(--success-color); font-weight:bold;">
-                    ${formatarValorMoeda(receita)}
+                <td>
+                    ${stringEquipe}
                 </td>
                 <td>
-                    <span style="color:var(--danger-color)">${formatarValorMoeda(custosDiretos)}</span><br>
-                    <small style="color:#666">Comb: ${formatarValorMoeda(abastecimentoViagem)}</small>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:var(--success-color);">Fat: ${formatarValorMoeda(receita)}</span>
+                        <span style="color:var(--danger-color);">Custo: ${formatarValorMoeda(custoTotalOp)}</span>
+                    </div>
+                    <div style="border-top:1px dashed #ccc; margin-top:2px; padding-top:2px;">
+                        <strong>Lucro: <span style="color:${lucroOp>=0?'green':'red'}">${formatarValorMoeda(lucroOp)}</span></strong>
+                    </div>
                 </td>
-                <td>
-                    <strong style="color:${lucroOp >= 0 ? 'green' : 'red'}">
-                        ${formatarValorMoeda(lucroOp)}
-                    </strong>
-                </td>
-            </tr>
-            <tr style="background:#f9f9f9; border-bottom:2px solid #ddd;">
-                <td colspan="5" style="padding:5px 10px; font-size:0.75rem; color:#555;">
-                    <i class="fas fa-info-circle"></i> Detalhes: 
-                    Mot: ${nomeMot} | 
-                    Km Rodado: ${kmRodado} | 
-                    Consumo Est.: ${consumoLitrosEstimado} L | 
-                    Status: ${op.status}
+                <td style="text-align:center; background:#fff3e0;">
+                    <strong style="color:#e65100;">${formatarValorMoeda(abastecimento)}</strong>
                 </td>
             </tr>
         `;
@@ -523,19 +517,27 @@ window.abrirModalDetalhesDia = function(dataString) {
 
     htmlLista += '</tbody></table></div>';
 
+    var totalLucroLiquido = totalFaturamento - totalCustosGerais;
+
     // Atualiza o Resumo no topo do modal
     if (modalSummary) {
         modalSummary.innerHTML = `
-            <div style="display:flex; justify-content:space-between; background:#e0f2f1; padding:15px; border-radius:6px; margin-bottom:10px; border:1px solid #b2dfdb;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:10px; background:#e0f2f1; padding:10px; border-radius:6px; margin-bottom:10px; border:1px solid #b2dfdb;">
                 <div style="text-align:center;">
-                    <small style="color:#00695c; font-weight:bold;">FATURAMENTO DO DIA</small><br>
-                    <span style="font-size:1.4rem; color:#004d40; font-weight:800;">${formatarValorMoeda(totalFaturamento)}</span>
+                    <small style="color:#00695c; font-weight:bold;">FATURAMENTO</small><br>
+                    <span style="font-weight:800; color:#004d40;">${formatarValorMoeda(totalFaturamento)}</span>
                 </div>
-                <div style="width:1px; background:#b2dfdb;"></div>
                 <div style="text-align:center;">
-                    <small style="color:#00695c; font-weight:bold;">LUCRO OPERACIONAL DO DIA</small><br>
-                    <span style="font-size:1.4rem; color:${totalLucroOperacional>=0?'#2e7d32':'#c62828'}; font-weight:800;">${formatarValorMoeda(totalLucroOperacional)}</span>
-                    <br><small style="font-size:0.6rem; color:#555;">(Receita - Custos Diretos da Viagem)</small>
+                    <small style="color:#c62828; font-weight:bold;">DESPESAS TOTAIS</small><br>
+                    <span style="font-weight:800; color:#c62828;">${formatarValorMoeda(totalCustosGerais)}</span>
+                </div>
+                <div style="text-align:center;">
+                    <small style="color:#e65100; font-weight:bold;">CONSUMO (COMB)</small><br>
+                    <span style="font-weight:800; color:#e65100;">${formatarValorMoeda(totalConsumoCombustivel)}</span>
+                </div>
+                <div style="text-align:center; background:${totalLucroLiquido>=0?'#c8e6c9':'#ffcdd2'}; border-radius:4px;">
+                    <small style="color:#1b5e20; font-weight:bold;">LUCRO LÍQUIDO</small><br>
+                    <span style="font-weight:800; color:${totalLucroLiquido>=0?'#1b5e20':'#b71c1c'};">${formatarValorMoeda(totalLucroLiquido)}</span>
                 </div>
             </div>
         `;
@@ -1484,7 +1486,7 @@ window.resetSystemData = function() {
 };
 
 // =============================================================================
-// GESTÃO DE EQUIPE E COMUNICAÇÃO (CORREÇÃO DE FUNCIONALIDADE)
+// GESTÃO DE EQUIPE E COMUNICAÇÃO
 // =============================================================================
 
 // Carrega as tabelas da aba "Equipe e Avisos"
@@ -1567,10 +1569,6 @@ window.renderizarPainelEquipe = async function() {
             });
         } catch (e) { console.error(e); }
     }
-    
-    // 3. RENDERIZAR SOLICITAÇÕES DE MUDANÇA DE PERFIL (Baseado em db_profile_requests)
-    // (Implementação simplificada lendo do cache ou firebase se existir a coleção)
-    // ... (Código mantido simples pois depende de implementação específica de request)
 };
 
 // Funções de Ação
@@ -1623,6 +1621,11 @@ document.addEventListener('submit', async function(e) {
         }
     }
 });
+// =============================================================================
+// ARQUIVO: script.js
+// PARTE 5: NAVEGAÇÃO, INICIALIZAÇÃO E SUPER ADMIN (FINAL)
+// =============================================================================
+
 // -----------------------------------------------------------------------------
 // 18. NAVEGAÇÃO E INICIALIZAÇÃO DO SISTEMA
 // -----------------------------------------------------------------------------
@@ -1654,6 +1657,7 @@ function configurarNavegacao() {
             if (pageId === 'home') { renderizarCalendario(); atualizarDashboard(); }
             if (pageId === 'despesas') renderizarTabelaDespesasGerais();
             if (pageId === 'checkins-pendentes' && typeof renderizarTabelaMonitoramento === 'function') renderizarTabelaMonitoramento();
+            if (pageId === 'access-management' && typeof renderizarPainelEquipe === 'function') renderizarPainelEquipe();
             
             // Fecha menu mobile se estiver aberto
             document.getElementById('sidebar').classList.remove('active');
@@ -1725,15 +1729,15 @@ window.initSystemByRole = function(user) {
     configurarNavegacao();
 };
 
-    // Listener Mobile Menu
-    document.getElementById('mobileMenuBtn').onclick = function() {
-        document.getElementById('sidebar').classList.add('active');
-        document.getElementById('sidebarOverlay').classList.add('active');
-    };
-    document.getElementById('sidebarOverlay').onclick = function() {
-        document.getElementById('sidebar').classList.remove('active');
-        this.classList.remove('active');
-    };
+// Listener Mobile Menu
+document.getElementById('mobileMenuBtn').onclick = function() {
+    document.getElementById('sidebar').classList.add('active');
+    document.getElementById('sidebarOverlay').classList.add('active');
+};
+document.getElementById('sidebarOverlay').onclick = function() {
+    document.getElementById('sidebar').classList.remove('active');
+    this.classList.remove('active');
+};
 
 function carregarDadosMeuPerfil(email) {
     // Procura o funcionário pelo email do login para preencher "Meus Dados"
@@ -1757,8 +1761,6 @@ function carregarDadosMeuPerfil(email) {
 
 // Inicia listeners globais
 document.addEventListener('DOMContentLoaded', function() {
-    // Se não estiver logado via Firebase, o initSystemByRole não roda,
-    // mas deixamos a navegação pronta caso precise.
     configurarNavegacao();
 });
 
@@ -1774,16 +1776,10 @@ window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
     
     if (forceRefresh) container.innerHTML = '<p style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Varrendo banco de dados global...</p>';
 
-    const { db, collection, getDocs, doc, getDoc } = window.dbRef;
+    const { db, collection, getDocs } = window.dbRef;
 
     try {
-        // 1. Busca todas as empresas (Coleção 'companies')
-        // Nota: O Firestore não lista coleções root facilmente no client-side sem truques, 
-        // mas assumindo que salvamos metadados ou varremos IDs conhecidos.
-        // Se não tivermos uma lista de empresas salva, teremos que confiar na lista de users e extrair domínios.
-        
         // ESTRATÉGIA HÍBRIDA: Varre a coleção 'users' para descobrir todos os domínios únicos e usuários.
-        
         var usersSnap = await getDocs(collection(db, "users"));
         var mapEmpresas = {}; // Objeto para agrupar: { 'dominio.com': [lista de users] }
 
@@ -1878,12 +1874,6 @@ window.filterGlobalUsers = function() {
 // Ações do Super Admin
 
 window.superAdminResetPass = function(email) {
-    // Firebase Admin SDK seria o ideal, mas no client side o melhor é enviar email de reset
-    const { auth, sendPasswordResetEmail } = window.dbRef; // Assumindo importação
-    // Precisamos importar sendPasswordResetEmail no módulo do HTML primeiro, mas vamos simular
-    
-    // Como o modulo é importado no HTML, precisamos acessá-lo. 
-    // Vamos adicionar um helper no HTML para expor essa função do Auth.
     alert("Para segurança, a função de Reset envia um e-mail para o usuário.\nEnviando para: " + email);
     
     if (window.dbRef.sendReset) {
@@ -1904,18 +1894,17 @@ window.superAdminDeleteUser = async function(uid, domain) {
         await deleteDoc(doc(db, "users", uid));
         
         // 2. Tenta remover da lista de funcionários da empresa (db_funcionarios)
-        // Isso exige ler, filtrar e salvar novamente.
         var empresaRef = doc(db, 'companies', domain, 'data', 'db_funcionarios');
         var snap = await window.dbRef.getDoc(empresaRef);
         if (snap.exists()) {
             var dados = snap.data();
-            var novaLista = (dados.items || []).filter(u => u.id !== uid && u.email !== uid); // Tenta match
+            var novaLista = (dados.items || []).filter(u => u.id !== uid && u.email !== uid);
             
             await window.dbRef.setDoc(empresaRef, { items: novaLista }, { merge: true });
         }
         
         alert("Usuário removido.");
-        carregarPainelSuperAdmin(false); // Reload leve
+        carregarPainelSuperAdmin(false); 
     } catch(e) {
         alert("Erro ao excluir: " + e.message);
     }
@@ -1932,27 +1921,14 @@ document.addEventListener('submit', async function(e) {
         
         if(domain.indexOf('.') === -1) return alert("Domínio inválido (ex: empresa.com)");
         
-        const { auth, createUserWithEmailAndPassword, db, doc, setDoc } = window.dbRef;
+        const { db, doc, setDoc } = window.dbRef;
         
         try {
-            // 1. Cria Auth do Admin da nova empresa
-            // OBS: Isso vai logar o Super Admin como o novo usuário. Precisamos evitar isso ou relogar.
-            // Firebase Client SDK não permite criar usuário sem deslogar o atual facilmente.
-            // WORKAROUND: Criar apenas o registro no DB e pedir para o usuário se cadastrar, 
-            // OU usar uma Secondary App (complexo).
-            
-            // Solução Prática: Cria o registro da empresa e o perfil de usuário no DB. 
-            // O login real (Auth) será criado quando essa pessoa tentar logar/registrar.
-            
             // Cria estrutura da empresa
             await setDoc(doc(db, 'companies', domain, 'data', 'config'), {
                 createdAt: new Date().toISOString(),
                 createdBy: 'SUPER_ADMIN'
             });
-            
-            // Pré-aprova o Admin na coleção users (para quando ele criar a conta no Auth)
-            // Como não temos o UID ainda, vamos criar um documento placeholder ou
-            // adicionar na lista de funcionários aprovados da empresa.
             
             var adminData = {
                 id: 'admin_' + Date.now(),
@@ -1979,113 +1955,11 @@ document.addEventListener('submit', async function(e) {
         }
     }
 });
+
 // =============================================================================
-// CORREÇÃO DE FUNÇÕES GLOBAIS E MODAIS (FIX)
+// REATIVAR FORMULÁRIOS (GARANTIA DE FUNCIONAMENTO)
 // =============================================================================
 
-// 1. GARANTIA DA FUNÇÃO DE MÉDIA GLOBAL (Necessária para o Modal abrir)
-window.calcularMediaGlobalVeiculo = function(placa) {
-    if (!window.CACHE_OPERACOES) return 0;
-    
-    var ops = window.CACHE_OPERACOES.filter(function(op) {
-        return op.veiculoPlaca === placa && 
-               op.status !== 'CANCELADA' &&
-               Number(op.kmRodado) > 0 && 
-               Number(op.combustivel) > 0;
-    });
-
-    if (ops.length === 0) return 0;
-
-    var totalKm = 0;
-    var totalLitros = 0;
-
-    ops.forEach(function(op) {
-        var preco = Number(op.precoLitro) || 0;
-        if (preco > 0) {
-            totalKm += Number(op.kmRodado);
-            totalLitros += (Number(op.combustivel) / preco);
-        }
-    });
-
-    return totalLitros > 0 ? (totalKm / totalLitros) : 0;
-};
-
-// 2. CORREÇÃO DO MODAL DE DETALHES (Com tratamento de erro)
-window.abrirModalDetalhesDia = function(dataString) {
-    try {
-        var listaOperacoes = window.CACHE_OPERACOES || [];
-        
-        // Filtra operações do dia
-        var operacoesDoDia = listaOperacoes.filter(function(op) {
-            return op.data === dataString && op.status !== 'CANCELADA';
-        });
-
-        if (operacoesDoDia.length === 0) return; // Se não tem, não faz nada (segurança)
-
-        var modalBody = document.getElementById('modalDayBody');
-        var modalTitle = document.getElementById('modalDayTitle');
-        var modalSummary = document.getElementById('modalDaySummary');
-        var modal = document.getElementById('modalDayOperations');
-
-        if (!modal || !modalBody) return console.error("Modal não encontrado no HTML");
-
-        // Título
-        if (modalTitle) modalTitle.textContent = 'DETALHES: ' + formatarDataParaBrasileiro(dataString);
-
-        // Totais do Dia
-        var totalFaturamento = 0;
-        var totalLucroOperacional = 0;
-
-        var htmlLista = '<div style="max-height:400px; overflow-y:auto;"><table class="data-table" style="width:100%; font-size:0.85rem;">';
-        htmlLista += '<thead><tr style="background:#263238; color:white;"><th>ID/CLIENTE</th><th>VEÍCULO</th><th>FATURAMENTO</th><th>CUSTOS</th><th>LUCRO</th></tr></thead><tbody>';
-
-        operacoesDoDia.forEach(function(op) {
-            // Cálculos
-            var receita = Number(op.faturamento) || 0;
-            var custoViagem = (Number(op.combustivel)||0) + (Number(op.despesas)||0) + (Number(op.comissao)||0);
-            
-            if(op.ajudantes) {
-                op.ajudantes.forEach(function(aj) { custoViagem += (Number(aj.diaria)||0); });
-            }
-
-            var lucro = receita - custoViagem;
-            totalFaturamento += receita;
-            totalLucroOperacional += lucro;
-
-            // Dados Visuais
-            var nomeCli = op.contratanteCNPJ ? (buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial || 'CLIENTE') : 'CLIENTE';
-            var media = window.calcularMediaGlobalVeiculo(op.veiculoPlaca);
-            
-            htmlLista += '<tr>';
-            htmlLista += '<td><strong>#' + op.id.toString().substr(-4) + '</strong><br><small>' + nomeCli.substr(0,15) + '</small></td>';
-            htmlLista += '<td>' + op.veiculoPlaca + '<br><small style="color:blue">' + (media > 0 ? media.toFixed(1) + ' Km/L (Méd)' : '-') + '</small></td>';
-            htmlLista += '<td style="color:green; font-weight:bold;">' + formatarValorMoeda(receita) + '</td>';
-            htmlLista += '<td style="color:red;">' + formatarValorMoeda(custoViagem) + '</td>';
-            htmlLista += '<td><strong>' + formatarValorMoeda(lucro) + '</strong></td>';
-            htmlLista += '</tr>';
-        });
-
-        htmlLista += '</tbody></table></div>';
-
-        // Atualiza Resumo
-        if (modalSummary) {
-            modalSummary.innerHTML = 
-                '<div style="display:flex; justify-content:space-around; background:#e0f2f1; padding:10px; border-radius:6px; margin-bottom:10px;">' +
-                    '<div style="text-align:center"><small>Faturamento</small><br><strong style="color:#004d40; font-size:1.2rem;">' + formatarValorMoeda(totalFaturamento) + '</strong></div>' +
-                    '<div style="text-align:center"><small>Lucro Op.</small><br><strong style="color:' + (totalLucroOperacional>=0?'green':'red') + '; font-size:1.2rem;">' + formatarValorMoeda(totalLucroOperacional) + '</strong></div>' +
-                '</div>';
-        }
-
-        modalBody.innerHTML = htmlLista;
-        modal.style.display = 'block';
-
-    } catch (err) {
-        console.error("Erro ao abrir modal:", err);
-        alert("Erro ao abrir detalhes: " + err.message);
-    }
-};
-
-// 3. REATIVAÇÃO DO FORMULÁRIO DE OPERAÇÃO (Garante que salva)
 // Esta função reescreve o comportamento do formulário para garantir que funcione
 (function reativarFormularioOperacao() {
     var formOp = document.getElementById('formOperacao');
@@ -2162,7 +2036,6 @@ window.abrirModalDetalhesDia = function(dataString) {
     // Reconecta botões de Ajudante
     var btnAddAj = document.getElementById('btnManualAddAjudante');
     if (btnAddAj) {
-        // Clone para limpar listeners antigos
         var novoBtn = btnAddAj.cloneNode(true);
         btnAddAj.parentNode.replaceChild(novoBtn, btnAddAj);
         
@@ -2177,5 +2050,4 @@ window.abrirModalDetalhesDia = function(dataString) {
             }
         };
     }
-
-})(); // Executa imediatamente para corrigir a tela atual
+})();
