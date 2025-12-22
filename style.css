@@ -1,532 +1,118 @@
 /* =============================================================================
-   LOGIMASTER - ESTILOS DO SISTEMA (STYLE.CSS)
-   VERSÃO: 9.2 (ESTÁVEL E CORRIGIDA)
+   LOGIMASTER - ESTILOS (CORREÇÃO DE LAYOUT E CALENDÁRIO)
    ============================================================================= */
 
-/* 1. VARIÁVEIS E CONFIGURAÇÕES GLOBAIS
-   -------------------------------------------------------------------------- */
 :root {
-    /* --- PALETA DE CORES PRINCIPAL --- */
-    --primary-color: #00796b;       /* Teal Escuro (Identidade) */
-    --primary-light: #48a999;       /* Teal Claro */
-    --primary-dark: #004d40;        /* Teal Muito Escuro */
-    
-    --secondary-color: #546e7a;     /* Cinza Azulado */
-    --secondary-light: #819ca9;
-    --secondary-dark: #29434e;
-    
-    /* --- FUNDOS E SUPERFÍCIES --- */
-    --background-color: #f0f4f8;    /* Fundo Geral */
-    --surface-color: #ffffff;       /* Cards e Modais */
-    --sidebar-bg: #263238;          /* Menu Lateral */
-    
-    /* --- TEXTOS E BORDAS --- */
-    --text-color: #37474f;          
-    --text-muted: #78909c;          
-    --border-color: #cfd8dc;        
-    
-    /* --- STATUS SEMÂNTICOS --- */
-    --success-color: #2e7d32;       /* Verde */
-    --success-bg: #e8f5e9;
-    
-    --danger-color: #c62828;        /* Vermelho */
-    --danger-bg: #ffebee;
-    
-    --warning-color: #ef6c00;       /* Laranja */
-    --warning-bg: #fff3e0;
-    
-    --info-color: #0277bd;          /* Azul */
-    --info-bg: #e1f5fe;
-
-    /* --- DIMENSÕES E EFEITOS --- */
-    --sidebar-width: 260px;
+    --primary-color: #00796b;
+    --primary-light: #48a999;
+    --secondary-color: #546e7a;
+    --background-color: #f0f4f8;
+    --surface-color: #ffffff;
+    --sidebar-bg: #263238;
+    --text-color: #37474f;
+    --success-color: #2e7d32;
+    --danger-color: #c62828;
+    --warning-color: #ef6c00;
     --header-height: 60px;
-    --border-radius: 8px;
-    --shadow-soft: 0 4px 6px rgba(0,0,0,0.05);
-    --shadow-medium: 0 8px 15px rgba(0,0,0,0.1);
-    --transition-speed: 0.3s;
+    --sidebar-width: 260px;
 }
 
-/* 2. RESET E TIPOGRAFIA
-   -------------------------------------------------------------------------- */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    outline: none;
-}
+* { box-sizing: border-box; outline: none; }
+body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--background-color); display: flex; height: 100vh; overflow: hidden; }
 
-body {
-    background-color: var(--background-color);
-    color: var(--text-color);
-    display: flex; /* FlexLayout Principal */
-    min-height: 100vh;
-    overflow-x: hidden;
-    line-height: 1.5;
-}
-
-/* Caixa Alta Geral (Padrão Industrial) */
-h1, h2, h3, h4, h5, h6, label, th, button {
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-a { text-decoration: none; color: inherit; cursor: pointer; }
-ul { list-style: none; }
-
-/* 3. MENU LATERAL (SIDEBAR)
-   -------------------------------------------------------------------------- */
+/* LAYOUT PRINCIPAL */
 .sidebar {
     width: var(--sidebar-width);
-    background-color: var(--sidebar-bg);
+    background: var(--sidebar-bg);
     color: white;
-    height: 100vh;
-    position: fixed;
-    top: 0;
-    left: 0;
-    z-index: 1100;
     display: flex;
     flex-direction: column;
-    box-shadow: 4px 0 10px rgba(0,0,0,0.1);
-    transition: transform var(--transition-speed);
-    overflow-y: auto;
+    z-index: 100;
 }
 
-.logo {
-    padding: 25px;
-    text-align: center;
-    font-size: 1.5rem;
-    font-weight: 900;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-    background: rgba(0,0,0,0.1);
-}
+.logo { padding: 20px; font-weight: bold; font-size: 1.5rem; text-align: center; background: rgba(0,0,0,0.1); }
+.user-info { padding: 20px; text-align: center; background: rgba(0,0,0,0.2); font-size: 0.9rem; }
+.nav-item { padding: 15px 20px; cursor: pointer; color: #b0bec5; border-left: 4px solid transparent; transition: 0.3s; }
+.nav-item:hover, .nav-item.active { background: rgba(255,255,255,0.05); color: white; border-left-color: var(--primary-light); }
+.sidebar-footer { margin-top: auto; padding: 20px; }
 
-.user-profile-section {
-    padding: 20px;
-    background: rgba(0,0,0,0.2);
-    text-align: center;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-}
-
-.user-profile-section p { font-size: 0.85rem; margin: 5px 0; color: #b0bec5; }
-#userRoleDisplay {
-    background: var(--primary-color);
-    padding: 2px 10px;
-    border-radius: 12px;
-    font-size: 0.7rem;
-    color: white;
-    display: inline-block;
-}
-
-.nav-item {
-    padding: 15px 25px;
-    cursor: pointer;
-    color: #cfd8dc;
-    transition: all 0.2s;
-    border-left: 4px solid transparent;
-    display: flex;
-    align-items: center;
-    font-size: 0.9rem;
-    font-weight: 500;
-}
-
-.nav-item i { width: 30px; text-align: center; margin-right: 10px; font-size: 1.1rem; }
-
-.nav-item:hover { background: rgba(255,255,255,0.05); color: white; }
-
-.nav-item.active {
-    background: rgba(0, 121, 107, 0.2); /* Tintura Primary */
-    color: var(--primary-light);
-    border-left-color: var(--primary-light);
-    font-weight: 700;
-}
-
-.notification-badge {
-    background: var(--danger-color);
-    color: white;
-    font-size: 0.7rem;
-    padding: 2px 6px;
-    border-radius: 10px;
-    margin-left: auto;
-}
-
-.sidebar-footer {
-    margin-top: auto;
-    padding: 20px;
-    border-top: 1px solid rgba(255,255,255,0.1);
-}
-
-/* 4. ÁREA DE CONTEÚDO PRINCIPAL
-   -------------------------------------------------------------------------- */
-.content {
-    margin-left: var(--sidebar-width);
-    width: calc(100% - var(--sidebar-width));
-    padding: 30px;
-    transition: margin var(--transition-speed);
-}
-
-.page {
-    display: none; /* Controlado via JS */
-    animation: fadeIn 0.4s ease-out;
-}
-
+.content { flex: 1; padding: 30px; overflow-y: auto; position: relative; }
+.page { display: none; animation: fadeIn 0.3s; }
 .page.active { display: block; }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-.content h2 {
-    color: var(--primary-color);
-    border-bottom: 4px solid var(--primary-color);
-    display: inline-block;
-    padding-bottom: 10px;
-    margin-bottom: 30px;
-}
+/* CARDS E GRIDS */
+.card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
+.card h2, .card h3 { color: var(--primary-color); margin-top: 0; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; }
 
-/* 5. CARDS E DASHBOARD
-   -------------------------------------------------------------------------- */
-.card {
-    background: var(--surface-color);
-    padding: 25px;
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow-soft);
-    margin-bottom: 25px;
-    border: 1px solid #e0e0e0;
-}
+.card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 20px; }
 
-.card h3 {
-    font-size: 1.1rem;
-    color: var(--secondary-color);
-    margin-bottom: 20px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #eee;
-}
-
-.card-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 20px;
-    margin-bottom: 30px;
-}
-
-.stat-card {
-    text-align: center;
-    border-top: 4px solid #ccc;
-}
+.stat-card { text-align: center; border-top: 4px solid #ccc; padding: 20px; }
 .stat-card.success { border-color: var(--success-color); }
 .stat-card.danger { border-color: var(--danger-color); }
 .stat-card.primary { border-color: var(--primary-color); }
-.stat-card.warning { border-color: var(--warning-color); }
+.stat-card h3 { font-size: 2rem; margin: 10px 0 0; }
 
-.stat-card h3 { 
-    font-size: 2rem; 
-    border: none; 
-    margin: 10px 0 0 0; 
-    color: var(--text-color); 
-}
-.stat-card p { font-size: 0.85rem; color: var(--text-muted); font-weight: 700; }
-
-/* 6. FORMULÁRIOS E GRID RESPONSIVO
-   -------------------------------------------------------------------------- */
-.form-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 15px;
-    margin-bottom: 15px;
-}
-
-.form-col {
-    flex: 1;
-    min-width: 200px;
-}
-
-/* Classes auxiliares para tamanhos proporcionais */
-.col-sm { flex: 1 1 150px; }
-.col-md { flex: 2 1 250px; }
-.col-lg { flex: 3 1 350px; }
-.col-xl { flex: 4 1 450px; }
-
-.form-group { margin-bottom: 10px; }
-
-.form-group label {
-    display: block;
-    margin-bottom: 5px;
-    font-size: 0.8rem;
-    color: var(--secondary-color);
-    font-weight: 700;
-}
-
-input[type="text"], input[type="email"], input[type="password"], 
-input[type="number"], input[type="date"], select, textarea {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    font-size: 0.95rem;
-    background: #fff;
-    transition: border-color 0.2s;
-    color: var(--text-color);
-}
-
-input:focus, select:focus, textarea:focus {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.1);
-}
-
-/* Botões */
-.form-actions {
-    margin-top: 25px;
-    padding-top: 20px;
-    border-top: 1px solid #eee;
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-button[class^="btn-"] {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 0.9rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    color: white;
-    transition: filter 0.2s;
-}
-
-button[class^="btn-"]:hover { filter: brightness(90%); }
-
-.btn-primary { background: var(--primary-color); }
-.btn-secondary { background: var(--secondary-color); }
-.btn-success { background: var(--success-color); }
-.btn-danger { background: var(--danger-color); }
-.btn-warning { background: var(--warning-color); color: white; }
-
-/* Botões Mini (Tabelas) */
-.btn-mini {
-    padding: 5px 10px !important;
-    font-size: 0.8rem !important;
-}
-
-/* 7. TABELAS DE DADOS
-   -------------------------------------------------------------------------- */
-.table-responsive {
-    overflow-x: auto;
-    border: 1px solid #eee;
-    border-radius: var(--border-radius);
-}
-
-.data-table {
-    width: 100%;
-    border-collapse: collapse;
-    min-width: 600px;
-}
-
-.data-table th {
-    background: #f5f5f5;
-    text-align: left;
-    padding: 12px 15px;
-    font-size: 0.8rem;
-    color: var(--secondary-color);
-    border-bottom: 2px solid #ddd;
-}
-
-.data-table td {
-    padding: 12px 15px;
-    border-bottom: 1px solid #eee;
-    font-size: 0.9rem;
-    vertical-align: middle;
-}
-
-.data-table tr:hover { background-color: #fafafa; }
-
-/* Status Pills (Badges) */
-.status-pill {
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    color: white;
-}
-.pill-active { background: var(--success-color); }
-.pill-pending { background: var(--warning-color); }
-.pill-blocked { background: var(--danger-color); }
-
-/* 8. ABAS (TABS) PARA CADASTROS
-   -------------------------------------------------------------------------- */
-.tab-controls {
-    display: flex;
-    gap: 5px;
-    margin-bottom: 20px;
-    border-bottom: 2px solid #eee;
-    overflow-x: auto;
-}
-
-.cadastro-tab-btn {
-    padding: 10px 20px;
-    background: none;
-    border: none;
-    border-radius: 8px 8px 0 0;
-    cursor: pointer;
-    font-weight: 600;
-    color: var(--text-muted);
-}
-
-.cadastro-tab-btn:hover { background: #f5f5f5; }
-
-.cadastro-tab-btn.active {
-    background: var(--surface-color);
-    color: var(--primary-color);
-    border: 1px solid #eee;
-    border-bottom: 2px solid var(--surface-color);
-    margin-bottom: -2px;
-}
-
-.cadastro-form { display: none; }
-.cadastro-form.active { display: block; }
-
-/* 9. CALENDÁRIO
-   -------------------------------------------------------------------------- */
-.calendar-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-}
-
+/* CALENDÁRIO COMPACTO (CORREÇÃO PEDIDA) */
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 5px;
-    background: #eee;
-    padding: 1px;
-    border: 1px solid #ddd;
+    gap: 4px;
+    background: #e0e0e0;
+    border: 1px solid #ccc;
 }
-
 .day-cell {
     background: white;
-    min-height: 100px;
+    min-height: 80px; /* Reduzido de 120px para 80px */
     padding: 5px;
-    position: relative;
+    font-size: 0.85rem;
     cursor: pointer;
-    font-weight: 700;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    transition: 0.2s;
 }
+.day-cell:hover { background: #f1f8e9; }
+.day-cell.empty { background: #f5f5f5; cursor: default; }
+.day-cell.has-event { border-bottom: 3px solid var(--primary-color); background: #e0f2f1; }
+.day-value { margin-top: auto; color: var(--success-color); font-weight: bold; font-size: 0.75rem; text-align: right; }
 
-.day-cell:hover { background: #f9f9f9; }
+/* FORMULÁRIOS */
+.form-row { display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; }
+.form-col { flex: 1; min-width: 200px; }
+label { display: block; font-size: 0.8rem; font-weight: bold; color: var(--secondary-color); margin-bottom: 5px; }
+input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+input:focus, select:focus { border-color: var(--primary-color); }
 
-.day-cell.empty { background: #f4f4f4; cursor: default; }
-
-.day-cell.has-operation {
-    border-bottom: 3px solid var(--primary-color);
+/* BOTÕES E AÇÕES */
+.btn-primary, .btn-secondary, .btn-danger, .btn-warning, .btn-success {
+    padding: 10px 20px; border: none; border-radius: 4px; color: white; cursor: pointer; font-weight: bold; display: inline-flex; align-items: center; gap: 8px;
 }
+.btn-primary { background: var(--primary-color); }
+.btn-secondary { background: var(--secondary-color); }
+.btn-danger { background: var(--danger-color); }
+.btn-warning { background: var(--warning-color); }
+.btn-success { background: var(--success-color); }
 
-.event-dot {
-    width: 8px; height: 8px;
-    background: var(--warning-color);
-    border-radius: 50%;
-    position: absolute;
-    top: 5px; right: 5px;
-}
+.btn-mini { padding: 5px 10px; font-size: 0.75rem; margin-right: 2px; }
 
-/* 10. MODAIS (POPUPS)
-   -------------------------------------------------------------------------- */
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 2000;
-    left: 0; top: 0;
-    width: 100%; height: 100%;
-    background-color: rgba(0,0,0,0.6);
-    backdrop-filter: blur(4px); /* Efeito moderno */
-}
+/* TABELAS */
+table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem; }
+th { background: #f5f5f5; text-align: left; padding: 12px; border-bottom: 2px solid #ddd; }
+td { padding: 10px 12px; border-bottom: 1px solid #eee; }
+.pill { padding: 4px 8px; border-radius: 12px; font-size: 0.7rem; color: white; text-transform: uppercase; }
+.pill.ok { background: var(--success-color); }
+.pill.pending { background: var(--warning-color); }
+.pill.err { background: var(--danger-color); }
 
-.modal-content {
-    background-color: var(--surface-color);
-    margin: 5% auto;
-    padding: 30px;
-    border-radius: 8px;
-    width: 90%;
-    max-width: 600px;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.4);
-    position: relative;
-    max-height: 90vh;
-    overflow-y: auto;
-}
+/* MODAL */
+.modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+.modal-content { background: white; width: 90%; max-width: 600px; padding: 25px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); max-height: 90vh; overflow-y: auto; position: relative; }
+.close-modal { position: absolute; top: 15px; right: 20px; font-size: 1.5rem; cursor: pointer; color: #999; }
 
-.close-btn {
-    position: absolute;
-    top: 15px; right: 20px;
-    font-size: 28px;
-    cursor: pointer;
-    color: #999;
-}
-.close-btn:hover { color: var(--danger-color); }
-
-/* 11. RESPONSIVIDADE (MOBILE)
-   -------------------------------------------------------------------------- */
-.mobile-nav {
-    display: none; /* Desktop: Oculto */
-    position: fixed;
-    top: 0; left: 0; width: 100%;
-    height: var(--header-height);
-    background: var(--sidebar-bg);
-    color: white;
-    z-index: 1050;
-    padding: 0 20px;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.mobile-nav button {
-    background: none; border: none; color: white; font-size: 1.5rem;
-}
-
-.overlay {
-    display: none;
-    position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.5);
-    z-index: 1090;
-}
-
-@media (max-width: 768px) {
-    .mobile-nav { display: flex; }
-    
-    .sidebar {
-        transform: translateX(-100%); /* Esconde menu lateral */
-        top: var(--header-height);
-        height: calc(100vh - var(--header-height));
-    }
-    
-    .sidebar.active { transform: translateX(0); } /* Mostra menu */
-    .overlay.active { display: block; }
-    
-    .content {
-        margin-left: 0;
-        width: 100%;
-        margin-top: var(--header-height);
-        padding: 15px;
-    }
-    
-    .form-row { flex-direction: column; }
-    .form-col { width: 100%; }
-    
-    .calendar-grid { grid-template-columns: repeat(7, minmax(30px, 1fr)); }
-    .day-cell { min-height: 60px; font-size: 0.8rem; }
-}
-
-@media print {
-    .sidebar, .mobile-nav, .no-print, .form-actions { display: none !important; }
-    .content { margin: 0; padding: 0; width: 100%; }
-    .card { box-shadow: none; border: 1px solid #000; }
-}
+/* ABAS DE CADASTRO */
+.tab-header { display: flex; border-bottom: 2px solid #eee; margin-bottom: 20px; }
+.tab-btn { padding: 10px 20px; background: none; border: none; cursor: pointer; color: #999; font-weight: bold; }
+.tab-btn.active { color: var(--primary-color); border-bottom: 3px solid var(--primary-color); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
