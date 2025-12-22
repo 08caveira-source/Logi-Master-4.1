@@ -857,24 +857,57 @@
         </section>
 
         <section id="super-admin" class="page">
-            <h2>PAINEL MASTER (GESTÃO GLOBAL)</h2>
-            <div class="card" style="border-left: 5px solid var(--primary-color);">
-                <h3><i class="fas fa-plus-circle"></i> CRIAR NOVA EMPRESA (ADMIN)</h3>
+            <div style="background: linear-gradient(135deg, #1a237e 0%, #283593 100%); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h2 style="color:white; border:none; margin:0;"><i class="fas fa-globe"></i> PAINEL MASTER (GLOBAL)</h2>
+                <p style="font-size: 0.9rem; opacity: 0.8;">Gestão total de domínios e usuários do sistema.</p>
+            </div>
+
+            <div class="card" style="border-left: 5px solid var(--success-color);">
+                <h3><i class="fas fa-building"></i> CRIAR NOVA EMPRESA (DOMÍNIO)</h3>
                 <form id="formCreateCompany">
                     <div class="form-row">
-                        <div class="form-col"><div class="form-group"><label>DOMÍNIO:</label><input type="text" id="newCompanyDomain" placeholder="ex: empresa.com" required></div></div>
-                        <div class="form-col"><div class="form-group"><label>EMAIL:</label><input type="email" id="newAdminEmail" required placeholder="admin@empresa.com"></div></div>
-                        <div class="form-col"><div class="form-group"><label>SENHA:</label><input type="text" id="newAdminPassword" required></div></div>
+                        <div class="form-col col-lg">
+                            <div class="form-group">
+                                <label>DOMÍNIO DA EMPRESA (ID ÚNICO):</label>
+                                <input type="text" id="newCompanyDomain" placeholder="ex: transportesilva.com" required onkeyup="this.value = this.value.toLowerCase().replace(/\s/g, '')">
+                            </div>
+                        </div>
+                        <div class="form-col col-lg">
+                            <div class="form-group">
+                                <label>EMAIL DO ADMINISTRADOR LOCAL:</label>
+                                <input type="email" id="newAdminEmail" required placeholder="admin@transportesilva.com">
+                            </div>
+                        </div>
+                        <div class="form-col col-md">
+                            <div class="form-group">
+                                <label>SENHA INICIAL:</label>
+                                <input type="text" id="newAdminPassword" required placeholder="Mínimo 6 dígitos">
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-actions"><button type="submit" class="btn-success">CRIAR EMPRESA</button></div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn-success">
+                            <i class="fas fa-plus-circle"></i> CRIAR AMBIENTE E ADMIN
+                        </button>
+                    </div>
                 </form>
             </div>
+
             <div class="card">
                 <div class="super-search-box">
-                    <i class="fas fa-search" style="color:var(--secondary-color);"></i>
-                    <input type="text" id="superAdminSearch" placeholder="BUSCAR..." onkeyup="filterGlobalUsers()" style="border:none; width:90%; margin-left:10px; outline:none; font-size:1rem;">
+                    <i class="fas fa-search" style="color:var(--secondary-color); font-size: 1.2rem;"></i>
+                    <input type="text" id="superAdminSearch" placeholder="Pesquisar por nome, email ou empresa..." onkeyup="filterGlobalUsers()" style="border:none; width:100%; margin-left:15px; outline:none; font-size:1.1rem; background:transparent;">
                 </div>
-                <div id="superAdminContainer" class="hierarchy-container"></div>
+                
+                <div class="form-actions" style="margin-bottom: 15px;">
+                    <button class="btn-secondary btn-mini" onclick="carregarPainelSuperAdmin(true)">
+                        <i class="fas fa-sync"></i> ATUALIZAR LISTA GLOBAL
+                    </button>
+                </div>
+
+                <div id="superAdminContainer" class="hierarchy-container">
+                    <p style="text-align:center; padding:20px;">Carregando dados globais...</p>
+                </div>
             </div>
         </section>
 
@@ -1047,10 +1080,11 @@
     </div>
 
     <script type="module">
+      
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
       import { getFirestore, collection, setDoc, doc, onSnapshot, getDoc, updateDoc, query, where, deleteDoc, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-      import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-      
+      import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+            
       const firebaseConfig = { apiKey: "AIzaSyBZjVdcyjbEoR_-X6_lZuTRDMeN2wIntZI", authDomain: "logi-master-dd4cd.firebaseapp.com", projectId: "logi-master-dd4cd", storageBucket: "logi-master-dd4cd.firebasestorage.app", messagingSenderId: "673000154258", appId: "1:673000154258:web:fc9d6fced43e557076324b" };
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);
@@ -1058,7 +1092,8 @@
       
       window.dbRef = { 
           db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, 
-          updateDoc, query, where, deleteDoc, getDocs, addDoc 
+          updateDoc, query, where, deleteDoc, getDocs, addDoc,
+          sendReset: (email) => sendPasswordResetEmail(auth, email) // <--- NOVO
       };
 
       onAuthStateChanged(auth, async (user) => {

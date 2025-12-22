@@ -1371,42 +1371,55 @@ function configurarNavegacao() {
     });
 }
 
-// BOOTSTRAP DO SISTEMA
+// BOOTSTRAP DO SISTEMA (ATUALIZADO PARA SUPORTE MASTER)
 window.initSystemByRole = function(user) {
-    console.log("Inicializando sistema para função: ", user.role);
+    console.log("Inicializando sistema para:", user.email, "| Role:", user.role);
     window.USUARIO_ATUAL = user;
 
-    // Garante carregamento dos dados antes de renderizar
+    // VERIFICAÇÃO DE SUPER ADMIN (EMAIL HARDCODED)
+    if (user.email.toUpperCase() === 'ADMIN@LOGIMASTER.COM') {
+        console.log(">>> MODO SUPER ADMIN ATIVADO <<<");
+        
+        // Esconde menus comuns
+        document.getElementById('menu-admin').style.display = 'none';
+        document.getElementById('menu-employee').style.display = 'none';
+        
+        // Mostra menu Super Admin
+        var menuSuper = document.getElementById('menu-super-admin');
+        if(menuSuper) menuSuper.style.display = 'block';
+        
+        // Inicia Painel Global
+        configurarNavegacao();
+        document.querySelector('[data-page="super-admin"]').click();
+        
+        // Carrega dados globais
+        setTimeout(carregarPainelSuperAdmin, 500);
+        return; // Encerra aqui para não carregar lógicas de empresas comuns
+    }
+
+    // FLUXO NORMAL (EMPRESAS COMUNS)
     carregarTodosDadosLocais();
     
-    // Configura UI baseada na role
     if (user.role === 'admin') {
         document.getElementById('menu-admin').style.display = 'block';
         window.MODO_APENAS_LEITURA = false;
-        
         preencherTodosSelects();
         renderizarCalendario();
         atualizarDashboard();
         renderizarTabelaDespesasGerais();
-        
-        // Vai para Dashboard
         document.querySelector('[data-page="home"]').click();
 
     } else if (user.role === 'motorista' || user.role === 'ajudante') {
         document.getElementById('menu-employee').style.display = 'block';
         window.MODO_APENAS_LEITURA = true;
-        
-        // Carrega dados do perfil no formulário "Meus Dados"
         carregarDadosMeuPerfil(user.email);
-        
-        // Vai para Home do Funcionário
         document.querySelector('[data-page="employee-home"]').click();
-        
     } else {
-        alert("Função de usuário desconhecida ou pendente aprovação.");
+        alert("Função de usuário desconhecida.");
     }
     
     configurarNavegacao();
+};
     
     // Listener Mobile Menu
     document.getElementById('mobileMenuBtn').onclick = function() {
@@ -1417,7 +1430,6 @@ window.initSystemByRole = function(user) {
         document.getElementById('sidebar').classList.remove('active');
         this.classList.remove('active');
     };
-};
 
 function carregarDadosMeuPerfil(email) {
     // Procura o funcionário pelo email do login para preencher "Meus Dados"
@@ -1444,4 +1456,222 @@ document.addEventListener('DOMContentLoaded', function() {
     // Se não estiver logado via Firebase, o initSystemByRole não roda,
     // mas deixamos a navegação pronta caso precise.
     configurarNavegacao();
+});
+
+// =============================================================================
+// MÓDULO SUPER ADMIN (GOD MODE)
+// =============================================================================
+
+window.GLOBAL_DATA_CACHE = {}; // Cache para o Super Admin
+
+window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
+    var container = document.getElementById('superAdminContainer');
+    if (!container) return;
+    
+    if (forceRefresh) container.innerHTML = '<p style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Varrendo banco de dados global...</p>';
+
+    const { db, collection, getDocs, doc, getDoc } = window.dbRef;
+
+    try {
+        // 1. Busca todas as empresas (Coleção 'companies')
+        // Nota: O Firestore não lista coleções root facilmente no client-side sem truques, 
+        // mas assumindo que salvamos metadados ou varremos IDs conhecidos.
+        // Se não tivermos uma lista de empresas salva, teremos que confiar na lista de users e extrair domínios.
+        
+        // ESTRATÉGIA HÍBRIDA: Varre a coleção 'users' para descobrir todos os domínios únicos e usuários.
+        
+        var usersSnap = await getDocs(collection(db, "users"));
+        var mapEmpresas = {}; // Objeto para agrupar: { 'dominio.com': [lista de users] }
+
+        usersSnap.forEach((docUser) => {
+            var u = docUser.data();
+            var dom = u.company || 'SEM_EMPRESA';
+            
+            if (!mapEmpresas[dom]) mapEmpresas[dom] = [];
+            mapEmpresas[dom].push({ ...u, uid: docUser.id }); // Guarda ID real do Auth/Doc
+        });
+
+        // Renderização
+        container.innerHTML = '';
+        var dominios = Object.keys(mapEmpresas).sort();
+
+        dominios.forEach(dom => {
+            // Conta tipos
+            var users = mapEmpresas[dom];
+            var admins = users.filter(u => u.role === 'admin').length;
+            var func = users.length - admins;
+
+            // HTML do Bloco da Empresa
+            var div = document.createElement('div');
+            div.className = 'company-block';
+            div.innerHTML = `
+                <div class="company-header" onclick="toggleCompanyBlock(this)">
+                    <h4><i class="fas fa-building"></i> ${dom.toUpperCase()}</h4>
+                    <span class="company-meta">${users.length} Usuários (${admins} Adm / ${func} Func)</span>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="company-content">
+                    <table class="data-table" style="width:100%">
+                        <thead>
+                            <tr style="background:#f5f5f5">
+                                <th>NOME</th>
+                                <th>EMAIL</th>
+                                <th>FUNÇÃO</th>
+                                <th>AÇÕES GERAIS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-${dom.replace(/\./g, '_')}">
+                            ${users.map(u => `
+                                <tr>
+                                    <td>${u.name || '-'}</td>
+                                    <td>${u.email}</td>
+                                    <td><span class="status-pill ${u.role==='admin'?'pill-active':'pill-pending'}">${u.role}</span></td>
+                                    <td>
+                                        <button class="btn-mini edit-btn" onclick="superAdminResetPass('${u.email}')" title="Resetar Senha"><i class="fas fa-key"></i></button>
+                                        <button class="btn-mini delete-btn" onclick="superAdminDeleteUser('${u.uid}', '${dom}')" title="Excluir Usuário"><i class="fas fa-trash"></i></button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                    <div style="margin-top:10px; text-align:right;">
+                        <button class="btn-mini btn-danger" onclick="superAdminDeleteCompany('${dom}')"><i class="fas fa-skull"></i> DESTRUIR EMPRESA INTEIRA</button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+
+    } catch (e) {
+        console.error("Erro Super Admin:", e);
+        container.innerHTML = '<p style="color:red">Erro ao carregar dados globais: ' + e.message + '</p>';
+    }
+};
+
+window.toggleCompanyBlock = function(header) {
+    var content = header.nextElementSibling;
+    var icon = header.querySelector('.fa-chevron-down');
+    
+    if (content.style.display === 'block') {
+        content.style.display = 'none';
+        if(icon) icon.style.transform = 'rotate(0deg)';
+    } else {
+        content.style.display = 'block';
+        if(icon) icon.style.transform = 'rotate(180deg)';
+    }
+};
+
+window.filterGlobalUsers = function() {
+    var term = document.getElementById('superAdminSearch').value.toLowerCase();
+    var blocks = document.querySelectorAll('.company-block');
+    
+    blocks.forEach(block => {
+        var text = block.innerText.toLowerCase();
+        block.style.display = text.includes(term) ? 'block' : 'none';
+    });
+};
+
+// Ações do Super Admin
+
+window.superAdminResetPass = function(email) {
+    // Firebase Admin SDK seria o ideal, mas no client side o melhor é enviar email de reset
+    const { auth, sendPasswordResetEmail } = window.dbRef; // Assumindo importação
+    // Precisamos importar sendPasswordResetEmail no módulo do HTML primeiro, mas vamos simular
+    
+    // Como o modulo é importado no HTML, precisamos acessá-lo. 
+    // Vamos adicionar um helper no HTML para expor essa função do Auth.
+    alert("Para segurança, a função de Reset envia um e-mail para o usuário.\nEnviando para: " + email);
+    
+    if (window.dbRef.sendReset) {
+         window.dbRef.sendReset(email)
+            .then(() => alert("E-mail de redefinição enviado!"))
+            .catch(e => alert("Erro: " + e.message));
+    } else {
+        alert("Função de reset não mapeada no window.dbRef. Atualize o módulo do index.html.");
+    }
+};
+
+window.superAdminDeleteUser = async function(uid, domain) {
+    if(!confirm("TEM CERTEZA? Isso removerá o acesso deste usuário.\n(Nota: Dados históricos em operações podem permanecer, mas o login será revogado).")) return;
+    
+    const { db, doc, deleteDoc } = window.dbRef;
+    try {
+        // 1. Remove da coleção 'users' (Login)
+        await deleteDoc(doc(db, "users", uid));
+        
+        // 2. Tenta remover da lista de funcionários da empresa (db_funcionarios)
+        // Isso exige ler, filtrar e salvar novamente.
+        var empresaRef = doc(db, 'companies', domain, 'data', 'db_funcionarios');
+        var snap = await window.dbRef.getDoc(empresaRef);
+        if (snap.exists()) {
+            var dados = snap.data();
+            var novaLista = (dados.items || []).filter(u => u.id !== uid && u.email !== uid); // Tenta match
+            
+            await window.dbRef.setDoc(empresaRef, { items: novaLista }, { merge: true });
+        }
+        
+        alert("Usuário removido.");
+        carregarPainelSuperAdmin(false); // Reload leve
+    } catch(e) {
+        alert("Erro ao excluir: " + e.message);
+    }
+};
+
+// Listener para criar nova empresa (Super Admin)
+document.addEventListener('submit', async function(e) {
+    if (e.target.id === 'formCreateCompany') {
+        e.preventDefault();
+        
+        var domain = document.getElementById('newCompanyDomain').value.toLowerCase().trim();
+        var email = document.getElementById('newAdminEmail').value.toLowerCase().trim();
+        var pass = document.getElementById('newAdminPassword').value;
+        
+        if(domain.indexOf('.') === -1) return alert("Domínio inválido (ex: empresa.com)");
+        
+        const { auth, createUserWithEmailAndPassword, db, doc, setDoc } = window.dbRef;
+        
+        try {
+            // 1. Cria Auth do Admin da nova empresa
+            // OBS: Isso vai logar o Super Admin como o novo usuário. Precisamos evitar isso ou relogar.
+            // Firebase Client SDK não permite criar usuário sem deslogar o atual facilmente.
+            // WORKAROUND: Criar apenas o registro no DB e pedir para o usuário se cadastrar, 
+            // OU usar uma Secondary App (complexo).
+            
+            // Solução Prática: Cria o registro da empresa e o perfil de usuário no DB. 
+            // O login real (Auth) será criado quando essa pessoa tentar logar/registrar.
+            
+            // Cria estrutura da empresa
+            await setDoc(doc(db, 'companies', domain, 'data', 'config'), {
+                createdAt: new Date().toISOString(),
+                createdBy: 'SUPER_ADMIN'
+            });
+            
+            // Pré-aprova o Admin na coleção users (para quando ele criar a conta no Auth)
+            // Como não temos o UID ainda, vamos criar um documento placeholder ou
+            // adicionar na lista de funcionários aprovados da empresa.
+            
+            var adminData = {
+                id: 'admin_' + Date.now(),
+                nome: 'ADMINISTRADOR ' + domain.toUpperCase(),
+                email: email,
+                funcao: 'admin',
+                role: 'admin'
+            };
+            
+            // Salva na lista de funcionários da empresa
+            await setDoc(doc(db, 'companies', domain, 'data', 'db_funcionarios'), {
+                items: [adminData],
+                lastUpdate: new Date().toISOString()
+            });
+
+            alert(`AMBIENTE '${domain}' PREPARADO!\n\nInstrução:\nPeça para o cliente acessar o sistema e se CADASTRAR com o email: ${email}.\nO sistema irá reconhecê-lo automaticamente como ADMIN desta empresa.`);
+            
+            e.target.reset();
+            carregarPainelSuperAdmin(true);
+
+        } catch (err) {
+            console.error(err);
+            alert("Erro ao criar estrutura: " + err.message);
+        }
+    }
 });
