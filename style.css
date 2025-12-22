@@ -1,5 +1,5 @@
 /* =============================================================================
-   LOGIMASTER - ESTILOS VISUAIS (VERSÃO 19.0)
+   LOGIMASTER - ESTILOS VISUAIS (VERSÃO COMPLETA)
    ============================================================================= */
 
 @import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@300;400;600;700;800&display=swap');
@@ -40,8 +40,7 @@
     margin: 0;
     padding: 0;
     font-family: 'Segoe UI', sans-serif;
-    /* Força caixa alta em quase tudo para padrão logístico */
-    text-transform: uppercase;
+    text-transform: uppercase; /* Padrão Logístico */
 }
 
 /* Exceções de texto normal */
@@ -200,6 +199,7 @@ h2 {
 .col-md { flex: 0 0 250px; }
 .col-lg { flex: 2; }
 .col-xl { flex: 3; }
+.col-full { flex: 0 0 100%; }
 
 .form-group { margin-bottom: 5px; }
 .form-group label { display: block; font-size: 0.8rem; font-weight: 700; color: #666; margin-bottom: 5px; }
@@ -296,7 +296,8 @@ button:hover { filter: brightness(90%); }
     flex-direction: column;
 }
 
-.day-cell:hover { border-color: var(--primary-color); background: #f0fdfc; }
+.day-cell.empty { background: transparent; border: none; cursor: default; }
+.day-cell:not(.empty):hover { border-color: var(--primary-color); background: #f0fdfc; }
 
 .day-cell span { font-weight: bold; font-size: 0.9rem; color: #555; }
 
@@ -316,6 +317,7 @@ button:hover { filter: brightness(90%); }
 }
 
 /* LISTA SIMPLES (Ajudantes) */
+.simple-list { list-style: none; padding: 0; }
 .simple-list li {
     background: #f9f9f9;
     padding: 8px 12px;
@@ -343,7 +345,7 @@ button:hover { filter: brightness(90%); }
     padding: 30px;
     border-radius: 8px;
     width: 100%;
-    max-width: 600px;
+    max-width: 700px;
     position: relative;
     margin: auto;
     animation: fadeUp 0.3s;
@@ -359,7 +361,7 @@ button:hover { filter: brightness(90%); }
 }
 
 /* TABS DE CADASTRO */
-.tab-controls { display: flex; border-bottom: 2px solid #eee; margin-bottom: 20px; gap: 5px; }
+.tab-controls { display: flex; border-bottom: 2px solid #eee; margin-bottom: 20px; gap: 5px; overflow-x: auto; }
 .cadastro-tab-btn {
     background: transparent;
     color: #777;
@@ -368,6 +370,7 @@ button:hover { filter: brightness(90%); }
     cursor: pointer;
     font-weight: 700;
     border-radius: 4px 4px 0 0;
+    white-space: nowrap;
 }
 .cadastro-tab-btn.active {
     background: #fff;
@@ -378,6 +381,16 @@ button:hover { filter: brightness(90%); }
 }
 .cadastro-form { display: none; }
 .cadastro-form.active { display: block; }
+
+/* IMPRESSÃO (RECIBOS/RELATÓRIOS) */
+.no-print { }
+
+@media print {
+    .sidebar, .mobile-nav, .no-print, .form-actions, .tab-controls, .calendar-controls { display: none !important; }
+    .content { margin: 0; padding: 0; }
+    .card { box-shadow: none; border: none; padding: 0; margin: 0; }
+    body { background: white; }
+}
 
 /* MEDIA QUERIES (CELULAR) */
 @media (max-width: 768px) {
@@ -397,10 +410,4 @@ button:hover { filter: brightness(90%); }
     .day-cell { min-height: 60px; font-size: 0.8rem; }
     
     .form-col { flex: 100%; }
-}
-
-@media print {
-    .sidebar, .mobile-nav, .no-print, .form-actions { display: none !important; }
-    .content { margin: 0; padding: 0; }
-    .card { box-shadow: none; border: none; padding: 0; }
 }
