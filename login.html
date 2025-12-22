@@ -6,13 +6,12 @@
     <title>ACESSO | LOGIMASTER</title>
     
     <link rel="stylesheet" href="style.css">
-    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     
     <style>
-        /* ESTILOS ESPECÍFICOS DA TELA DE LOGIN */
+        /* ESTILOS ESPECÍFICOS DA TELA DE LOGIN (Mantidos internos para garantir renderização imediata) */
         body.login-page {
-            background-color: #263238; /* Cor de fundo escura corporativa */
+            background-color: #263238;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -36,7 +35,7 @@
 
         .login-header {
             margin-bottom: 40px;
-            border-bottom: 4px solid #00796b; /* Primary Color */
+            border-bottom: 4px solid #00796b;
             padding-bottom: 20px;
         }
 
@@ -48,9 +47,7 @@
             letter-spacing: 1px;
         }
 
-        .login-header h1 span {
-            color: #00796b;
-        }
+        .login-header h1 span { color: #00796b; }
 
         .login-header p {
             color: #78909c;
@@ -60,11 +57,7 @@
             text-transform: uppercase;
         }
 
-        /* INPUTS */
-        .form-group {
-            margin-bottom: 20px;
-            text-align: left;
-        }
+        .form-group { margin-bottom: 20px; text-align: left; }
 
         .form-group label {
             display: block;
@@ -75,8 +68,7 @@
             text-transform: uppercase;
         }
 
-        .form-group input, 
-        .form-group select {
+        .form-group input, .form-group select {
             width: 100%;
             padding: 14px;
             border: 2px solid #cfd8dc;
@@ -87,14 +79,12 @@
             color: #333;
         }
 
-        .form-group input:focus,
-        .form-group select:focus {
+        .form-group input:focus, .form-group select:focus {
             border-color: #00796b;
             outline: none;
             background-color: #fff;
         }
 
-        /* BOTÕES */
         .btn-full {
             width: 100%;
             padding: 16px;
@@ -114,24 +104,12 @@
             gap: 10px;
         }
 
-        .btn-full:hover {
-            background-color: #004d40;
-        }
+        .btn-full:hover { background-color: #004d40; }
+        .btn-full:disabled { background-color: #ccc; cursor: not-allowed; }
 
-        .btn-full:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
+        .btn-secondary-login { background-color: #546e7a; }
+        .btn-secondary-login:hover { background-color: #37474f; }
 
-        .btn-secondary-login {
-            background-color: #546e7a;
-        }
-        
-        .btn-secondary-login:hover {
-            background-color: #37474f;
-        }
-
-        /* LINKS E UTILITÁRIOS */
         .toggle-link {
             display: block;
             margin-top: 20px;
@@ -142,13 +120,8 @@
             font-weight: 600;
         }
 
-        .toggle-link:hover {
-            color: #004d40;
-        }
-
-        .hidden {
-            display: none;
-        }
+        .toggle-link:hover { color: #004d40; }
+        .hidden { display: none; }
 
         .error-message {
             background-color: #ffebee;
@@ -205,7 +178,7 @@
             <h3 style="color:#00796b; margin-bottom: 20px; text-transform: uppercase;">Criar Acesso</h3>
             
             <div class="alert-info" style="background:#e3f2fd; padding:12px; border-radius:6px; margin-bottom:20px; font-size:0.85rem; color:#0d47a1; text-align:left; border-left: 4px solid #0d47a1;">
-                <strong><i class="fas fa-info-circle"></i> IMPORTANTE:</strong><br> Utilize exatamente o mesmo e-mail que foi cadastrado pelo seu administrador. O sistema irá vincular sua conta automaticamente.
+                <strong><i class="fas fa-info-circle"></i> IMPORTANTE:</strong><br> Utilize exatamente o mesmo e-mail cadastrado pelo seu administrador. O sistema irá vincular sua conta automaticamente.
             </div>
 
             <div id="regError" class="error-message"></div>
@@ -245,7 +218,7 @@
         </form>
 
         <div class="footer-copy">
-            &copy; 2025 LOGIMASTER SYSTEMS<br>Versão 8.0 - Build Stable
+            &copy; 2025 LOGIMASTER SYSTEMS<br>Versão 9.1 - Build Stable
         </div>
     </div>
 
@@ -254,7 +227,6 @@
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // Configuração do Firebase (Projeto LOGI-MASTER)
         const firebaseConfig = {
             apiKey: "AIzaSyBZjVdcyjbEoR_-X6_lZuTRDMeN2wIntZI",
             authDomain: "logi-master-dd4cd.firebaseapp.com",
@@ -264,42 +236,35 @@
             appId: "1:673000154258:web:fc9d6fced43e557076324b"
         };
 
-        // Inicialização
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // --- MONITOR DE ESTADO (AUTH STATE LISTENER) ---
+        // MONITOR DE LOGIN
         onAuthStateChanged(auth, async (user) => {
             if (user) {
-                // Usuário autenticado, verifica se tem perfil no Banco de Dados
                 const userRef = doc(db, "users", user.uid);
                 try {
                     const userSnap = await getDoc(userRef);
                     if (userSnap.exists()) {
-                        // Sucesso: Redireciona para o sistema
                         console.log("Login autorizado para:", user.email);
                         window.location.href = "index.html";
                     } else {
-                        // Falha de Integridade: Auth existe, mas perfil não
-                        console.error("Erro Crítico: Usuário autenticado sem perfil de dados.");
+                        console.error("Erro Crítico: Usuário autenticado sem perfil.");
                         await signOut(auth);
-                        showError("loginError", "Erro de integridade no cadastro. Por favor, tente criar a conta novamente.");
+                        showError("loginError", "Erro de integridade. Crie a conta novamente.");
                     }
                 } catch (e) {
                     console.error("Erro de conexão:", e);
-                    showError("loginError", "Erro de conexão com o banco de dados. Verifique sua internet.");
+                    showError("loginError", "Erro de conexão com o banco de dados.");
                 }
             }
         });
 
-        // Função Visual: Alternar entre Login e Cadastro
         window.toggleForms = function() {
             const loginForm = document.getElementById('formLogin');
             const regForm = document.getElementById('formRegister');
             const errorDivs = document.querySelectorAll('.error-message');
-            
-            // Limpa mensagens de erro ao trocar de tela
             errorDivs.forEach(el => el.style.display = 'none');
 
             if (loginForm.classList.contains('hidden')) {
@@ -311,14 +276,12 @@
             }
         };
 
-        // Função Auxiliar: Mostrar Erro
         function showError(elementId, message) {
             const el = document.getElementById(elementId);
             el.textContent = message;
             el.style.display = 'block';
         }
 
-        // --- LÓGICA DE LOGIN ---
         document.getElementById('formLogin').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('email').value.trim();
@@ -328,156 +291,94 @@
             try {
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> VERIFICANDO...';
                 btn.disabled = true;
-                
                 await signInWithEmailAndPassword(auth, email, password);
-                // O redirecionamento é tratado pelo onAuthStateChanged
             } catch (error) {
                 console.error(error);
                 btn.innerHTML = 'ENTRAR <i class="fas fa-sign-in-alt"></i>';
                 btn.disabled = false;
-                
-                let msg = "Falha no login.";
-                if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-                    msg = "E-mail ou senha incorretos.";
-                } else if (error.code === 'auth/too-many-requests') {
-                    msg = "Muitas tentativas falhas. Aguarde um momento.";
-                } else if (error.code === 'auth/network-request-failed') {
-                    msg = "Sem conexão com a internet.";
-                }
+                let msg = "Falha no login. Verifique e-mail e senha.";
+                if (error.code === 'auth/invalid-credential') msg = "Credenciais inválidas.";
                 showError("loginError", msg);
             }
         });
 
-        // --- LÓGICA DE CADASTRO COM VÍNCULO INTELIGENTE ---
         document.getElementById('formRegister').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
-            // Coleta dos dados do formulário
             const name = document.getElementById('regName').value.trim().toUpperCase();
             const email = document.getElementById('regEmail').value.trim().toLowerCase();
             const password = document.getElementById('regPassword').value;
             let role = document.getElementById('regRole').value;
-            
             const btn = document.getElementById('btnRegister');
             
-            // Validações Locais
-            if (password.length < 6) {
-                return showError("regError", "A senha deve ter no mínimo 6 caracteres.");
-            }
-            if (!email.includes('@') || !email.includes('.')) {
-                return showError("regError", "E-mail inválido.");
-            }
-
-            // Extração do Domínio da Empresa (ex: usuario@transportes.com -> transportes.com)
+            if (password.length < 6) return showError("regError", "A senha deve ter no mínimo 6 caracteres.");
             const domainParts = email.split('@');
-            if (domainParts.length < 2) return showError("regError", "Formato de e-mail inválido.");
+            if (domainParts.length < 2) return showError("regError", "E-mail inválido.");
             const domain = domainParts[1];
 
             try {
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
                 btn.disabled = true;
 
-                // -------------------------------------------------------------
-                // PASSO 1: VERIFICAR SE EXISTE UM PRÉ-CADASTRO NA EMPRESA
-                // -------------------------------------------------------------
                 let isLinked = false;
                 let linkedId = null;
-                
-                // Se não for um Admin criando uma empresa nova, precisamos checar o vínculo
+
                 if (role !== 'admin') {
                     try {
-                        // Caminho: companies / [DOMINIO] / data / db_funcionarios
                         const funcionariosRef = doc(db, 'companies', domain, 'data', 'db_funcionarios');
                         const snap = await getDoc(funcionariosRef);
-                        
                         if (snap.exists()) {
-                            const listaFuncionarios = snap.data().items || [];
-                            
-                            // Busca na lista um funcionário com o MESMO E-MAIL
-                            const match = listaFuncionarios.find(f => f.email === email);
-                            
+                            const lista = snap.data().items || [];
+                            const match = lista.find(f => f.email && f.email.toLowerCase() === email);
                             if (match) {
                                 isLinked = true;
                                 linkedId = match.id;
-                                role = match.funcao; // Força a função definida pelo Admin (Segurança)
-                                console.log(`Vínculo encontrado! ID: ${linkedId}, Função: ${role}`);
-                            } else {
-                                console.warn("E-mail não encontrado na lista de funcionários da empresa.");
+                                role = match.funcao;
                             }
-                        } else {
-                            console.warn(`Empresa ${domain} não encontrada ou sem funcionários cadastrados.`);
                         }
-                    } catch (err) {
-                        console.warn("Erro ao buscar vínculo (possível primeira conta da empresa):", err);
-                    }
+                    } catch (err) { console.warn("Erro ao buscar vínculo:", err); }
                 } else {
-                    // Se for Admin criando a empresa, ele é auto-aprovado
                     isLinked = true;
                 }
 
-                // -------------------------------------------------------------
-                // PASSO 2: CRIAR O USUÁRIO NO FIREBASE AUTHENTICATION
-                // -------------------------------------------------------------
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
 
-                // -------------------------------------------------------------
-                // PASSO 3: CRIAR O PERFIL PÚBLICO (users collection)
-                // -------------------------------------------------------------
                 await setDoc(doc(db, "users", user.uid), {
                     uid: user.uid,
                     name: name,
                     email: email,
                     role: role,
                     company: domain,
-                    approved: isLinked, // Se achou vínculo, aprova. Se não, fica pendente.
-                    createdAt: new Date().toISOString(),
-                    lastLogin: new Date().toISOString()
+                    approved: isLinked,
+                    createdAt: new Date().toISOString()
                 });
 
-                // -------------------------------------------------------------
-                // PASSO 4: ATUALIZAR O CADASTRO DA EMPRESA (VÍNCULO REVERSO)
-                // -------------------------------------------------------------
                 if (isLinked && role !== 'admin' && linkedId) {
-                    const funcionariosRef = doc(db, 'companies', domain, 'data', 'db_funcionarios');
-                    
-                    // Re-lê para garantir dados atualizados e evitar sobrescrita
-                    const snap = await getDoc(funcionariosRef);
-                    if (snap.exists()) {
-                        let items = snap.data().items || [];
-                        const index = items.findIndex(i => String(i.id) === String(linkedId));
-                        
-                        if (index >= 0) {
-                            items[index].uid = user.uid; // INJETA O UID NO CADASTRO
-                            // Opcional: Atualizar nome caso o usuário tenha corrigido
-                            // items[index].nome = name; 
-                            
-                            await updateDoc(funcionariosRef, { items: items });
-                            console.log("Vínculo reverso concluído: UID salvo no cadastro da empresa.");
+                    try {
+                        const funcionariosRef = doc(db, 'companies', domain, 'data', 'db_funcionarios');
+                        const snap = await getDoc(funcionariosRef);
+                        if (snap.exists()) {
+                            let items = snap.data().items || [];
+                            const index = items.findIndex(i => String(i.id) === String(linkedId));
+                            if (index >= 0) {
+                                items[index].uid = user.uid;
+                                await updateDoc(funcionariosRef, { items: items });
+                            }
                         }
-                    }
+                    } catch (errSync) { console.error("Erro no vínculo reverso:", errSync); }
                 }
 
-                // Feedback Final
                 if (isLinked) {
-                    alert("SUCESSO! Sua conta foi criada e VINCULADA ao seu perfil.\n\nVocê será redirecionado para o painel.");
-                    // Redirecionamento automático pelo onAuthStateChanged
+                    alert("Conta criada e VINCULADA com sucesso!");
                 } else {
-                    alert("CONTA CRIADA!\n\nPorém, não encontramos seu cadastro prévio na empresa.\nSua conta está PENDENTE de aprovação pelo Administrador.\n\nAvise seu gestor.");
-                    // Usuário entra, mas o sistema (script.js) deve bloquear ações se approved for false
+                    alert("Conta criada! Aguardando aprovação do administrador.");
+                    window.location.href = "index.html";
                 }
-
             } catch (error) {
                 console.error("Erro no Registro:", error);
                 btn.innerHTML = 'CADASTRAR / VINCULAR';
                 btn.disabled = false;
-                
-                let msg = "Erro ao criar conta.";
-                if (error.code === 'auth/email-already-in-use') msg = "Este e-mail já possui cadastro. Volte e faça login.";
-                if (error.code === 'auth/weak-password') msg = "A senha deve ter pelo menos 6 caracteres.";
-                if (error.code === 'auth/invalid-email') msg = "Formato de e-mail inválido.";
-                
-                showError("regError", msg);
+                showError("regError", "Erro ao criar conta: " + error.code);
             }
         });
     </script>
