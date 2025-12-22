@@ -3,255 +3,435 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LOGIMASTER | SISTEMA</title>
+    <title>LOGIMASTER | SISTEMA DE GESTÃO INTEGRADA</title>
+    
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
-<body style="display:none;"> <div class="sidebar">
-        <div class="logo">LOGI<span style="color:var(--primary-light)">MASTER</span></div>
-        <div class="user-info">
-            <i class="fas fa-user-circle fa-2x"></i>
-            <p id="userEmailDisplay">...</p>
-            <span id="userRoleDisplay" class="pill pending">...</span>
+
+<body style="display:none;"> 
+    
+    <header class="sidebar" id="sidebar">
+        <div class="logo-area">
+            <h2>LOGI<span>MASTER</span></h2>
+            <p>Versão Enterprise 10.0</p>
         </div>
         
-        <nav id="menuAdmin" style="display:none;">
-            <div class="nav-item active" onclick="navTo('home')"><i class="fas fa-chart-line"></i> DASHBOARD</div>
-            <div class="nav-item" onclick="navTo('operacoes')"><i class="fas fa-truck"></i> OPERAÇÕES</div>
-            <div class="nav-item" onclick="navTo('equipe')"><i class="fas fa-users"></i> EQUIPE & AVISOS</div>
-            <div class="nav-item" onclick="navTo('cadastros')"><i class="fas fa-database"></i> CADASTROS</div>
-            <div class="nav-item" onclick="navTo('despesas')"><i class="fas fa-money-bill-wave"></i> DESPESAS</div>
-            <div class="nav-item" onclick="navTo('relatorios')"><i class="fas fa-file-alt"></i> RELATÓRIOS</div>
-            <div class="nav-item" onclick="navTo('config')"><i class="fas fa-cogs"></i> CONFIGURAÇÕES</div>
+        <div class="user-profile-widget">
+            <div class="avatar-circle"><i class="fas fa-user"></i></div>
+            <div class="user-info">
+                <p id="userEmailDisplay">Carregando...</p>
+                <span id="userRoleDisplay" class="role-badge">...</span>
+            </div>
+        </div>
+
+        <nav class="main-menu">
+            <ul id="menu-admin" style="display:none;">
+                <li class="nav-item active" onclick="navegarPara('home')">
+                    <i class="fas fa-chart-pie"></i> DASHBOARD
+                </li>
+                <li class="nav-item" onclick="navegarPara('operacoes')">
+                    <i class="fas fa-truck-moving"></i> OPERAÇÕES
+                </li> 
+                <li class="nav-item" onclick="navegarPara('equipe')">
+                    <i class="fas fa-users"></i> EQUIPE & AVISOS
+                </li>
+                <li class="nav-item" onclick="navegarPara('despesas')">
+                    <i class="fas fa-file-invoice-dollar"></i> FINANCEIRO
+                </li> 
+                <li class="nav-item" onclick="navegarPara('cadastros')">
+                    <i class="fas fa-folder-open"></i> CADASTROS
+                </li>
+                <li class="nav-item" onclick="navegarPara('relatorios')">
+                    <i class="fas fa-print"></i> RELATÓRIOS
+                </li>
+                <li class="nav-item" onclick="navegarPara('config')">
+                    <i class="fas fa-sliders-h"></i> CONFIGURAÇÕES
+                </li>
+            </ul>
+
+            <ul id="menu-employee" style="display:none;">
+                <li class="nav-item active" onclick="navegarPara('func-home')">
+                    <i class="fas fa-home"></i> MEU PAINEL
+                </li>
+                <li class="nav-item" onclick="navegarPara('func-dados')">
+                    <i class="fas fa-id-card"></i> MEUS DADOS
+                </li>
+            </ul>
         </nav>
         
-        <nav id="menuFunc" style="display:none;">
-            <div class="nav-item active" onclick="navTo('func-home')"><i class="fas fa-home"></i> MEU PAINEL</div>
-            <div class="nav-item" onclick="navTo('func-dados')"><i class="fas fa-id-card"></i> MEUS DADOS</div>
-        </nav>
-
         <div class="sidebar-footer">
-            <button class="btn-danger" style="width:100%" onclick="logout()"><i class="fas fa-sign-out-alt"></i> SAIR</button>
+            <button onclick="logoutSistema()" class="btn-logout">
+                <i class="fas fa-sign-out-alt"></i> SAIR DO SISTEMA
+            </button>
         </div>
-    </div>
+    </header>
 
-    <div class="content">
+    <main class="content-area">
         
-        <section id="home" class="page active">
-            <h2>DASHBOARD</h2>
-            <div class="card-grid">
-                <div class="card stat-card success"><h3>R$ <span id="dashFat">0,00</span></h3><p>FATURAMENTO</p></div>
-                <div class="card stat-card danger"><h3>R$ <span id="dashCust">0,00</span></h3><p>CUSTOS</p></div>
-                <div class="card stat-card primary"><h3>R$ <span id="dashLucro">0,00</span></h3><p>LUCRO LÍQUIDO</p></div>
+        <section id="home" class="page-section active">
+            <div class="page-header">
+                <h2>VISÃO GERAL</h2>
+                <span class="date-display" id="dataHojeExtenso">...</span>
             </div>
             
-            <div class="card">
-                <h3><i class="far fa-calendar-alt"></i> CALENDÁRIO DE OPERAÇÕES</h3>
-                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-                    <button class="btn-secondary btn-mini" onclick="mudarMes(-1)">ANTERIOR</button>
-                    <strong id="mesAnoDisplay" style="font-size:1.2rem;">...</strong>
-                    <button class="btn-secondary btn-mini" onclick="mudarMes(1)">PRÓXIMO</button>
+            <div class="kpi-grid">
+                <div class="kpi-card success">
+                    <div class="icon"><i class="fas fa-arrow-up"></i></div>
+                    <div class="info">
+                        <h3>FATURAMENTO</h3>
+                        <p id="kpiFaturamento">R$ 0,00</p>
+                    </div>
                 </div>
-                <div id="calendarGrid" class="calendar-grid"></div>
+                <div class="kpi-card danger">
+                    <div class="icon"><i class="fas fa-arrow-down"></i></div>
+                    <div class="info">
+                        <h3>CUSTOS TOTAIS</h3>
+                        <p id="kpiCustos">R$ 0,00</p>
+                    </div>
+                </div>
+                <div class="kpi-card primary">
+                    <div class="icon"><i class="fas fa-wallet"></i></div>
+                    <div class="info">
+                        <h3>LUCRO LÍQUIDO</h3>
+                        <p id="kpiLucro">R$ 0,00</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-row">
+                <div class="card calendar-container" style="flex: 2;">
+                    <div class="card-header">
+                        <h3><i class="far fa-calendar-alt"></i> CALENDÁRIO DE OPERAÇÕES</h3>
+                        <div class="calendar-nav">
+                            <button onclick="mudarMesCalendario(-1)" class="btn-icon"><i class="fas fa-chevron-left"></i></button>
+                            <span id="calendarTitle">MES/ANO</span>
+                            <button onclick="mudarMesCalendario(1)" class="btn-icon"><i class="fas fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+                    <div id="calendarGrid" class="calendar-grid"></div>
+                </div>
+                
+                <div class="card chart-container" style="flex: 1;">
+                    <h3>DESEMPENHO ANUAL</h3>
+                    <canvas id="graficoFinanceiro"></canvas>
+                </div>
             </div>
         </section>
 
-        <section id="operacoes" class="page">
-            <h2>LANÇAR OPERAÇÃO</h2>
+        <section id="operacoes" class="page-section">
+            <h2>GESTÃO DE OPERAÇÕES</h2>
+            
             <div class="card">
+                <h3><i class="fas fa-plus-circle"></i> LANÇAR NOVA OPERAÇÃO / VIAGEM</h3>
                 <form id="formOperacao">
-                    <input type="hidden" id="opId">
-                    <div class="form-row">
-                        <div class="form-col"><label>DATA:</label><input type="date" id="opData" required></div>
-                        <div class="form-col"><label>MOTORISTA:</label><select id="opMotorista" required></select></div>
-                        <div class="form-col"><label>VEÍCULO:</label><select id="opVeiculo" required></select></div>
-                        <div class="form-col"><label>CLIENTE:</label><select id="opCliente" required></select></div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-col"><label style="color:green">FATURAMENTO (R$):</label><input type="number" step="0.01" id="opFat"></div>
-                        <div class="form-col"><label style="color:red">COMBUSTÍVEL (R$):</label><input type="number" step="0.01" id="opComb"></div>
-                        <div class="form-col"><label>OUTRAS DESPESAS:</label><input type="number" step="0.01" id="opDesp"></div>
-                        <div class="form-col"><label>STATUS:</label>
-                            <select id="opStatus">
-                                <option value="AGENDADA">AGENDADA</option>
+                    <input type="hidden" id="operacaoId"> <div class="form-row">
+                        <div class="form-group col-3">
+                            <label>DATA DA VIAGEM:</label>
+                            <input type="date" id="opData" required>
+                        </div>
+                        <div class="form-group col-3">
+                            <label>STATUS:</label>
+                            <select id="opStatus" required>
+                                <option value="AGENDADA">AGENDADA (PENDENTE)</option>
                                 <option value="CONFIRMADA">CONFIRMADA (FINALIZADA)</option>
+                                <option value="CANCELADA">CANCELADA</option>
                             </select>
                         </div>
+                         <div class="form-group col-6">
+                            <label>CLIENTE / CONTRATANTE:</label>
+                            <select id="opCliente" required></select>
+                        </div>
                     </div>
+
                     <div class="form-row">
-                        <div class="form-col"><label>AJUDANTES:</label><input type="text" id="opAjudantesInput" placeholder="Nomes separados por vírgula"></div>
+                        <div class="form-group col-6">
+                            <label>MOTORISTA RESPONSÁVEL:</label>
+                            <select id="opMotorista" required></select>
+                        </div>
+                        <div class="form-group col-6">
+                            <label>VEÍCULO UTILIZADO:</label>
+                            <select id="opVeiculo" required></select>
+                        </div>
                     </div>
-                    <button type="submit" class="btn-primary"><i class="fas fa-save"></i> SALVAR OPERAÇÃO</button>
-                    <button type="button" class="btn-secondary" onclick="limparFormOp()">NOVA</button>
+
+                    <hr class="separator">
+                    <h4>FINANCEIRO DA VIAGEM</h4>
+                    
+                    <div class="form-row">
+                        <div class="form-group col-3">
+                            <label style="color:var(--success-color)">VALOR FATURADO (R$):</label>
+                            <input type="number" step="0.01" id="opValor" placeholder="0,00">
+                        </div>
+                         <div class="form-group col-3">
+                            <label style="color:var(--danger-color)">GASTO COMBUSTÍVEL (R$):</label>
+                            <input type="number" step="0.01" id="opCombustivel" placeholder="0,00">
+                        </div>
+                        <div class="form-group col-3">
+                            <label style="color:var(--danger-color)">OUTRAS DESPESAS (R$):</label>
+                            <input type="number" step="0.01" id="opDespesas" placeholder="Pedágio, chapa, etc">
+                        </div>
+                        <div class="form-group col-3">
+                            <label>COMISSÃO/DIÁRIA (R$):</label>
+                            <input type="number" step="0.01" id="opComissao" placeholder="0,00">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group col-12">
+                            <label>OBSERVAÇÕES / AJUDANTES:</label>
+                            <textarea id="opObs" rows="2" placeholder="Digite nomes dos ajudantes ou detalhes da carga..."></textarea>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary"><i class="fas fa-save"></i> SALVAR OPERAÇÃO</button>
+                        <button type="button" onclick="limparFormOperacao()" class="btn-secondary"><i class="fas fa-eraser"></i> LIMPAR</button>
+                    </div>
                 </form>
             </div>
+
+            <div class="card">
+                <h3>HISTÓRICO DE OPERAÇÕES</h3>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>DATA</th>
+                                <th>CLIENTE</th>
+                                <th>VEÍCULO/MOT.</th>
+                                <th>STATUS</th>
+                                <th>FATURAMENTO</th>
+                                <th>AÇÕES</th>
+                            </tr>
+                        </thead>
+                        <tbody id="listaOperacoesBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="equipe" class="page-section">
+            <h2>EQUIPE E COMUNICAÇÃO</h2>
             
+            <div class="card warning-card">
+                <h3><i class="fas fa-bullhorn"></i> QUADRO DE AVISOS (WHATSAPP/MURAL)</h3>
+                <p>Envie uma mensagem que ficará visível no painel de todos os funcionários.</p>
+                <div class="form-row">
+                    <input type="text" id="msgAviso" placeholder="Digite o aviso aqui..." style="flex:1;">
+                    <button onclick="enviarAvisoEquipe()" class="btn-warning">PUBLICAR</button>
+                </div>
+            </div>
+
             <div class="card">
-                <h3>HISTÓRICO RECENTE</h3>
-                <table>
-                    <thead><tr><th>DATA</th><th>CLIENTE</th><th>VEÍCULO/MOT.</th><th>STATUS</th><th>VALOR</th><th>AÇÕES</th></tr></thead>
-                    <tbody id="tabelaOperacoes"></tbody>
+                <h3>FUNCIONÁRIOS ATIVOS</h3>
+                <table class="data-table">
+                    <thead><tr><th>NOME</th><th>FUNÇÃO</th><th>CONTATO</th><th>LOGIN (EMAIL)</th></tr></thead>
+                    <tbody id="listaEquipeView"></tbody>
                 </table>
             </div>
         </section>
 
-        <section id="equipe" class="page">
-            <h2>EQUIPE & COMUNICAÇÃO</h2>
-            <div class="card" style="border-left: 5px solid orange;">
-                <h3><i class="fas fa-bullhorn"></i> ENVIAR AVISO PARA EQUIPE</h3>
-                <form id="formAviso">
-                    <div class="form-row">
-                        <div class="form-col"><label>MENSAGEM:</label><textarea id="avisoTexto" rows="3" placeholder="Digite o aviso para todos..." required></textarea></div>
-                    </div>
-                    <button type="submit" class="btn-warning"><i class="fas fa-paper-plane"></i> ENVIAR AVISO</button>
-                </form>
-            </div>
-            <div class="card">
-                <h3>LISTA DE FUNCIONÁRIOS</h3>
-                <table>
-                    <thead><tr><th>NOME</th><th>FUNÇÃO</th><th>EMAIL</th><th>AÇÕES</th></tr></thead>
-                    <tbody id="tabelaEquipeFull"></tbody>
-                </table>
-            </div>
-        </section>
-
-        <section id="cadastros" class="page">
-            <h2>GESTÃO DE CADASTROS</h2>
-            <div class="card">
-                <div class="tab-header">
-                    <button class="tab-btn active" onclick="openTab('tabFunc')">FUNCIONÁRIOS</button>
-                    <button class="tab-btn" onclick="openTab('tabVeic')">VEÍCULOS</button>
-                    <button class="tab-btn" onclick="openTab('tabCli')">CLIENTES</button>
+        <section id="cadastros" class="page-section">
+            <h2>CENTRAL DE CADASTROS</h2>
+            
+            <div class="tabs-container">
+                <div class="tabs-header">
+                    <button class="tab-btn active" onclick="abrirAba('tabFuncionarios')">FUNCIONÁRIOS</button>
+                    <button class="tab-btn" onclick="abrirAba('tabVeiculos')">VEÍCULOS</button>
+                    <button class="tab-btn" onclick="abrirAba('tabClientes')">CLIENTES</button>
                 </div>
 
-                <div id="tabFunc" class="tab-content active">
-                    <div style="background:#e3f2fd; padding:15px; margin-bottom:15px; border-radius:5px;">
-                        <i class="fas fa-info-circle"></i> <strong>Atenção:</strong> Ao salvar, o sistema criará automaticamente o LOGIN no Firebase.
+                <div id="tabFuncionarios" class="tab-content active">
+                    <div class="info-box">
+                        <i class="fas fa-info-circle"></i> <strong>Sincronização Automática:</strong> Ao cadastrar um funcionário aqui, o sistema cria automaticamente o usuário e senha para ele acessar o app.
                     </div>
-                    <form id="formFunc">
-                        <input type="hidden" id="funcId">
+                    <form id="formCadastroFuncionario">
+                        <input type="hidden" id="cadFuncId">
                         <div class="form-row">
-                            <div class="form-col"><label>NOME COMPLETO:</label><input type="text" id="funcNome" required></div>
-                            <div class="form-col"><label>FUNÇÃO:</label><select id="funcFuncao"><option value="motorista">MOTORISTA</option><option value="ajudante">AJUDANTE</option></select></div>
+                            <div class="form-group col-6">
+                                <label>NOME COMPLETO:</label>
+                                <input type="text" id="cadFuncNome" required>
+                            </div>
+                            <div class="form-group col-6">
+                                <label>FUNÇÃO:</label>
+                                <select id="cadFuncFuncao">
+                                    <option value="motorista">MOTORISTA</option>
+                                    <option value="ajudante">AJUDANTE</option>
+                                    <option value="escritorio">ADMINISTRATIVO</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="form-row">
-                            <div class="form-col"><label>EMAIL (LOGIN):</label><input type="email" id="funcEmail" required></div>
-                            <div class="form-col"><label>SENHA DE ACESSO:</label><input type="text" id="funcSenha" placeholder="Mínimo 6 caracteres (Obrigatório para novo)"></div>
+                            <div class="form-group col-6">
+                                <label>E-MAIL (SERÁ O LOGIN):</label>
+                                <input type="email" id="cadFuncEmail" required placeholder="ex: joao@empresa.com">
+                            </div>
+                            <div class="form-group col-6">
+                                <label>SENHA DE ACESSO:</label>
+                                <input type="text" id="cadFuncSenha" placeholder="Mínimo 6 dígitos (Obrigatório p/ novos)">
+                            </div>
                         </div>
                         <div class="form-row">
-                            <div class="form-col"><label>CPF:</label><input type="text" id="funcDoc"></div>
-                            <div class="form-col"><label>TELEFONE:</label><input type="text" id="funcTel"></div>
+                            <div class="form-group col-4">
+                                <label>CPF:</label>
+                                <input type="text" id="cadFuncCPF">
+                            </div>
+                             <div class="form-group col-4">
+                                <label>TELEFONE:</label>
+                                <input type="text" id="cadFuncTel">
+                            </div>
+                             <div class="form-group col-4">
+                                <label>CNH (SE MOTORISTA):</label>
+                                <input type="text" id="cadFuncCNH">
+                            </div>
                         </div>
-                        <button type="submit" class="btn-primary">SALVAR E CRIAR LOGIN</button>
+                        <button type="submit" class="btn-primary">SALVAR E CRIAR ACESSO</button>
                     </form>
+                    
+                    <hr>
+                    <h4>LISTA DE FUNCIONÁRIOS CADASTRADOS</h4>
+                    <table class="data-table">
+                        <thead><tr><th>NOME</th><th>FUNÇÃO</th><th>EMAIL</th><th>AÇÕES</th></tr></thead>
+                        <tbody id="tabelaCadFuncionarios"></tbody>
+                    </table>
                 </div>
 
-                <div id="tabVeic" class="tab-content">
-                    <form id="formVeic">
+                <div id="tabVeiculos" class="tab-content">
+                    <form id="formCadastroVeiculo">
                         <div class="form-row">
-                            <div class="form-col"><label>PLACA:</label><input type="text" id="veicPlaca" required></div>
-                            <div class="form-col"><label>MODELO:</label><input type="text" id="veicModelo"></div>
+                            <div class="form-group col-4"><label>PLACA:</label><input type="text" id="cadVeicPlaca" required></div>
+                            <div class="form-group col-4"><label>MODELO:</label><input type="text" id="cadVeicModelo" required></div>
+                            <div class="form-group col-4"><label>ANO:</label><input type="number" id="cadVeicAno"></div>
                         </div>
                         <button type="submit" class="btn-primary">SALVAR VEÍCULO</button>
                     </form>
-                    <table><thead><tr><th>PLACA</th><th>MODELO</th><th>AÇÃO</th></tr></thead><tbody id="listaVeiculos"></tbody></table>
+                    <table class="data-table" style="margin-top:20px;">
+                        <thead><tr><th>PLACA</th><th>MODELO</th><th>ANO</th><th>AÇÕES</th></tr></thead>
+                        <tbody id="tabelaCadVeiculos"></tbody>
+                    </table>
                 </div>
 
-                <div id="tabCli" class="tab-content">
-                    <form id="formCli">
+                <div id="tabClientes" class="tab-content">
+                    <form id="formCadastroCliente">
                         <div class="form-row">
-                            <div class="form-col"><label>RAZÃO SOCIAL:</label><input type="text" id="cliNome" required></div>
-                            <div class="form-col"><label>CNPJ/ID:</label><input type="text" id="cliDoc" required></div>
+                            <div class="form-group col-8"><label>RAZÃO SOCIAL:</label><input type="text" id="cadCliNome" required></div>
+                            <div class="form-group col-4"><label>CNPJ:</label><input type="text" id="cadCliCNPJ"></div>
                         </div>
                         <button type="submit" class="btn-primary">SALVAR CLIENTE</button>
                     </form>
-                    <table><thead><tr><th>NOME</th><th>CNPJ</th><th>AÇÃO</th></tr></thead><tbody id="listaClientes"></tbody></table>
+                    <table class="data-table" style="margin-top:20px;">
+                        <thead><tr><th>CLIENTE</th><th>CNPJ</th><th>AÇÕES</th></tr></thead>
+                        <tbody id="tabelaCadClientes"></tbody>
+                    </table>
                 </div>
             </div>
         </section>
 
-        <section id="despesas" class="page">
-            <h2>DESPESAS GERAIS</h2>
+        <section id="despesas" class="page-section">
+            <h2>FINANCEIRO E DESPESAS GERAIS</h2>
             <div class="card">
-                <form id="formDespesa">
+                <form id="formDespesaGeral">
                     <div class="form-row">
-                        <div class="form-col"><label>DATA:</label><input type="date" id="despData" required></div>
-                        <div class="form-col"><label>DESCRIÇÃO:</label><input type="text" id="despDesc" required></div>
-                        <div class="form-col"><label>VALOR (R$):</label><input type="number" step="0.01" id="despValor" required></div>
+                        <div class="form-group col-3"><label>DATA:</label><input type="date" id="despData" required></div>
+                        <div class="form-group col-6"><label>DESCRIÇÃO:</label><input type="text" id="despDesc" required placeholder="Ex: Aluguel, Luz, Manutenção"></div>
+                        <div class="form-group col-3"><label>VALOR (R$):</label><input type="number" step="0.01" id="despValor" required></div>
                     </div>
-                    <button type="submit" class="btn-danger">LANÇAR DESPESA</button>
+                    <button type="submit" class="btn-danger"><i class="fas fa-minus-circle"></i> LANÇAR DESPESA</button>
                 </form>
-                <table><thead><tr><th>DATA</th><th>DESCRIÇÃO</th><th>VALOR</th><th>AÇÃO</th></tr></thead><tbody id="tabelaDespesas"></tbody></table>
+                
+                <h4 style="margin-top:20px;">HISTÓRICO DE DESPESAS</h4>
+                <table class="data-table">
+                    <thead><tr><th>DATA</th><th>DESCRIÇÃO</th><th>VALOR</th><th>AÇÕES</th></tr></thead>
+                    <tbody id="tabelaDespesasGerais"></tbody>
+                </table>
             </div>
         </section>
 
-        <section id="relatorios" class="page">
-            <h2>RELATÓRIOS & RECIBOS</h2>
+        <section id="relatorios" class="page-section">
+            <h2>CENTRAL DE RELATÓRIOS</h2>
             <div class="card">
                 <div class="form-row">
-                    <div class="form-col"><label>INÍCIO:</label><input type="date" id="relInicio"></div>
-                    <div class="form-col"><label>FIM:</label><input type="date" id="relFim"></div>
-                    <div class="form-col"><label>MOTORISTA:</label><select id="relMot"></select></div>
+                    <div class="form-group col-3"><label>DATA INICIAL:</label><input type="date" id="relIni"></div>
+                    <div class="form-group col-3"><label>DATA FINAL:</label><input type="date" id="relFim"></div>
+                    <div class="form-group col-4"><label>FILTRAR POR MOTORISTA:</label><select id="relMotorista"></select></div>
                 </div>
-                <div style="display:flex; gap:10px;">
-                    <button class="btn-primary" onclick="gerarRelatorio()">GERAR RELATÓRIO GERAL</button>
-                    <button class="btn-warning" onclick="gerarRecibo()">GERAR RECIBO DE PAGAMENTO</button>
+                <div class="form-actions">
+                    <button class="btn-primary" onclick="gerarRelatorioGeral()">GERAR RELATÓRIO GERAL</button>
+                    <button class="btn-warning" onclick="gerarReciboPagamento()">GERAR RECIBO DE PAGAMENTO</button>
                 </div>
-                <div id="areaRelatorio" style="margin-top:20px; padding:20px; border:1px solid #ccc; background:#fff; display:none;"></div>
-                <button class="btn-secondary" style="margin-top:10px;" onclick="baixarPDF()">BAIXAR PDF</button>
             </div>
+            
+            <div id="areaImpressao" class="card" style="display:none; border:2px dashed #ccc; padding:40px;">
+                </div>
+            <button id="btnBaixarPdf" class="btn-secondary" style="display:none; margin-top:10px;" onclick="baixarPDF()">BAIXAR PDF</button>
         </section>
 
-        <section id="config" class="page">
-            <h2>CONFIGURAÇÕES E BACKUP</h2>
+        <section id="config" class="page-section">
+            <h2>CONFIGURAÇÕES DO SISTEMA</h2>
             <div class="card">
-                <h3>MANUTENÇÃO DE DADOS</h3>
-                <p>Utilize estas opções para salvar seus dados ou restaurar em outro dispositivo.</p>
-                <div style="display:flex; gap:15px; margin-top:15px;">
-                    <button class="btn-primary" onclick="exportarBackup()"><i class="fas fa-download"></i> BAIXAR BACKUP (JSON)</button>
-                    <label class="btn-secondary" style="cursor:pointer;">
-                        <i class="fas fa-upload"></i> IMPORTAR BACKUP
-                        <input type="file" style="display:none;" onchange="importarBackup(this)">
+                <h3>BACKUP E SEGURANÇA</h3>
+                <p>Faça o download dos seus dados regularmente para garantir segurança.</p>
+                <div class="form-actions">
+                    <button class="btn-primary" onclick="fazerBackup()"><i class="fas fa-download"></i> BAIXAR BACKUP (JSON)</button>
+                    <label class="btn-secondary" style="cursor:pointer; display:inline-flex; align-items:center;">
+                        <i class="fas fa-upload" style="margin-right:5px;"></i> RESTAURAR BACKUP
+                        <input type="file" style="display:none" onchange="restaurarBackup(this)">
                     </label>
                 </div>
             </div>
         </section>
         
-        <section id="func-home" class="page">
+        <section id="func-home" class="page-section">
             <h2>MEU PAINEL</h2>
-            <div class="card"><p>Bem-vindo, <strong id="funcWelcome"></strong>.</p></div>
-        </section>
-        <section id="func-dados" class="page">
-            <h2>MEUS DADOS</h2>
             <div class="card">
-                <p>Para alterar dados sensíveis, contate o administrador.</p>
+                <h3>BEM-VINDO, <span id="funcNomeDisplay"></span></h3>
+                <p>Utilize o menu lateral para consultar seus dados.</p>
+                <div class="alert-box">
+                    <strong>AVISO DA EQUIPE:</strong> <span id="avisoEquipeDisplay">Sem novos avisos.</span>
+                </div>
+            </div>
+        </section>
+        
+        <section id="func-dados" class="page-section">
+            <h2>MEUS DADOS CADASTRAIS</h2>
+            <div class="card">
                 <form id="formMeusDados">
-                    <label>TELEFONE:</label><input type="text" id="meuTel">
-                    <label>ENDEREÇO:</label><input type="text" id="meuEnd">
-                    <button type="submit" class="btn-primary" style="margin-top:10px;">ATUALIZAR CONTATO</button>
+                    <div class="form-row">
+                        <div class="form-group col-6"><label>NOME:</label><input type="text" id="meuNome" readonly style="background:#eee"></div>
+                        <div class="form-group col-6"><label>FUNÇÃO:</label><input type="text" id="minhaFuncao" readonly style="background:#eee"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-6"><label>TELEFONE ATUAL:</label><input type="text" id="meuTel"></div>
+                        <div class="form-group col-6"><label>ENDEREÇO:</label><input type="text" id="meuEnd"></div>
+                    </div>
+                    <button type="button" class="btn-primary" onclick="atualizarMeusDados()">SOLICITAR ALTERAÇÃO</button>
                 </form>
             </div>
         </section>
 
-    </div>
+    </main>
 
-    <div id="modalDetalhes" class="modal">
-        <div class="modal-content">
+    <div id="modalDetalhes" class="modal-overlay">
+        <div class="modal-box">
             <span class="close-modal" onclick="fecharModal()">&times;</span>
-            <h3 id="modalTitulo">DETALHES</h3>
-            <div id="modalCorpo"></div>
+            <h3>DETALHES DA OPERAÇÃO</h3>
+            <div id="conteudoModal" class="modal-body"></div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="fecharModal()">FECHAR</button>
+            </div>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, doc, getDoc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
-        // CONFIGURAÇÃO DO SEU PROJETO
+        // Configuração Principal
         const firebaseConfig = {
             apiKey: "AIzaSyBZjVdcyjbEoR_-X6_lZuTRDMeN2wIntZI",
             authDomain: "logi-master-dd4cd.firebaseapp.com",
@@ -263,40 +443,44 @@
 
         const app = initializeApp(firebaseConfig);
         
-        // APP SECUNDÁRIA (PARA CRIAR USUÁRIOS SEM DESLOGAR O ADMIN)
+        // APP SECUNDÁRIA: Para admin criar usuários sem deslogar
         const secondaryApp = initializeApp(firebaseConfig, "Secondary");
 
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-
-        // Exportar para o script.js
-        window.dbRef = { 
-            db, auth, doc, getDoc, setDoc, updateDoc, signOut, 
-            secondaryAuth: getAuth(secondaryApp), 
-            createUser: createUserWithEmailAndPassword 
+        // Objetos Exportados para window
+        window.dbRef = {
+            db: getFirestore(app),
+            auth: getAuth(app),
+            secondaryAuth: getAuth(secondaryApp), // Auth Auxiliar
+            doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs,
+            signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword
         };
 
-        // Auth Monitor
-        onAuthStateChanged(auth, async (user) => {
+        // Monitor de Login
+        onAuthStateChanged(window.dbRef.auth, async (user) => {
             if (user) {
-                const snap = await getDoc(doc(db, "users", user.uid));
-                if (snap.exists()) {
-                    window.currentUser = snap.data();
-                    document.body.style.display = 'flex';
-                    document.getElementById('userEmailDisplay').textContent = window.currentUser.email;
-                    document.getElementById('userRoleDisplay').textContent = window.currentUser.role;
+                // Busca dados do usuário
+                const userDoc = await getDoc(doc(window.dbRef.db, "users", user.uid));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    window.CURRENT_USER = userData;
+                    document.body.style.display = 'flex'; // Exibe o corpo
                     
-                    // Inicia o sistema
-                    setTimeout(() => window.initSystem(window.currentUser), 100);
+                    // Preenche Sidebar
+                    document.getElementById('userEmailDisplay').textContent = userData.email;
+                    document.getElementById('userRoleDisplay').textContent = userData.role.toUpperCase();
+
+                    // Inicia Sistema
+                    if(window.iniciarSistema) window.iniciarSistema(userData);
                 } else {
-                    alert("Usuário sem perfil!");
-                    signOut(auth);
+                    alert("Erro crítico: Usuário sem perfil no banco.");
+                    signOut(window.dbRef.auth);
                 }
             } else {
                 window.location.href = "login.html";
             }
         });
     </script>
+
     <script src="script.js"></script>
 </body>
 </html>

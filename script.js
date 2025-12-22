@@ -1,479 +1,586 @@
 // =============================================================================
-// LOGIMASTER - CORE LOGIC (CORRIGIDO)
+// LOGIMASTER SYSTEM - NÚCLEO LÓGICO EXTENSO (CORRIGIDO)
 // =============================================================================
 
-// CONFIGURAÇÃO GLOBAL
-const DB_KEY = 'logimaster_data'; 
-// Em produção com Firebase, os dados viriam do onSnapshot. 
-// Para simplificar a lógica local + sync, usamos uma variável global de Cache.
-
+// --- 1. VARIÁVEIS GLOBAIS E CACHE ---
 var CACHE = {
     funcionarios: [],
     veiculos: [],
     clientes: [],
     operacoes: [],
-    despesas: []
+    despesas: [],
+    mensagens: ""
 };
 
-// DATA ATUAL PARA CALENDÁRIO
-var dataCalendario = new Date();
+var ESTADO = {
+    dataCalendario: new Date(),
+    graficoInstance: null,
+    usuario: null
+};
 
-// --- 1. INICIALIZAÇÃO E FIREBASE SYNC ---
+// --- 2. INICIALIZAÇÃO E SINCRONIZAÇÃO ---
 
-window.initSystem = function(user) {
-    console.log("Sistema iniciado para: ", user.role);
-    
-    // Controle de Menu por Permissão
-    if (user.role === 'admin' || user.email === 'admin@logimaster.com') {
-        document.getElementById('menuAdmin').style.display = 'block';
-        navTo('home');
+window.iniciarSistema = function(userData) {
+    ESTADO.usuario = userData;
+    console.log("Sistema Iniciado. Perfil:", userData.role);
+
+    // Controle de Acesso ao Menu
+    if (userData.role === 'admin' || userData.role === 'escritorio') {
+        document.getElementById('menu-admin').style.display = 'block';
+        navegarPara('home');
     } else {
-        document.getElementById('menuFunc').style.display = 'block';
-        document.getElementById('funcWelcome').innerText = user.name;
-        navTo('func-home');
+        document.getElementById('menu-employee').style.display = 'block';
+        document.getElementById('funcNomeDisplay').innerText = userData.name;
+        navegarPara('func-home');
     }
 
-    // Carregar dados do Firebase (Firestore)
-    carregarDadosFirebase(user.company);
+    // Carregar Dados do Banco
+    sincronizarDadosFirebase(userData.company);
 };
 
-async function carregarDadosFirebase(companyId) {
-    if(!window.dbRef || !companyId) return;
+window.sincronizarDadosFirebase = async function(companyId) {
+    if(!window.dbRef) return;
     const { db, doc, getDoc } = window.dbRef;
 
     try {
-        const docSnap = await getDoc(doc(db, 'companies', companyId, 'data', 'geral'));
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            CACHE = data; // Carrega tudo para memória
-            console.log("Dados carregados:", CACHE);
+        const docRef = doc(db, 'companies', companyId, 'data', 'sistema_completo');
+        const snap = await getDoc(docRef);
+
+        if (snap.exists()) {
+            const dados = snap.data();
+            // Carrega para memória ou inicia arrays vazios
+            CACHE.funcionarios = dados.funcionarios || [];
+            CACHE.veiculos = dados.veiculos || [];
+            CACHE.clientes = dados.clientes || [];
+            CACHE.operacoes = dados.operacoes || [];
+            CACHE.despesas = dados.despesas || [];
+            CACHE.mensagens = dados.mensagens || "Bem-vindo ao sistema.";
+            
+            console.log("Dados sincronizados com sucesso. Itens:", CACHE.operacoes.length);
         } else {
-            console.log("Nenhum dado encontrado, iniciando vazio.");
+            console.log("Primeiro acesso da empresa. Iniciando banco vazio.");
         }
-        atualizarInterface();
-    } catch (e) {
-        console.error("Erro ao carregar:", e);
+        
+        atualizarTodaInterface();
+
+    } catch (error) {
+        console.error("Erro no sync:", error);
+        alert("Erro ao carregar dados. Verifique sua conexão.");
     }
-}
-
-async function salvarNoFirebase() {
-    if(!window.currentUser) return;
-    const { db, doc, setDoc } = window.dbRef;
-    try {
-        await setDoc(doc(db, 'companies', window.currentUser.company, 'data', 'geral'), JSON.parse(JSON.stringify(CACHE)));
-        console.log("Salvo no Firebase.");
-    } catch (e) {
-        console.error("Erro ao salvar:", e);
-        alert("Erro de sincronização. Verifique internet.");
-    }
-}
-
-// --- 2. NAVEGAÇÃO E ABAS ---
-
-window.navTo = function(pageId) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-    
-    document.getElementById(pageId).classList.add('active');
-    
-    // Atualiza dados específicos ao abrir a página
-    if(pageId === 'home') renderizarDashboard();
-    if(pageId === 'operacoes') atualizarInterface(); 
 };
 
-window.openTab = function(tabId) {
+window.salvarNoFirebase = async function() {
+    if(!window.dbRef || !ESTADO.usuario) return;
+    const { db, doc, setDoc } = window.dbRef;
+
+    try {
+        // Salva o objeto CACHE inteiro dentro do documento da empresa
+        await setDoc(doc(db, 'companies', ESTADO.usuario.company, 'data', 'sistema_completo'), JSON.parse(JSON.stringify(CACHE)));
+        console.log("Backup automático realizado no Firebase.");
+    } catch (error) {
+        console.error("Falha ao salvar:", error);
+        alert("Atenção: Falha ao salvar dados na nuvem.");
+    }
+};
+
+// --- 3. NAVEGAÇÃO E UI ---
+
+window.navegarPara = function(pageId) {
+    // Esconde todas as seções
+    document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+
+    // Mostra a desejada
+    const target = document.getElementById(pageId);
+    if(target) target.classList.add('active');
+
+    // Atualiza menu
+    // (Lógica simplificada para destacar ícone)
+    
+    if(pageId === 'home') renderizarDashboard();
+    if(pageId === 'operacoes') preencherSelectsOperacao();
+    if(pageId === 'func-home') document.getElementById('avisoEquipeDisplay').innerText = CACHE.mensagens;
+};
+
+window.abrirAba = function(tabId) {
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     
     document.getElementById(tabId).classList.add('active');
-    // Adiciona classe active no botão correspondente (lógica simples baseada em ordem ou query selector seria melhor, mas aqui funciona pelo clique)
-    event.target.classList.add('active');
+    event.currentTarget.classList.add('active');
 };
 
-window.logout = function() {
-    window.dbRef.signOut(window.dbRef.auth);
+window.logoutSistema = async function() {
+    await window.dbRef.signOut(window.dbRef.auth);
+    window.location.href = "login.html";
 };
 
-// --- 3. CRUD: FUNCIONÁRIOS (COM CRIAÇÃO DE LOGIN) ---
+window.atualizarTodaInterface = function() {
+    renderizarTabelasCadastro();
+    renderizarTabelaOperacoes();
+    renderizarTabelaDespesas();
+    renderizarDashboard();
+    renderizarEquipeView();
+    preencherSelectsOperacao();
+};
 
-document.getElementById('formFunc').addEventListener('submit', async (e) => {
+// --- 4. FUNÇÕES DE CRUD (CADASTROS DETALHADOS) ---
+
+// A. CADASTRO DE FUNCIONÁRIOS COM CRIAÇÃO DE LOGIN
+document.getElementById('formCadastroFuncionario').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const id = document.getElementById('funcId').value;
-    const email = document.getElementById('funcEmail').value.trim();
-    const senha = document.getElementById('funcSenha').value.trim();
-    const docCPF = document.getElementById('funcDoc').value.trim();
+    const id = document.getElementById('cadFuncId').value;
+    const email = document.getElementById('cadFuncEmail').value.trim().toLowerCase();
+    const senha = document.getElementById('cadFuncSenha').value;
+    const nome = document.getElementById('cadFuncNome').value.toUpperCase();
+    
+    // 1. Verificação de Duplicidade
+    const existe = CACHE.funcionarios.find(f => f.email === email && f.id !== id);
+    if (existe) return alert("ERRO: Este e-mail já está cadastrado para outro funcionário.");
 
-    // Validação de Duplicidade
-    const duplicado = CACHE.funcionarios.find(f => (f.email === email || f.documento === docCPF) && f.id !== id);
-    if (duplicado) {
-        return alert("ERRO: Já existe um funcionário com este E-mail ou CPF!");
-    }
-
-    // Criação no Firebase Auth (Apenas se for novo e tiver senha)
+    // 2. Criação de Login no Firebase (Somente se for novo e tiver senha)
     if (!id && senha) {
-        if (senha.length < 6) return alert("A senha deve ter no mínimo 6 dígitos.");
+        if(senha.length < 6) return alert("A senha deve ter no mínimo 6 caracteres.");
         try {
-            // Usa Auth Secundária para não deslogar o admin
-            const userCred = await window.dbRef.createUser(window.dbRef.secondaryAuth, email, senha);
+            // Usa App Secundária para não deslogar o admin
+            const userCred = await window.dbRef.createUserWithEmailAndPassword(window.dbRef.secondaryAuth, email, senha);
             const uid = userCred.user.uid;
             
-            // Cria perfil público 'users'
+            // Cria perfil público 'users' vinculado à empresa
             await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "users", uid), {
                 uid: uid,
-                name: document.getElementById('funcNome').value.toUpperCase(),
+                name: nome,
                 email: email,
-                role: 'funcionario', // padrão
-                company: window.currentUser.company
+                role: document.getElementById('cadFuncFuncao').value,
+                company: ESTADO.usuario.company
             });
-            alert("Login criado com sucesso para o funcionário!");
+            alert("Login de acesso criado com sucesso!");
+            
+            // Logout da app secundária para limpar memória
+            await window.dbRef.signOut(window.dbRef.secondaryAuth);
+            
         } catch (err) {
             console.error(err);
-            return alert("Erro ao criar login: " + err.code);
+            return alert("Erro ao criar login no servidor: " + err.code);
         }
     }
 
+    // 3. Salvar no Banco de Dados da Empresa
     const novoFunc = {
         id: id || Date.now().toString(),
-        nome: document.getElementById('funcNome').value.toUpperCase(),
-        funcao: document.getElementById('funcFuncao').value,
+        nome: nome,
+        funcao: document.getElementById('cadFuncFuncao').value,
         email: email,
-        documento: docCPF,
-        telefone: document.getElementById('funcTel').value
+        cpf: document.getElementById('cadFuncCPF').value,
+        telefone: document.getElementById('cadFuncTel').value,
+        cnh: document.getElementById('cadFuncCNH').value
     };
 
     if (id) {
-        const idx = CACHE.funcionarios.findIndex(f => f.id === id);
-        CACHE.funcionarios[idx] = novoFunc;
+        const index = CACHE.funcionarios.findIndex(f => f.id === id);
+        if(index > -1) CACHE.funcionarios[index] = novoFunc;
     } else {
         CACHE.funcionarios.push(novoFunc);
     }
 
-    salvarNoFirebase();
-    alert("Funcionário salvo!");
+    await salvarNoFirebase();
+    alert("Funcionário salvo com sucesso!");
     e.target.reset();
-    document.getElementById('funcId').value = '';
-    atualizarInterface();
+    document.getElementById('cadFuncId').value = '';
+    renderizarTabelasCadastro();
 });
 
-// --- 4. CRUD: OPERAÇÕES ---
-
-document.getElementById('formOperacao').addEventListener('submit', (e) => {
+// B. VEÍCULOS E CLIENTES
+document.getElementById('formCadastroVeiculo').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const id = document.getElementById('opId').value;
+    const veiculo = {
+        placa: document.getElementById('cadVeicPlaca').value.toUpperCase(),
+        modelo: document.getElementById('cadVeicModelo').value.toUpperCase(),
+        ano: document.getElementById('cadVeicAno').value
+    };
+    // Verifica duplicidade de placa
+    if(CACHE.veiculos.find(v => v.placa === veiculo.placa)) return alert("Placa já cadastrada!");
+    
+    CACHE.veiculos.push(veiculo);
+    await salvarNoFirebase();
+    e.target.reset();
+    renderizarTabelasCadastro();
+    alert("Veículo Salvo!");
+});
+
+document.getElementById('formCadastroCliente').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const cliente = {
+        razaoSocial: document.getElementById('cadCliNome').value.toUpperCase(),
+        cnpj: document.getElementById('cadCliCNPJ').value
+    };
+    CACHE.clientes.push(cliente);
+    await salvarNoFirebase();
+    e.target.reset();
+    renderizarTabelasCadastro();
+    alert("Cliente Salvo!");
+});
+
+// --- 5. OPERAÇÕES E FINANCEIRO ---
+
+document.getElementById('formOperacao').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('operacaoId').value;
     
     const op = {
         id: id || Date.now().toString(),
         data: document.getElementById('opData').value,
+        status: document.getElementById('opStatus').value,
+        cliente: document.getElementById('opCliente').value,
         motoristaId: document.getElementById('opMotorista').value,
         veiculo: document.getElementById('opVeiculo').value,
-        cliente: document.getElementById('opCliente').value,
-        faturamento: parseFloat(document.getElementById('opFat').value) || 0,
-        combustivel: parseFloat(document.getElementById('opComb').value) || 0,
-        despesas: parseFloat(document.getElementById('opDesp').value) || 0,
-        status: document.getElementById('opStatus').value,
-        ajudantes: document.getElementById('opAjudantesInput').value
+        faturamento: parseFloat(document.getElementById('opValor').value) || 0,
+        combustivel: parseFloat(document.getElementById('opCombustivel').value) || 0,
+        despesas: parseFloat(document.getElementById('opDespesas').value) || 0,
+        comissao: parseFloat(document.getElementById('opComissao').value) || 0,
+        obs: document.getElementById('opObs').value
     };
 
     if(id) {
         const idx = CACHE.operacoes.findIndex(o => o.id === id);
-        CACHE.operacoes[idx] = op;
+        if(idx > -1) CACHE.operacoes[idx] = op;
     } else {
         CACHE.operacoes.push(op);
     }
 
-    salvarNoFirebase();
-    alert("Operação salva!");
-    limparFormOp();
-    atualizarInterface();
+    await salvarNoFirebase();
+    limparFormOperacao();
+    atualizarTodaInterface();
+    alert("Operação Registrada!");
 });
 
-window.limparFormOp = function() {
-    document.getElementById('formOperacao').reset();
-    document.getElementById('opId').value = '';
-};
-
-window.editarOp = function(id) {
-    const op = CACHE.operacoes.find(o => o.id === id);
-    if(!op) return;
-    document.getElementById('opId').value = op.id;
-    document.getElementById('opData').value = op.data;
-    document.getElementById('opMotorista').value = op.motoristaId;
-    document.getElementById('opVeiculo').value = op.veiculo;
-    document.getElementById('opCliente').value = op.cliente;
-    document.getElementById('opFat').value = op.faturamento;
-    document.getElementById('opComb').value = op.combustivel;
-    document.getElementById('opDesp').value = op.despesas;
-    document.getElementById('opStatus').value = op.status;
-    document.getElementById('opAjudantesInput').value = op.ajudantes || '';
-    window.scrollTo(0,0);
-};
-
-window.excluirOp = function(id) {
-    if(confirm("Deseja excluir esta operação?")) {
-        CACHE.operacoes = CACHE.operacoes.filter(o => o.id !== id);
-        salvarNoFirebase();
-        atualizarInterface();
-    }
-};
-
-window.verDetalhes = function(id) {
-    const op = CACHE.operacoes.find(o => o.id === id);
-    if(!op) return;
-    const mot = CACHE.funcionarios.find(f => f.id == op.motoristaId)?.nome || '?';
-    
-    const html = `
-        <p><strong>Data:</strong> ${formatarData(op.data)}</p>
-        <p><strong>Cliente:</strong> ${op.cliente}</p>
-        <p><strong>Veículo:</strong> ${op.veiculo}</p>
-        <p><strong>Motorista:</strong> ${mot}</p>
-        <p><strong>Ajudantes:</strong> ${op.ajudantes || '-'}</p>
-        <hr>
-        <p><strong>Faturamento:</strong> ${formatarMoeda(op.faturamento)}</p>
-        <p><strong>Custos:</strong> ${formatarMoeda(op.combustivel + op.despesas)}</p>
-        <p><strong>Lucro:</strong> <span style="color:green; font-weight:bold">${formatarMoeda(op.faturamento - (op.combustivel + op.despesas))}</span></p>
-        <p><strong>Status:</strong> ${op.status}</p>
-    `;
-    document.getElementById('modalCorpo').innerHTML = html;
-    document.getElementById('modalDetalhes').style.display = 'flex';
-};
-
-window.fecharModal = function() { document.getElementById('modalDetalhes').style.display = 'none'; };
-
-// --- 5. RENDERIZAÇÃO E UI ---
-
-function atualizarInterface() {
-    preencherSelects();
-    renderizarTabelaOperacoes();
-    renderizarEquipe();
-    renderizarCadastrosAuxiliares();
-    renderizarDashboard();
-}
-
-function preencherSelects() {
-    const preencher = (id, lista, val, txt) => {
-        const el = document.getElementById(id);
-        el.innerHTML = '<option value="">Selecione...</option>';
-        lista.forEach(i => el.innerHTML += `<option value="${i[val]}">${i[txt]}</option>`);
+document.getElementById('formDespesaGeral').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const desp = {
+        id: Date.now().toString(),
+        data: document.getElementById('despData').value,
+        descricao: document.getElementById('despDesc').value.toUpperCase(),
+        valor: parseFloat(document.getElementById('despValor').value)
     };
-    preencher('opMotorista', CACHE.funcionarios.filter(f=>f.funcao==='motorista'), 'id', 'nome');
-    preencher('relMot', CACHE.funcionarios, 'id', 'nome');
-    
-    // Veículos e Clientes (Simples string ou objetos)
-    const elVeic = document.getElementById('opVeiculo');
-    elVeic.innerHTML = '<option value="">Selecione...</option>';
-    CACHE.veiculos.forEach(v => elVeic.innerHTML += `<option value="${v.placa}">${v.placa} - ${v.modelo}</option>`);
+    CACHE.despesas.push(desp);
+    await salvarNoFirebase();
+    e.target.reset();
+    atualizarTodaInterface();
+});
 
-    const elCli = document.getElementById('opCliente');
-    elCli.innerHTML = '<option value="">Selecione...</option>';
-    CACHE.clientes.forEach(c => elCli.innerHTML += `<option value="${c.razaoSocial}">${c.razaoSocial}</option>`);
+// --- 6. RENDERIZAÇÃO DE TABELAS (HTML GENERATORS) ---
+
+function renderizarTabelasCadastro() {
+    // Funcionários
+    const tbFunc = document.getElementById('tabelaCadFuncionarios');
+    tbFunc.innerHTML = '';
+    CACHE.funcionarios.forEach(f => {
+        tbFunc.innerHTML += `
+            <tr>
+                <td>${f.nome}</td>
+                <td><span class="badge">${f.funcao}</span></td>
+                <td>${f.email}</td>
+                <td>
+                    <button class="btn-mini edit" onclick="editarFunc('${f.id}')"><i class="fas fa-edit"></i></button>
+                    <button class="btn-mini delete" onclick="excluirFunc('${f.id}')"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>`;
+    });
+
+    // Veículos
+    const tbVeic = document.getElementById('tabelaCadVeiculos');
+    tbVeic.innerHTML = '';
+    CACHE.veiculos.forEach((v, i) => {
+        tbVeic.innerHTML += `<tr><td>${v.placa}</td><td>${v.modelo}</td><td>${v.ano}</td><td><button class="btn-mini delete" onclick="excluirVeic(${i})"><i class="fas fa-trash"></i></button></td></tr>`;
+    });
+
+    // Clientes
+    const tbCli = document.getElementById('tabelaCadClientes');
+    tbCli.innerHTML = '';
+    CACHE.clientes.forEach((c, i) => {
+        tbCli.innerHTML += `<tr><td>${c.razaoSocial}</td><td>${c.cnpj}</td><td><button class="btn-mini delete" onclick="excluirCli(${i})"><i class="fas fa-trash"></i></button></td></tr>`;
+    });
 }
 
 function renderizarTabelaOperacoes() {
-    const tbody = document.getElementById('tabelaOperacoes');
+    const tbody = document.getElementById('listaOperacoesBody');
     tbody.innerHTML = '';
-    // Ordena por data
-    const lista = [...CACHE.operacoes].sort((a,b) => new Date(b.data) - new Date(a.data));
     
+    // Ordenar por data (mais recente primeiro)
+    const lista = [...CACHE.operacoes].sort((a,b) => new Date(b.data) - new Date(a.data));
+
     lista.forEach(op => {
-        const mot = CACHE.funcionarios.find(f => f.id == op.motoristaId)?.nome || '?';
+        const mot = CACHE.funcionarios.find(f => f.id == op.motoristaId)?.nome || '---';
+        let statusClass = op.status === 'CONFIRMADA' ? 'success' : (op.status === 'CANCELADA' ? 'danger' : 'warning');
+        
         tbody.innerHTML += `
             <tr>
                 <td>${formatarData(op.data)}</td>
                 <td>${op.cliente}</td>
                 <td>${op.veiculo}<br><small>${mot}</small></td>
-                <td><span class="pill ${op.status==='CONFIRMADA'?'ok':'pending'}">${op.status}</span></td>
-                <td>${formatarMoeda(op.faturamento)}</td>
+                <td><span class="badge badge-${statusClass}">${op.status}</span></td>
+                <td style="font-weight:bold; color:var(--success-color)">${formatarMoeda(op.faturamento)}</td>
                 <td>
-                    <button class="btn-mini btn-primary" onclick="verDetalhes('${op.id}')"><i class="fas fa-eye"></i></button>
-                    <button class="btn-mini btn-warning" onclick="editarOp('${op.id}')"><i class="fas fa-edit"></i></button>
-                    <button class="btn-mini btn-danger" onclick="excluirOp('${op.id}')"><i class="fas fa-trash"></i></button>
+                    <button class="btn-mini info" onclick="verDetalhesOp('${op.id}')"><i class="fas fa-eye"></i></button>
+                    <button class="btn-mini edit" onclick="editarOp('${op.id}')"><i class="fas fa-edit"></i></button>
+                    <button class="btn-mini delete" onclick="excluirOp('${op.id}')"><i class="fas fa-trash"></i></button>
                 </td>
-            </tr>
-        `;
+            </tr>`;
     });
 }
 
-function renderizarEquipe() {
-    const tbody = document.getElementById('tabelaEquipeFull');
+function renderizarTabelaDespesas() {
+    const tbody = document.getElementById('tabelaDespesasGerais');
     tbody.innerHTML = '';
-    CACHE.funcionarios.forEach(f => {
+    CACHE.despesas.forEach(d => {
         tbody.innerHTML += `
             <tr>
-                <td>${f.nome}</td>
-                <td><span class="pill ok">${f.funcao}</span></td>
-                <td>${f.email}</td>
-                <td>
-                    <button class="btn-mini btn-warning" onclick="alert('Edite na aba Cadastros')"><i class="fas fa-edit"></i></button>
-                    <button class="btn-mini btn-danger" onclick="excluirFunc('${f.id}')"><i class="fas fa-trash"></i></button>
-                </td>
-            </tr>
-        `;
+                <td>${formatarData(d.data)}</td>
+                <td>${d.descricao}</td>
+                <td style="color:red">${formatarMoeda(d.valor)}</td>
+                <td><button class="btn-mini delete" onclick="excluirDespesa('${d.id}')">X</button></td>
+            </tr>`;
     });
 }
 
-function renderizarCadastrosAuxiliares() {
-    // Veículos
-    const tbV = document.getElementById('listaVeiculos');
-    tbV.innerHTML = '';
-    CACHE.veiculos.forEach((v, i) => {
-        tbV.innerHTML += `<tr><td>${v.placa}</td><td>${v.modelo}</td><td><button class="btn-mini btn-danger" onclick="CACHE.veiculos.splice(${i},1); salvarNoFirebase(); atualizarInterface();">X</button></td></tr>`;
-    });
+// --- 7. DASHBOARD E CALENDÁRIO ---
 
-    // Clientes
-    const tbC = document.getElementById('listaClientes');
-    tbC.innerHTML = '';
-    CACHE.clientes.forEach((c, i) => {
-        tbC.innerHTML += `<tr><td>${c.razaoSocial}</td><td>${c.cnpj}</td><td><button class="btn-mini btn-danger" onclick="CACHE.clientes.splice(${i},1); salvarNoFirebase(); atualizarInterface();">X</button></td></tr>`;
-    });
-}
+window.renderizarDashboard = function() {
+    // 1. KPIs
+    const totalFat = CACHE.operacoes.reduce((acc, o) => o.status === 'CONFIRMADA' ? acc + (o.faturamento||0) : acc, 0);
+    const custosOp = CACHE.operacoes.reduce((acc, o) => o.status === 'CONFIRMADA' ? acc + (o.combustivel||0) + (o.despesas||0) + (o.comissao||0) : acc, 0);
+    const despGerais = CACHE.despesas.reduce((acc, d) => acc + (d.valor||0), 0);
+    const totalCustos = custosOp + despGerais;
 
-// --- 6. RELATÓRIOS E RECIBOS (CORRIGIDO) ---
+    document.getElementById('kpiFaturamento').innerText = formatarMoeda(totalFat);
+    document.getElementById('kpiCustos').innerText = formatarMoeda(totalCustos);
+    document.getElementById('kpiLucro').innerText = formatarMoeda(totalFat - totalCustos);
 
-window.gerarRecibo = function() {
-    const motId = document.getElementById('relMot').value;
-    const ini = document.getElementById('relInicio').value;
-    const fim = document.getElementById('relFim').value;
-
-    if(!motId || !ini || !fim) return alert("Preencha Motorista e Datas.");
-
-    const mot = CACHE.funcionarios.find(f => f.id == motId);
-    const ops = CACHE.operacoes.filter(o => o.motoristaId == motId && o.data >= ini && o.data <= fim && o.status === 'CONFIRMADA');
-
-    let html = `<h3>RECIBO DE PAGAMENTO</h3><p>Beneficiário: ${mot.nome}</p><hr><ul>`;
-    let total = 0; // Aqui você somaria comissões reais se tivesse o campo, vou simular 10%
-    ops.forEach(o => {
-        const comissao = o.faturamento * 0.10; 
-        total += comissao;
-        html += `<li>${formatarData(o.data)} - ${o.cliente}: ${formatarMoeda(comissao)}</li>`;
-    });
-    html += `</ul><hr><h4>TOTAL A PAGAR: ${formatarMoeda(total)}</h4>`;
-    
-    const area = document.getElementById('areaRelatorio');
-    area.innerHTML = html;
-    area.style.display = 'block';
-};
-
-window.baixarPDF = function() {
-    const el = document.getElementById('areaRelatorio');
-    if(el.style.display === 'none') return alert("Gere um relatório primeiro.");
-    html2pdf().from(el).save('documento.pdf');
-};
-
-// --- 7. BACKUP E IMPORTAÇÃO ---
-
-window.exportarBackup = function() {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(CACHE));
-    const el = document.createElement('a');
-    el.setAttribute("href", dataStr);
-    el.setAttribute("download", "backup_logimaster.json");
-    document.body.appendChild(el);
-    el.click();
-    el.remove();
-};
-
-window.importarBackup = function(input) {
-    const file = input.files[0];
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = async function(e) {
-        try {
-            const json = JSON.parse(e.target.result);
-            CACHE = json;
-            await salvarNoFirebase();
-            atualizarInterface();
-            alert("Backup restaurado com sucesso!");
-        } catch(err) {
-            alert("Erro ao ler arquivo JSON.");
-        }
-    };
-    reader.readAsText(file);
-};
-
-// --- 8. DASHBOARD E CALENDÁRIO ---
-
-function renderizarDashboard() {
-    // Totais
-    const fat = CACHE.operacoes.reduce((acc, o) => acc + (o.faturamento||0), 0);
-    const cust = CACHE.operacoes.reduce((acc, o) => acc + (o.combustivel||0) + (o.despesas||0), 0);
-    
-    document.getElementById('dashFat').innerText = formatarMoeda(fat).replace('R$','');
-    document.getElementById('dashCust').innerText = formatarMoeda(cust).replace('R$','');
-    document.getElementById('dashLucro').innerText = formatarMoeda(fat - cust).replace('R$','');
-
-    // Calendário
+    // 2. Calendário
     renderizarCalendario();
-}
+    
+    // 3. Gráfico Chart.js
+    atualizarGrafico(totalFat, totalCustos);
+};
 
-function renderizarCalendario() {
+window.renderizarCalendario = function() {
     const grid = document.getElementById('calendarGrid');
-    const display = document.getElementById('mesAnoDisplay');
+    const title = document.getElementById('calendarTitle');
+    if(!grid) return;
     grid.innerHTML = '';
-    
-    const mes = dataCalendario.getMonth();
-    const ano = dataCalendario.getFullYear();
-    
-    display.innerText = `${ano}/${mes+1}`;
 
-    const primeiroDia = new Date(ano, mes, 1).getDay();
-    const totalDias = new Date(ano, mes+1, 0).getDate();
+    const ano = ESTADO.dataCalendario.getFullYear();
+    const mes = ESTADO.dataCalendario.getMonth();
+    
+    title.innerText = `${ano} / ${mes + 1}`;
 
-    for(let i=0; i<primeiroDia; i++) {
+    const primeiroDiaSemana = new Date(ano, mes, 1).getDay();
+    const ultimoDiaMes = new Date(ano, mes + 1, 0).getDate();
+
+    // Espaços vazios
+    for(let i=0; i<primeiroDiaSemana; i++) {
         grid.innerHTML += `<div class="day-cell empty"></div>`;
     }
 
-    for(let d=1; d<=totalDias; d++) {
-        const dataStr = `${ano}-${String(mes+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-        const opsDia = CACHE.operacoes.filter(o => o.data === dataStr);
+    // Dias
+    for(let dia=1; dia<=ultimoDiaMes; dia++) {
+        const dataIso = `${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+        const opsDia = CACHE.operacoes.filter(o => o.data === dataIso && o.status !== 'CANCELADA');
         
-        let html = `<span style="color:#999">${d}</span>`;
+        let htmlContent = `<span class="day-number">${dia}</span>`;
         if(opsDia.length > 0) {
             const totalDia = opsDia.reduce((acc, o) => acc + (o.faturamento||0), 0);
-            html += `<div class="day-value">${formatarMoeda(totalDia)}</div>`;
+            htmlContent += `<div class="day-event">${opsDia.length} ops<br><small>${formatarMoeda(totalDia)}</small></div>`;
         }
-        
+
         const div = document.createElement('div');
-        div.className = `day-cell ${opsDia.length>0 ? 'has-event' : ''}`;
-        div.innerHTML = html;
+        div.className = `day-cell ${opsDia.length > 0 ? 'has-data' : ''}`;
+        div.innerHTML = htmlContent;
         if(opsDia.length > 0) {
             div.onclick = () => {
-                // Mostra detalhes do dia no modal
-                let lista = '';
-                opsDia.forEach(o => lista += `<p>Op #${o.id.substr(-4)} - ${o.cliente} - ${formatarMoeda(o.faturamento)}</p>`);
-                document.getElementById('modalCorpo').innerHTML = lista;
-                document.getElementById('modalDetalhes').style.display = 'flex';
+                let msg = `Operações do dia ${dia}:\n`;
+                opsDia.forEach(o => msg += `- ${o.cliente} (${o.veiculo}): ${formatarMoeda(o.faturamento)}\n`);
+                alert(msg);
             };
         }
         grid.appendChild(div);
     }
-}
+};
 
-window.mudarMes = function(dir) {
-    dataCalendario.setMonth(dataCalendario.getMonth() + dir);
+window.mudarMesCalendario = function(delta) {
+    ESTADO.dataCalendario.setMonth(ESTADO.dataCalendario.getMonth() + delta);
     renderizarCalendario();
 };
 
-// --- 9. HELPERS ---
-function formatarMoeda(v) { return (v||0).toLocaleString('pt-BR', {style:'currency', currency:'BRL'}); }
-function formatarData(d) { if(!d) return '-'; const p=d.split('-'); return `${p[2]}/${p[1]}/${p[0]}`; }
+function atualizarGrafico(receitas, despesas) {
+    const ctx = document.getElementById('graficoFinanceiro');
+    if(!ctx) return;
+    
+    if(ESTADO.graficoInstance) ESTADO.graficoInstance.destroy();
 
-// Listeners de Forms Auxiliares
-document.getElementById('formVeic').addEventListener('submit', (e) => {
-    e.preventDefault();
-    CACHE.veiculos.push({ placa: document.getElementById('veicPlaca').value, modelo: document.getElementById('veicModelo').value });
-    salvarNoFirebase(); atualizarInterface(); e.target.reset();
-});
-document.getElementById('formCli').addEventListener('submit', (e) => {
-    e.preventDefault();
-    CACHE.clientes.push({ razaoSocial: document.getElementById('cliNome').value, cnpj: document.getElementById('cliDoc').value });
-    salvarNoFirebase(); atualizarInterface(); e.target.reset();
-});
-document.getElementById('formDespesa').addEventListener('submit', (e) => {
-    e.preventDefault();
-    CACHE.despesas.push({ 
-        id: Date.now().toString(),
-        data: document.getElementById('despData').value,
-        desc: document.getElementById('despDesc').value,
-        valor: parseFloat(document.getElementById('despValor').value)
+    ESTADO.graficoInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Receitas', 'Despesas'],
+            datasets: [{
+                data: [receitas, despesas],
+                backgroundColor: ['#00796b', '#c62828']
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
     });
-    salvarNoFirebase(); atualizarInterface(); e.target.reset();
-});
+}
+
+// --- 8. HELPERS E INTERAÇÕES ---
+
+window.preencherSelectsOperacao = function() {
+    const fill = (id, list, val, txt) => {
+        const el = document.getElementById(id);
+        el.innerHTML = '<option value="">Selecione...</option>';
+        list.forEach(i => el.innerHTML += `<option value="${i[val]}">${i[txt]}</option>`);
+    };
+    
+    fill('opMotorista', CACHE.funcionarios.filter(f => f.funcao === 'motorista'), 'id', 'nome');
+    fill('relMotorista', CACHE.funcionarios, 'id', 'nome');
+    
+    // Veículos (array de objetos simples)
+    const elVeic = document.getElementById('opVeiculo');
+    elVeic.innerHTML = '<option value="">Selecione...</option>';
+    CACHE.veiculos.forEach(v => elVeic.innerHTML += `<option value="${v.placa}">${v.placa} - ${v.modelo}</option>`);
+    
+    // Clientes
+    const elCli = document.getElementById('opCliente');
+    elCli.innerHTML = '<option value="">Selecione...</option>';
+    CACHE.clientes.forEach(c => elCli.innerHTML += `<option value="${c.razaoSocial}">${c.razaoSocial}</option>`);
+};
+
+window.verDetalhesOp = function(id) {
+    const op = CACHE.operacoes.find(o => o.id === id);
+    if(!op) return;
+    const mot = CACHE.funcionarios.find(f => f.id == op.motoristaId)?.nome || '---';
+
+    const html = `
+        <table style="width:100%; text-align:left;">
+            <tr><td><strong>Data:</strong></td><td>${formatarData(op.data)}</td></tr>
+            <tr><td><strong>Cliente:</strong></td><td>${op.cliente}</td></tr>
+            <tr><td><strong>Motorista:</strong></td><td>${mot}</td></tr>
+            <tr><td><strong>Veículo:</strong></td><td>${op.veiculo}</td></tr>
+            <tr><td><strong>Status:</strong></td><td>${op.status}</td></tr>
+            <tr><td colspan="2"><hr></td></tr>
+            <tr><td><strong>Faturamento:</strong></td><td style="color:green">${formatarMoeda(op.faturamento)}</td></tr>
+            <tr><td><strong>Combustível:</strong></td><td style="color:red">${formatarMoeda(op.combustivel)}</td></tr>
+            <tr><td><strong>Despesas:</strong></td><td style="color:red">${formatarMoeda(op.despesas)}</td></tr>
+            <tr><td><strong>Lucro Estimado:</strong></td><td><strong>${formatarMoeda(op.faturamento - op.combustivel - op.despesas - op.comissao)}</strong></td></tr>
+            <tr><td colspan="2"><hr></td></tr>
+            <tr><td><strong>Obs:</strong></td><td>${op.obs || '-'}</td></tr>
+        </table>
+    `;
+    document.getElementById('conteudoModal').innerHTML = html;
+    document.getElementById('modalDetalhes').style.display = 'flex';
+};
+
+window.fecharModal = function() { document.getElementById('modalDetalhes').style.display = 'none'; };
+
+window.editarOp = function(id) {
+    const op = CACHE.operacoes.find(o => o.id === id);
+    if(!op) return;
+    document.getElementById('operacaoId').value = op.id;
+    document.getElementById('opData').value = op.data;
+    document.getElementById('opStatus').value = op.status;
+    document.getElementById('opCliente').value = op.cliente;
+    document.getElementById('opMotorista').value = op.motoristaId;
+    document.getElementById('opVeiculo').value = op.veiculo;
+    document.getElementById('opValor').value = op.faturamento;
+    document.getElementById('opCombustivel').value = op.combustivel;
+    document.getElementById('opDespesas').value = op.despesas;
+    document.getElementById('opComissao').value = op.comissao;
+    document.getElementById('opObs').value = op.obs;
+    document.querySelector('.content-area').scrollTop = 0; // Sobe para o form
+};
+
+window.excluirOp = function(id) {
+    if(confirm("Confirma exclusão? Isso afetará o financeiro.")) {
+        CACHE.operacoes = CACHE.operacoes.filter(o => o.id !== id);
+        salvarNoFirebase();
+        atualizarTodaInterface();
+    }
+};
+
+window.limparFormOperacao = function() {
+    document.getElementById('formOperacao').reset();
+    document.getElementById('operacaoId').value = '';
+};
+
+window.enviarAvisoEquipe = async function() {
+    const msg = document.getElementById('msgAviso').value;
+    if(msg) {
+        CACHE.mensagens = msg + " (Enviado em " + new Date().toLocaleDateString() + ")";
+        await salvarNoFirebase();
+        alert("Aviso enviado para o painel de todos!");
+    }
+};
+
+window.renderizarEquipeView = function() {
+    const tbody = document.getElementById('listaEquipeView');
+    tbody.innerHTML = '';
+    CACHE.funcionarios.forEach(f => {
+        tbody.innerHTML += `<tr><td>${f.nome}</td><td>${f.funcao}</td><td>${f.telefone}</td><td>${f.email}</td></tr>`;
+    });
+};
+
+// --- 9. RELATÓRIOS E PDF ---
+
+window.gerarRelatorioGeral = function() {
+    const ini = document.getElementById('relIni').value;
+    const fim = document.getElementById('relFim').value;
+    const motId = document.getElementById('relMotorista').value;
+    
+    if(!ini || !fim) return alert("Selecione o período.");
+
+    const ops = CACHE.operacoes.filter(o => o.data >= ini && o.data <= fim && o.status === 'CONFIRMADA' && (!motId || o.motoristaId === motId));
+    
+    let total = 0;
+    let html = `<h3>RELATÓRIO (${formatarData(ini)} a ${formatarData(fim)})</h3><table style="width:100%; border-collapse:collapse;" border="1"><tr><th>Data</th><th>Cliente</th><th>Valor</th></tr>`;
+    
+    ops.forEach(o => {
+        total += o.faturamento;
+        html += `<tr><td>${formatarData(o.data)}</td><td>${o.cliente}</td><td>${formatarMoeda(o.faturamento)}</td></tr>`;
+    });
+    html += `</table><h4>TOTAL: ${formatarMoeda(total)}</h4>`;
+
+    const area = document.getElementById('areaImpressao');
+    area.innerHTML = html;
+    area.style.display = 'block';
+    document.getElementById('btnBaixarPdf').style.display = 'block';
+};
+
+window.baixarPDF = function() {
+    const element = document.getElementById('areaImpressao');
+    html2pdf(element);
+};
+
+// --- UTILITÁRIOS ---
+function formatarMoeda(v) { return (v||0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}); }
+function formatarData(d) { if(!d) return '-'; const p = d.split('-'); return `${p[2]}/${p[1]}/${p[0]}`; }
+
+window.fazerBackup = function() {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(CACHE));
+    const el = document.createElement('a');
+    el.href = dataStr;
+    el.download = "backup_sistema.json";
+    el.click();
+};
+
+window.restaurarBackup = function(input) {
+    const file = input.files[0];
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            CACHE = JSON.parse(e.target.result);
+            await salvarNoFirebase();
+            atualizarTodaInterface();
+            alert("Backup restaurado!");
+        } catch(err) { alert("Erro no arquivo."); }
+    };
+    reader.readAsText(file);
+};
