@@ -589,26 +589,47 @@
         </section>
         
         <section id="meus-dados" class="page">
-            <h2>MEUS DADOS</h2>
-            <div class="card">
-                <form id="formMeusDadosFuncionario">
-                    <div class="form-group"><label>NOME:</label><input type="text" id="meuPerfilNome"></div>
-                    <div class="form-group"><label>FUNÇÃO:</label><input type="text" id="meuPerfilFuncao" readonly></div>
-                    <div class="form-group"><label>DOC:</label><input type="text" id="meuPerfilDoc"></div>
-                    <div class="form-group"><label>TEL:</label><input type="text" id="meuPerfilTel"></div>
-                    <div class="form-group"><label>PIX:</label><input type="text" id="meuPerfilPix"></div>
-                    <div class="form-group"><label>ENDEREÇO:</label><input type="text" id="meuPerfilEndereco"></div>
-                    
-                    <div id="meuPerfilCNHGroup" style="display:none;">
-                        <label>CNH:</label><input type="text" id="meuPerfilCNH">
-                    </div>
-                    <div id="meuPerfilValidadeCNHGroup" style="display:none;">
-                        <label>VAL. CNH:</label><input type="date" id="meuPerfilValidadeCNH">
-                    </div>
-                    <button type="submit" class="btn-primary">SALVAR</button>
-                </form>
+    <h2>MEUS DADOS PESSOAIS</h2>
+    <div class="card">
+        <div style="background: #e3f2fd; padding: 15px; border-left: 5px solid #2196f3; margin-bottom: 20px;">
+            <p style="margin:0; font-size:0.9rem;">
+                <i class="fas fa-info-circle"></i> <strong>Atenção:</strong> 
+                Para alterar seus dados sensíveis (Documento, CNH, Função), clique no botão "Solicitar Alteração" abaixo.
+            </p>
+        </div>
+
+        <form id="formMeusDadosFuncionario">
+            <div class="form-row">
+                <div class="form-col col-lg"><div class="form-group"><label>NOME COMPLETO:</label><input type="text" id="meuPerfilNome" readonly style="background:#eee;"></div></div>
+                <div class="form-col col-md"><div class="form-group"><label>FUNÇÃO:</label><input type="text" id="meuPerfilFuncao" readonly style="background:#eee;"></div></div>
             </div>
-        </section>
+            
+            <div class="form-row">
+                <div class="form-col"><div class="form-group"><label>CPF/DOC:</label><input type="text" id="meuPerfilDoc" readonly style="background:#eee;"></div></div>
+                <div class="form-col"><div class="form-group"><label>TELEFONE:</label><input type="text" id="meuPerfilTel"></div></div>
+                <div class="form-col"><div class="form-group"><label>PIX:</label><input type="text" id="meuPerfilPix"></div></div>
+            </div>
+            
+            <div class="form-group"><label>ENDEREÇO:</label><input type="text" id="meuPerfilEndereco"></div>
+            
+            <div id="meuPerfilCNHGroup" style="display:none; border-top: 1px dashed #ccc; padding-top:15px; margin-top:10px;">
+                <div class="form-row">
+                    <div class="form-col"><div class="form-group"><label>CNH:</label><input type="text" id="meuPerfilCNH" readonly style="background:#eee;"></div></div>
+                    <div class="form-col"><div class="form-group"><label>VALIDADE CNH:</label><input type="date" id="meuPerfilValidadeCNH" readonly style="background:#eee;"></div></div>
+                </div>
+            </div>
+
+            <div class="form-actions" style="justify-content: space-between;">
+                <button type="button" class="btn-warning" onclick="abrirModalSolicitacao()">
+                    <i class="fas fa-edit"></i> SOLICITAR ALTERAÇÃO
+                </button>
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-save"></i> SALVAR (TEL/END/PIX)
+                </button>
+            </div>
+        </form>
+    </div>
+</section>
 
     </main>
 
