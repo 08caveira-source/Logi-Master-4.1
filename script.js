@@ -1987,3 +1987,203 @@ document.addEventListener('submit', async function(e) {
         }
     }
 });
+// =============================================================================
+// CORREÇÃO DE FUNÇÕES GLOBAIS E MODAIS (FIX)
+// =============================================================================
+
+// 1. GARANTIA DA FUNÇÃO DE MÉDIA GLOBAL (Necessária para o Modal abrir)
+window.calcularMediaGlobalVeiculo = function(placa) {
+    if (!window.CACHE_OPERACOES) return 0;
+    
+    var ops = window.CACHE_OPERACOES.filter(function(op) {
+        return op.veiculoPlaca === placa && 
+               op.status !== 'CANCELADA' &&
+               Number(op.kmRodado) > 0 && 
+               Number(op.combustivel) > 0;
+    });
+
+    if (ops.length === 0) return 0;
+
+    var totalKm = 0;
+    var totalLitros = 0;
+
+    ops.forEach(function(op) {
+        var preco = Number(op.precoLitro) || 0;
+        if (preco > 0) {
+            totalKm += Number(op.kmRodado);
+            totalLitros += (Number(op.combustivel) / preco);
+        }
+    });
+
+    return totalLitros > 0 ? (totalKm / totalLitros) : 0;
+};
+
+// 2. CORREÇÃO DO MODAL DE DETALHES (Com tratamento de erro)
+window.abrirModalDetalhesDia = function(dataString) {
+    try {
+        var listaOperacoes = window.CACHE_OPERACOES || [];
+        
+        // Filtra operações do dia
+        var operacoesDoDia = listaOperacoes.filter(function(op) {
+            return op.data === dataString && op.status !== 'CANCELADA';
+        });
+
+        if (operacoesDoDia.length === 0) return; // Se não tem, não faz nada (segurança)
+
+        var modalBody = document.getElementById('modalDayBody');
+        var modalTitle = document.getElementById('modalDayTitle');
+        var modalSummary = document.getElementById('modalDaySummary');
+        var modal = document.getElementById('modalDayOperations');
+
+        if (!modal || !modalBody) return console.error("Modal não encontrado no HTML");
+
+        // Título
+        if (modalTitle) modalTitle.textContent = 'DETALHES: ' + formatarDataParaBrasileiro(dataString);
+
+        // Totais do Dia
+        var totalFaturamento = 0;
+        var totalLucroOperacional = 0;
+
+        var htmlLista = '<div style="max-height:400px; overflow-y:auto;"><table class="data-table" style="width:100%; font-size:0.85rem;">';
+        htmlLista += '<thead><tr style="background:#263238; color:white;"><th>ID/CLIENTE</th><th>VEÍCULO</th><th>FATURAMENTO</th><th>CUSTOS</th><th>LUCRO</th></tr></thead><tbody>';
+
+        operacoesDoDia.forEach(function(op) {
+            // Cálculos
+            var receita = Number(op.faturamento) || 0;
+            var custoViagem = (Number(op.combustivel)||0) + (Number(op.despesas)||0) + (Number(op.comissao)||0);
+            
+            if(op.ajudantes) {
+                op.ajudantes.forEach(function(aj) { custoViagem += (Number(aj.diaria)||0); });
+            }
+
+            var lucro = receita - custoViagem;
+            totalFaturamento += receita;
+            totalLucroOperacional += lucro;
+
+            // Dados Visuais
+            var nomeCli = op.contratanteCNPJ ? (buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial || 'CLIENTE') : 'CLIENTE';
+            var media = window.calcularMediaGlobalVeiculo(op.veiculoPlaca);
+            
+            htmlLista += '<tr>';
+            htmlLista += '<td><strong>#' + op.id.toString().substr(-4) + '</strong><br><small>' + nomeCli.substr(0,15) + '</small></td>';
+            htmlLista += '<td>' + op.veiculoPlaca + '<br><small style="color:blue">' + (media > 0 ? media.toFixed(1) + ' Km/L (Méd)' : '-') + '</small></td>';
+            htmlLista += '<td style="color:green; font-weight:bold;">' + formatarValorMoeda(receita) + '</td>';
+            htmlLista += '<td style="color:red;">' + formatarValorMoeda(custoViagem) + '</td>';
+            htmlLista += '<td><strong>' + formatarValorMoeda(lucro) + '</strong></td>';
+            htmlLista += '</tr>';
+        });
+
+        htmlLista += '</tbody></table></div>';
+
+        // Atualiza Resumo
+        if (modalSummary) {
+            modalSummary.innerHTML = 
+                '<div style="display:flex; justify-content:space-around; background:#e0f2f1; padding:10px; border-radius:6px; margin-bottom:10px;">' +
+                    '<div style="text-align:center"><small>Faturamento</small><br><strong style="color:#004d40; font-size:1.2rem;">' + formatarValorMoeda(totalFaturamento) + '</strong></div>' +
+                    '<div style="text-align:center"><small>Lucro Op.</small><br><strong style="color:' + (totalLucroOperacional>=0?'green':'red') + '; font-size:1.2rem;">' + formatarValorMoeda(totalLucroOperacional) + '</strong></div>' +
+                '</div>';
+        }
+
+        modalBody.innerHTML = htmlLista;
+        modal.style.display = 'block';
+
+    } catch (err) {
+        console.error("Erro ao abrir modal:", err);
+        alert("Erro ao abrir detalhes: " + err.message);
+    }
+};
+
+// 3. REATIVAÇÃO DO FORMULÁRIO DE OPERAÇÃO (Garante que salva)
+// Esta função reescreve o comportamento do formulário para garantir que funcione
+(function reativarFormularioOperacao() {
+    var formOp = document.getElementById('formOperacao');
+    if (!formOp) return;
+
+    // Remove clones antigos para evitar duplicação
+    var novoForm = formOp.cloneNode(true);
+    formOp.parentNode.replaceChild(novoForm, formOp);
+
+    novoForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        try {
+            var idHidden = document.getElementById('operacaoId').value;
+            var lista = window.CACHE_OPERACOES ? window.CACHE_OPERACOES.slice() : [];
+            var antiga = idHidden ? lista.find(function(o) { return String(o.id) === String(idHidden); }) : null;
+            
+            var novoId = idHidden ? idHidden : Date.now().toString();
+            
+            var novaOp = {
+                id: novoId,
+                data: document.getElementById('operacaoData').value,
+                motoristaId: document.getElementById('selectMotoristaOperacao').value,
+                veiculoPlaca: document.getElementById('selectVeiculoOperacao').value,
+                contratanteCNPJ: document.getElementById('selectContratanteOperacao').value,
+                atividadeId: document.getElementById('selectAtividadeOperacao').value,
+                
+                faturamento: document.getElementById('operacaoFaturamento').value,
+                adiantamento: document.getElementById('operacaoAdiantamento').value,
+                comissao: document.getElementById('operacaoComissao').value,
+                despesas: document.getElementById('operacaoDespesas').value,
+                
+                combustivel: document.getElementById('operacaoCombustivel').value,
+                precoLitro: document.getElementById('operacaoPrecoLitro').value,
+                kmRodado: document.getElementById('operacaoKmRodado').value,
+                
+                status: document.getElementById('operacaoIsAgendamento').checked ? 'AGENDADA' : 'CONFIRMADA',
+                
+                // Preserva dados internos
+                checkins: antiga ? antiga.checkins : { motorista: false, ajudantes: [] },
+                kmInicial: antiga ? antiga.kmInicial : 0,
+                kmFinal: antiga ? antiga.kmFinal : 0,
+                ajudantes: window._operacaoAjudantesTempList || []
+            };
+
+            if (idHidden) {
+                // Atualiza existente
+                lista = lista.map(function(o) { return String(o.id) === String(idHidden) ? novaOp : o; });
+            } else {
+                // Adiciona nova
+                lista.push(novaOp);
+            }
+            
+            // Salva
+            salvarListaOperacoes(lista).then(function() {
+                alert("Operação salva com sucesso!");
+                novoForm.reset(); 
+                document.getElementById('operacaoId').value = '';
+                document.getElementById('operacaoIsAgendamento').checked = false;
+                window._operacaoAjudantesTempList = [];
+                
+                if (typeof renderizarListaAjudantesAdicionados === 'function') renderizarListaAjudantesAdicionados();
+                if (typeof preencherTodosSelects === 'function') preencherTodosSelects();
+                if (typeof renderizarCalendario === 'function') renderizarCalendario();
+                if (typeof atualizarDashboard === 'function') atualizarDashboard();
+            });
+
+        } catch (erro) {
+            console.error(erro);
+            alert("Erro ao salvar operação: " + erro.message);
+        }
+    });
+    
+    // Reconecta botões de Ajudante
+    var btnAddAj = document.getElementById('btnManualAddAjudante');
+    if (btnAddAj) {
+        // Clone para limpar listeners antigos
+        var novoBtn = btnAddAj.cloneNode(true);
+        btnAddAj.parentNode.replaceChild(novoBtn, btnAddAj);
+        
+        novoBtn.onclick = function() {
+            var sel = document.getElementById('selectAjudantesOperacao');
+            if(!sel.value) return alert("Selecione um ajudante.");
+            var val = prompt("Valor da Diária?", "0");
+            if(val) {
+                if(!window._operacaoAjudantesTempList) window._operacaoAjudantesTempList=[];
+                window._operacaoAjudantesTempList.push({id:sel.value, diaria:Number(val.replace(',','.'))});
+                if(typeof renderizarListaAjudantesAdicionados === 'function') renderizarListaAjudantesAdicionados();
+            }
+        };
+    }
+
+})(); // Executa imediatamente para corrigir a tela atual
