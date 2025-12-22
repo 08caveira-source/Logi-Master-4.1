@@ -1080,20 +1080,36 @@
     </div>
 
     <script type="module">
-      
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+      import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
       import { getFirestore, collection, setDoc, doc, onSnapshot, getDoc, updateDoc, query, where, deleteDoc, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
       import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-            
+      
       const firebaseConfig = { apiKey: "AIzaSyBZjVdcyjbEoR_-X6_lZuTRDMeN2wIntZI", authDomain: "logi-master-dd4cd.firebaseapp.com", projectId: "logi-master-dd4cd", storageBucket: "logi-master-dd4cd.firebasestorage.app", messagingSenderId: "673000154258", appId: "1:673000154258:web:fc9d6fced43e557076324b" };
+      
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);
       const auth = getAuth(app);
       
+      // Função para criar usuário usando App Secundário (Sem deslogar Admin)
+      async function criarUsuarioSecundario(email, senha) {
+          const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
+          const secondaryAuth = getAuth(secondaryApp);
+          try {
+              const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, senha);
+              await deleteApp(secondaryApp); // Limpa a app secundária
+              return userCredential.user.uid;
+          } catch (error) {
+              await deleteApp(secondaryApp);
+              throw error;
+          }
+      }
+
+      // Expondo para o Script Global
       window.dbRef = { 
           db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, 
           updateDoc, query, where, deleteDoc, getDocs, addDoc,
-          sendReset: (email) => sendPasswordResetEmail(auth, email) // <--- NOVO
+          sendReset: (email) => sendPasswordResetEmail(auth, email),
+          criarAuthUsuario: criarUsuarioSecundario // Nova função exposta
       };
 
       onAuthStateChanged(auth, async (user) => {
@@ -1114,7 +1130,8 @@
                   }, 500);
               }
           } else { 
-              window.location.replace("login.html"); 
+              // Permite acesso à pagina de login se não estiver logado
+              if(!window.location.href.includes('login.html')) window.location.replace("login.html"); 
           }
       });
       

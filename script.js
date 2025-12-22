@@ -431,42 +431,81 @@ function abrirModalDetalhesDia(dia, mes, ano, ops) {
 // -----------------------------------------------------------------------------
 
 // Salvar Funcionário
-document.addEventListener('submit', function(e) {
+// ATUALIZAÇÃO DA LÓGICA DE SALVAR FUNCIONÁRIO (INTEGRAÇÃO FIREBASE)
+document.addEventListener('submit', async function(e) {
     if (e.target.id === 'formFuncionario') {
         e.preventDefault();
-        var id = document.getElementById('funcionarioId').value || Date.now().toString();
-        var funcao = document.getElementById('funcFuncao').value;
         
-        var novo = {
-            id: id,
-            nome: document.getElementById('funcNome').value.toUpperCase(),
-            funcao: funcao,
-            documento: document.getElementById('funcDocumento').value,
-            email: document.getElementById('funcEmail').value.toLowerCase(),
-            telefone: document.getElementById('funcTelefone').value,
-            pix: document.getElementById('funcPix').value,
-            endereco: document.getElementById('funcEndereco').value,
-            // Dados específicos de motorista
-            cnh: funcao === 'motorista' ? document.getElementById('funcCNH').value : '',
-            validadeCNH: funcao === 'motorista' ? document.getElementById('funcValidadeCNH').value : '',
-            categoriaCNH: funcao === 'motorista' ? document.getElementById('funcCategoriaCNH').value : '',
-            cursoDescricao: funcao === 'motorista' ? document.getElementById('funcCursoDescricao').value : ''
-        };
-        
-        // Se forneceu senha (criação ou alteração), salva num campo separado para tratar no login (dummy logic aqui)
-        var pass = document.getElementById('funcSenha').value;
-        if(pass) novo.tempPassword = pass; 
+        var btnSubmit = e.target.querySelector('button[type="submit"]');
+        var textoOriginal = btnSubmit.innerHTML;
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
 
-        var lista = CACHE_FUNCIONARIOS.filter(f => String(f.id) !== String(id));
-        lista.push(novo);
-        
-        salvarListaFuncionarios(lista).then(() => {
-            alert("Funcionário Salvo com Sucesso!");
+        try {
+            var id = document.getElementById('funcionarioId').value || Date.now().toString();
+            var email = document.getElementById('funcEmail').value.toLowerCase().trim();
+            var senha = document.getElementById('funcSenha').value;
+            var funcao = document.getElementById('funcFuncao').value;
+            var nome = document.getElementById('funcNome').value.toUpperCase();
+
+            // Verifica se é novo cadastro e se tem senha para criar login
+            var criarLogin = (!document.getElementById('funcionarioId').value && senha);
+
+            var novoUID = id; // Por padrão usa o timestamp, mas se criar auth usa o UID real
+
+            if (criarLogin) {
+                if(senha.length < 6) throw new Error("A senha deve ter no mínimo 6 dígitos.");
+                
+                // 1. Cria no Firebase Auth (Backend)
+                console.log("Criando usuário no Auth...");
+                novoUID = await window.dbRef.criarAuthUsuario(email, senha);
+                
+                // 2. Cria o perfil público na coleção 'users'
+                await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "users", novoUID), {
+                    uid: novoUID,
+                    name: nome,
+                    email: email,
+                    role: funcao,
+                    company: window.USUARIO_ATUAL.company, // Vincula à empresa do Admin
+                    createdAt: new Date().toISOString(),
+                    approved: true
+                });
+            }
+
+            var funcionarioObj = {
+                id: novoUID, // Usa o UID do Firebase se criado
+                nome: nome,
+                funcao: funcao,
+                documento: document.getElementById('funcDocumento').value,
+                email: email,
+                telefone: document.getElementById('funcTelefone').value,
+                pix: document.getElementById('funcPix').value,
+                endereco: document.getElementById('funcEndereco').value,
+                cnh: funcao === 'motorista' ? document.getElementById('funcCNH').value : '',
+                validadeCNH: funcao === 'motorista' ? document.getElementById('funcValidadeCNH').value : '',
+                categoriaCNH: funcao === 'motorista' ? document.getElementById('funcCategoriaCNH').value : '',
+                cursoDescricao: funcao === 'motorista' ? document.getElementById('funcCursoDescricao').value : ''
+            };
+
+            // Atualiza lista local
+            var lista = CACHE_FUNCIONARIOS.filter(f => f.email !== email && f.id !== id);
+            lista.push(funcionarioObj);
+            
+            await salvarListaFuncionarios(lista);
+            
+            alert("Funcionário salvo e acesso criado com sucesso!");
             e.target.reset();
             document.getElementById('funcionarioId').value = '';
             toggleDriverFields();
-            preencherTodosSelects(); // Atualiza selects em tempo real
-        });
+            preencherTodosSelects();
+
+        } catch (erro) {
+            console.error(erro);
+            alert("Erro ao salvar: " + (erro.message || erro));
+        } finally {
+            btnSubmit.disabled = false;
+            btnSubmit.innerHTML = textoOriginal;
+        }
     }
 });
 
