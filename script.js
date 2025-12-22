@@ -350,10 +350,12 @@ window.renderizarCalendario = function() {
             cellContent += `<div style="font-size:0.7em; margin-top:auto; color:var(--primary-dark); font-weight:bold;">${opsDoDia.length} VIAGENS</div>`;
             cellContent += `<div style="font-size:0.65em; color:green;">${formatarValorMoeda(totalDia)}</div>`;
             
-            // Evento de clique para ver detalhes do dia
-            cell.onclick = (function(d, m, y, ops) {
-                return function() { abrirModalDetalhesDia(d, m, y, ops); };
-            })(dia, mes, ano, opsDoDia);
+            // --- CORREÇÃO APLICADA AQUI ---
+            // Passa apenas a string da data (dateStr) para o modal abrir corretamente
+            cell.onclick = (function(ds) {
+                return function() { abrirModalDetalhesDia(ds); };
+            })(dateStr);
+
         } else {
             // Se não tem operação, clica para adicionar nova nesta data
             cell.onclick = (function(dateString) {
@@ -1621,16 +1623,6 @@ document.addEventListener('submit', async function(e) {
         }
     }
 });
-
-// Listener para carregar a aba de equipe quando clicada
-document.addEventListener('click', function(e) {
-    // Verifica se clicou na aba de Access Management
-    var target = e.target.closest('[data-page="access-management"]');
-    if (target) {
-        setTimeout(renderizarPainelEquipe, 100); // Pequeno delay para garantir transição
-    }
-});
-
 // -----------------------------------------------------------------------------
 // 18. NAVEGAÇÃO E INICIALIZAÇÃO DO SISTEMA
 // -----------------------------------------------------------------------------
@@ -1732,7 +1724,7 @@ window.initSystemByRole = function(user) {
     
     configurarNavegacao();
 };
-    
+
     // Listener Mobile Menu
     document.getElementById('mobileMenuBtn').onclick = function() {
         document.getElementById('sidebar').classList.add('active');
