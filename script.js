@@ -1,15 +1,10 @@
 // =============================================================================
 // ARQUIVO: script.js
-// SISTEMA LOGIMASTER - VERSÃO 5.0 (STABLE / FULL)
-// DATA: DEZEMBRO 2025
+// SISTEMA LOGIMASTER - VERSÃO 5.1 (CORREÇÃO DE CHECK-INS)
 // PARTE 1: CONFIGURAÇÕES, VARIÁVEIS GLOBAIS E CAMADA DE DADOS
 // =============================================================================
 
-/**
- * SEÇÃO 1: CONSTANTES DE ARMAZENAMENTO (CHAVES DO BANCO DE DADOS)
- * Define as chaves utilizadas tanto no localStorage (Navegador)
- * quanto nas coleções/documentos do Firebase Firestore.
- */
+// 1. CONSTANTES DE ARMAZENAMENTO (CHAVES DO BANCO DE DADOS)
 const CHAVE_DB_FUNCIONARIOS = 'db_funcionarios';
 const CHAVE_DB_VEICULOS = 'db_veiculos';
 const CHAVE_DB_CONTRATANTES = 'db_contratantes';
@@ -19,22 +14,15 @@ const CHAVE_DB_DESPESAS = 'db_despesas_gerais';
 const CHAVE_DB_ATIVIDADES = 'db_atividades';
 const CHAVE_DB_PROFILE_REQUESTS = 'db_profile_requests';
 
-/**
- * SEÇÃO 2: VARIÁVEIS GLOBAIS DE ESTADO
- * Controlam o estado da aplicação em tempo de execução.
- */
-window.USUARIO_ATUAL = null;          // Objeto do usuário logado (Admin ou Func)
-window.MODO_APENAS_LEITURA = false;   // Define se o usuário pode editar ou apenas ver
-window.currentDate = new Date();      // Data base para o calendário e dashboard
-window.chartInstance = null;          // Instância do gráfico (Chart.js) para evitar sobreposição
-window._operacaoAjudantesTempList = []; // Lista temporária de ajudantes na tela de operação
-window._mensagemAtualId = null;       // ID da mensagem sendo exibida no modal de notificação
+// 2. VARIÁVEIS GLOBAIS DE ESTADO
+window.USUARIO_ATUAL = null;
+window.MODO_APENAS_LEITURA = false; 
+window.currentDate = new Date(); // Data base para o calendário e dashboard
+window.chartInstance = null; // Instância do gráfico
+window._operacaoAjudantesTempList = []; // Lista temporária de ajudantes na operação
+window._mensagemAtualId = null; 
 
-/**
- * SEÇÃO 3: CACHE LOCAL
- * Armazena os dados em memória para evitar leituras repetitivas no disco/rede.
- * Inicializados como arrays vazios ou objetos vazios.
- */
+// 3. CACHE LOCAL (Para evitar leituras repetitivas e lentidão)
 var CACHE_FUNCIONARIOS = [];
 var CACHE_VEICULOS = [];
 var CACHE_CONTRATANTES = [];
@@ -44,31 +32,23 @@ var CACHE_DESPESAS = [];
 var CACHE_ATIVIDADES = [];
 var CACHE_PROFILE_REQUESTS = [];
 
-/**
- * SEÇÃO 4: FUNÇÕES DE FORMATAÇÃO (HELPERS)
- * Utilitários para formatar moeda, data e telefone.
- */
-
-// Formata valor numérico para Real Brasileiro (R$)
+// 4. FUNÇÕES DE FORMATAÇÃO (HELPERS)
 function formatarValorMoeda(valor) {
     var numero = Number(valor);
     if (isNaN(numero)) return 'R$ 0,00';
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numero);
 }
 
-// Converte data ISO (YYYY-MM-DD) para formato brasileiro (DD/MM/YYYY)
 function formatarDataParaBrasileiro(dataIso) {
     if (!dataIso) return '-';
     // Espera formato YYYY-MM-DD
     var partes = dataIso.split('-');
     if (partes.length >= 3) {
-        // Pega apenas os 2 primeiros caracteres do dia para evitar problemas com timezones
         return partes[2].substring(0, 2) + '/' + partes[1] + '/' + partes[0];
     }
-    return dataIso; // Retorna original se não for data válida
+    return dataIso; 
 }
 
-// Formata telefone para padrões (XX) XXXX-XXXX ou (XX) XXXXX-XXXX
 function formatarTelefoneBrasil(telefone) {
     var numeros = String(telefone || '').replace(/\D/g, '');
     if (numeros.length > 10) {
@@ -79,13 +59,9 @@ function formatarTelefoneBrasil(telefone) {
     return telefone;
 }
 
-/**
- * SEÇÃO 5: CAMADA DE DADOS (PERSISTÊNCIA LOCAL + FIREBASE)
- * Funções responsáveis por carregar e salvar dados.
- */
+// 5. CAMADA DE DADOS (PERSISTÊNCIA LOCAL + FIREBASE)
 
-// Função auxiliar para sanitizar objetos antes de enviar ao Firebase
-// (CORREÇÃO DO ERRO DA IMAGEM: Remove 'undefined' que quebra o Firestore)
+// Função para limpar dados undefined (Correção do erro "Save to cloud")
 function sanitizarObjetoParaFirebase(obj) {
     return JSON.parse(JSON.stringify(obj, (key, value) => {
         if (value === undefined) return null;
@@ -93,20 +69,18 @@ function sanitizarObjetoParaFirebase(obj) {
     }));
 }
 
-// Carrega dados do LocalStorage de forma genérica
 function carregarDadosGenerico(chave, variavelCache, valorPadrao) {
     try {
         var dados = localStorage.getItem(chave);
         return dados ? JSON.parse(dados) : valorPadrao;
     } catch (erro) {
-        console.error("Erro ao carregar do localStorage (" + chave + "):", erro);
+        console.error("Erro ao carregar " + chave, erro);
         return valorPadrao;
     }
 }
 
-// Carrega todos os dados iniciais para a memória (Cache)
 function carregarTodosDadosLocais() {
-    console.log("Iniciando carregamento de dados locais...");
+    console.log("Carregando dados locais...");
     CACHE_FUNCIONARIOS = carregarDadosGenerico(CHAVE_DB_FUNCIONARIOS, [], []);
     CACHE_VEICULOS = carregarDadosGenerico(CHAVE_DB_VEICULOS, [], []);
     CACHE_CONTRATANTES = carregarDadosGenerico(CHAVE_DB_CONTRATANTES, [], []);
@@ -115,15 +89,11 @@ function carregarTodosDadosLocais() {
     CACHE_DESPESAS = carregarDadosGenerico(CHAVE_DB_DESPESAS, [], []);
     CACHE_ATIVIDADES = carregarDadosGenerico(CHAVE_DB_ATIVIDADES, [], []);
     CACHE_PROFILE_REQUESTS = carregarDadosGenerico(CHAVE_DB_PROFILE_REQUESTS, [], []);
-    console.log("Dados locais carregados com sucesso.");
 }
 
-/**
- * Função Mestra de Salvamento.
- * Atualiza o cache, o localStorage e sincroniza com o Firebase se houver conexão.
- */
+// Função Mestra de Salvamento (Sincroniza LocalStorage e Firebase)
 async function salvarDadosGenerico(chave, dados, atualizarCacheCallback) {
-    // 1. Atualiza Memória e LocalStorage imediatamente (UI responsiva)
+    // 1. Atualiza Memória e LocalStorage
     atualizarCacheCallback(dados);
     localStorage.setItem(chave, JSON.stringify(dados));
     
@@ -131,26 +101,23 @@ async function salvarDadosGenerico(chave, dados, atualizarCacheCallback) {
     if (window.dbRef && window.USUARIO_ATUAL && window.USUARIO_ATUAL.company) {
         const { db, doc, setDoc } = window.dbRef;
         try {
-            // Sanitiza os dados para remover 'undefined' antes de enviar
+            // Sanitiza antes de enviar
             var dadosLimpos = sanitizarObjetoParaFirebase({ 
                 items: dados, 
                 lastUpdate: new Date().toISOString(),
                 updatedBy: window.USUARIO_ATUAL.email
             });
 
-            // Salva dentro da subcoleção 'data' da empresa
             await setDoc(doc(db, 'companies', window.USUARIO_ATUAL.company, 'data', chave), dadosLimpos);
-            console.log("Sincronizado com nuvem com sucesso: " + chave);
+            console.log("Sincronizado com nuvem: " + chave);
         } catch (erro) {
-            console.error("Erro crítico ao salvar no Firebase (" + chave + "):", erro);
-            // Alerta amigável para o usuário se falhar a nuvem
-            alert("Atenção: Erro ao salvar na nuvem (" + erro.message + "). Os dados foram salvos localmente.");
+            console.error("Erro ao salvar no Firebase (" + chave + "):", erro);
+            // Não bloqueia o uso local, mas avisa no console
         }
     }
 }
 
-// Wrappers específicos para facilitar leitura, manutenção e tipagem futura
-// Cada função chama o salvamento genérico passando a chave correta
+// Wrappers específicos para facilitar leitura e manutenção
 async function salvarListaFuncionarios(lista) { await salvarDadosGenerico(CHAVE_DB_FUNCIONARIOS, lista, (d) => CACHE_FUNCIONARIOS = d); }
 async function salvarListaVeiculos(lista) { await salvarDadosGenerico(CHAVE_DB_VEICULOS, lista, (d) => CACHE_VEICULOS = d); }
 async function salvarListaContratantes(lista) { await salvarDadosGenerico(CHAVE_DB_CONTRATANTES, lista, (d) => CACHE_CONTRATANTES = d); }
@@ -160,13 +127,13 @@ async function salvarListaDespesas(lista) { await salvarDadosGenerico(CHAVE_DB_D
 async function salvarListaAtividades(lista) { await salvarDadosGenerico(CHAVE_DB_ATIVIDADES, lista, (d) => CACHE_ATIVIDADES = d); }
 async function salvarProfileRequests(lista) { await salvarDadosGenerico(CHAVE_DB_PROFILE_REQUESTS, lista, (d) => CACHE_PROFILE_REQUESTS = d); }
 
-// Funções de Busca Rápida (Helpers)
+// Buscas Rápidas
 function buscarFuncionarioPorId(id) { return CACHE_FUNCIONARIOS.find(f => String(f.id) === String(id)); }
 function buscarVeiculoPorPlaca(placa) { return CACHE_VEICULOS.find(v => v.placa === placa); }
 function buscarContratantePorCnpj(cnpj) { return CACHE_CONTRATANTES.find(c => String(c.cnpj) === String(cnpj)); }
 function buscarAtividadePorId(id) { return CACHE_ATIVIDADES.find(a => String(a.id) === String(id)); }
 
-// Inicialização Inicial de Dados (Executa ao carregar o script)
+// Inicialização Inicial de Dados
 carregarTodosDadosLocais();
 // =============================================================================
 // ARQUIVO: script.js
@@ -178,30 +145,22 @@ carregarTodosDadosLocais();
 // -----------------------------------------------------------------------------
 
 window.atualizarDashboard = function() {
-    // Se não estiver na tela de home ou gráficos, evita processamento desnecessário,
-    // mas garante que os totais sejam calculados se requisitado.
     console.log("Calculando métricas do Dashboard...");
     
-    // 1. Define o período base (Mês selecionado no calendário)
     var mesAtual = window.currentDate.getMonth(); // 0 a 11
     var anoAtual = window.currentDate.getFullYear();
 
-    // 2. Variáveis de Acumulação
     var faturamentoMes = 0;
-    var custosMes = 0; // Soma de: Combustível (Real/Caixa) + Despesas Op + Comissão + Ajudantes + Despesas Gerais
+    var custosMes = 0; 
     var receitaHistorico = 0;
     
-    // 3. Processar Operações (Receitas e Custos Diretos)
     CACHE_OPERACOES.forEach(function(op) {
-        // Ignora operações canceladas
         if (op.status === 'CANCELADA') return;
 
-        // Se houver falta do motorista, não conta comissão nem diárias para o motorista (mas combustível sim, se houve gasto)
         var teveFalta = (op.checkins && op.checkins.faltaMotorista);
-
         var valorFat = Number(op.faturamento) || 0;
         
-        // No Dashboard Geral, mantemos o regime de CAIXA (o que a empresa pagou no mês)
+        // Custo Caixa (o que realmente saiu do bolso no mês)
         var custoOp = (Number(op.despesas) || 0) + 
                       (Number(op.combustivel) || 0);
         
@@ -210,16 +169,12 @@ window.atualizarDashboard = function() {
             custoOp += (Number(op.comissao) || 0);
         }
 
-        // Soma custo de ajudantes (se houver)
         if (op.ajudantes && Array.isArray(op.ajudantes)) {
             op.ajudantes.forEach(aj => custoOp += (Number(aj.diaria) || 0));
         }
 
-        // Histórico Total (Todo o tempo)
         receitaHistorico += valorFat;
 
-        // Filtra pelo mês atual do calendário
-        // Tratamento de fuso horário simples para garantir mês correto
         var dataOp = new Date(op.data + 'T12:00:00'); 
         if (dataOp.getMonth() === mesAtual && dataOp.getFullYear() === anoAtual) {
             faturamentoMes += valorFat;
@@ -227,7 +182,6 @@ window.atualizarDashboard = function() {
         }
     });
 
-    // 4. Processar Despesas Gerais (Fora de Operação - Ex: Aluguel, Luz)
     CACHE_DESPESAS.forEach(function(desp) {
         var dataDesp = new Date(desp.data + 'T12:00:00');
         if (dataDesp.getMonth() === mesAtual && dataDesp.getFullYear() === anoAtual) {
@@ -235,11 +189,9 @@ window.atualizarDashboard = function() {
         }
     });
 
-    // 5. Cálculos Finais
     var lucroMes = faturamentoMes - custosMes;
     var margem = faturamentoMes > 0 ? ((lucroMes / faturamentoMes) * 100) : 0;
 
-    // 6. Atualização do DOM (Interface)
     var elFat = document.getElementById('faturamentoMes');
     var elDesp = document.getElementById('despesasMes');
     var elLucro = document.getElementById('receitaMes');
@@ -251,14 +203,12 @@ window.atualizarDashboard = function() {
     
     if (elLucro) {
         elLucro.textContent = formatarValorMoeda(lucroMes);
-        // Muda cor conforme prejuízo ou lucro
         elLucro.style.color = lucroMes >= 0 ? 'var(--success-color)' : 'var(--danger-color)';
     }
 
     if (elHist) elHist.textContent = formatarValorMoeda(receitaHistorico);
     if (elMargem) elMargem.textContent = margem.toFixed(1) + '%';
 
-    // 7. Atualiza o Gráfico Visual
     atualizarGraficoPrincipal(mesAtual, anoAtual);
 };
 
@@ -268,20 +218,17 @@ window.atualizarDashboard = function() {
 
 function atualizarGraficoPrincipal(mes, ano) {
     var ctx = document.getElementById('mainChart');
-    if (!ctx) return; // Se o elemento não existir na página atual, aborta
+    if (!ctx) return; 
 
-    // Destrói gráfico anterior para não sobrepor (Erro comum de "Canvas is already in use")
     if (window.chartInstance) {
         window.chartInstance.destroy();
     }
 
-    // Preparação dos dados
     var receita = 0;
     var combustivel = 0;
-    var pessoal = 0; // Comissão + Ajudantes
-    var manutencaoGeral = 0; // Despesas Op + Despesas Gerais
+    var pessoal = 0; 
+    var manutencaoGeral = 0; 
     
-    // Filtro de dados para o gráfico
     CACHE_OPERACOES.forEach(op => {
         var d = new Date(op.data + 'T12:00:00');
         if (op.status !== 'CANCELADA' && d.getMonth() === mes && d.getFullYear() === ano) {
@@ -308,48 +255,29 @@ function atualizarGraficoPrincipal(mes, ano) {
 
     var lucro = receita - (combustivel + pessoal + manutencaoGeral);
 
-    // Configuração do Chart.js
     window.chartInstance = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ['FATURAMENTO', 'CUSTO COMBUSTÍVEL', 'PESSOAL (Mot/Ajud)', 'MANUTENÇÃO/GERAL', 'LUCRO LÍQUIDO'],
+            labels: ['FATURAMENTO', 'CUSTO COMBUSTÍVEL', 'PESSOAL', 'MANUTENÇÃO/GERAL', 'LUCRO LÍQUIDO'],
             datasets: [{
                 label: 'Resultados do Mês (R$)',
                 data: [receita, combustivel, pessoal, manutencaoGeral, lucro],
                 backgroundColor: [
-                    'rgba(46, 125, 50, 0.7)',   // Faturamento (Verde Escuro)
-                    'rgba(198, 40, 40, 0.7)',   // Combustível (Vermelho)
-                    'rgba(255, 152, 0, 0.7)',   // Pessoal (Laranja)
-                    'rgba(156, 39, 176, 0.7)',  // Manutenção (Roxo)
-                    (lucro >= 0 ? 'rgba(0, 200, 83, 0.9)' : 'rgba(183, 28, 28, 0.9)') // Lucro (Verde Neon ou Vermelho Sangue)
+                    'rgba(46, 125, 50, 0.7)',
+                    'rgba(198, 40, 40, 0.7)',
+                    'rgba(255, 152, 0, 0.7)',
+                    'rgba(156, 39, 176, 0.7)',
+                    (lucro >= 0 ? 'rgba(0, 200, 83, 0.9)' : 'rgba(183, 28, 28, 0.9)')
                 ],
-                borderColor: [
-                    '#1b5e20', '#b71c1c', '#e65100', '#4a148c', '#000'
-                ],
+                borderColor: [ '#1b5e20', '#b71c1c', '#e65100', '#4a148c', '#000' ],
                 borderWidth: 1
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return formatarValorMoeda(context.raw);
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) { return 'R$ ' + value; }
-                    }
-                }
-            }
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(context) { return formatarValorMoeda(context.raw); } } } },
+            scales: { y: { beginAtZero: true, ticks: { callback: function(value) { return 'R$ ' + value; } } } }
         }
     });
 }
@@ -363,58 +291,40 @@ window.renderizarCalendario = function() {
     var label = document.getElementById('currentMonthYear');
     if (!grid || !label) return;
 
-    grid.innerHTML = ''; // Limpa grid anterior
-    
+    grid.innerHTML = ''; 
     var now = window.currentDate;
     var mes = now.getMonth();
     var ano = now.getFullYear();
 
-    // Nome do Mês em Português
-    var nomeMes = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-    label.textContent = nomeMes.toUpperCase();
+    label.textContent = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
 
-    // Lógica de dias
-    var primeiroDiaSemana = new Date(ano, mes, 1).getDay(); // 0 (Dom) a 6 (Sab)
+    var primeiroDiaSemana = new Date(ano, mes, 1).getDay(); 
     var diasNoMes = new Date(ano, mes + 1, 0).getDate();
 
-    // Preenche espaços vazios antes do dia 1
     for (var i = 0; i < primeiroDiaSemana; i++) {
         var emptyCell = document.createElement('div');
-        emptyCell.classList.add('day-cell', 'empty');
+        emptyCell.className = 'day-cell empty';
         grid.appendChild(emptyCell);
     }
 
-    // Preenche os dias
     for (var dia = 1; dia <= diasNoMes; dia++) {
         var cell = document.createElement('div');
         cell.className = 'day-cell';
         
-        // Data formatada YYYY-MM-DD para comparação
         var dateStr = `${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
-        
-        // HTML interno da célula
         var cellContent = `<span>${dia}</span>`;
-        
-        // Verifica se há operações neste dia
         var opsDoDia = CACHE_OPERACOES.filter(o => o.data === dateStr && o.status !== 'CANCELADA');
         
         if (opsDoDia.length > 0) {
             cell.classList.add('has-operation');
             var totalDia = opsDoDia.reduce((acc, curr) => acc + (Number(curr.faturamento)||0), 0);
             
-            // Bolinha indicadora
             cellContent += `<div class="event-dot"></div>`;
-            // Valor financeiro pequeno
             cellContent += `<div style="font-size:0.7em; margin-top:auto; color:var(--primary-dark); font-weight:bold;">${opsDoDia.length} VIAGENS</div>`;
             cellContent += `<div style="font-size:0.65em; color:green;">${formatarValorMoeda(totalDia)}</div>`;
             
-            // Evento para abrir o modal
-            cell.onclick = (function(ds) {
-                return function() { abrirModalDetalhesDia(ds); };
-            })(dateStr);
-
+            cell.onclick = (function(ds) { return function() { abrirModalDetalhesDia(ds); }; })(dateStr);
         } else {
-            // Se não tem operação, clica para adicionar nova nesta data
             cell.onclick = (function(dateString) {
                 return function() { 
                     document.getElementById('operacaoData').value = dateString;
@@ -423,17 +333,15 @@ window.renderizarCalendario = function() {
                 };
             })(dateStr);
         }
-
         cell.innerHTML = cellContent;
         grid.appendChild(cell);
     }
 };
 
 window.changeMonth = function(direction) {
-    // direction: -1 (anterior) ou 1 (próximo)
     window.currentDate.setMonth(window.currentDate.getMonth() + direction);
     renderizarCalendario();
-    atualizarDashboard(); // Recalcula totais ao mudar o mês
+    atualizarDashboard(); 
 };
 
 // =============================================================================
@@ -441,11 +349,8 @@ window.changeMonth = function(direction) {
 // =============================================================================
 
 window.calcularMediaGlobalVeiculo = function(placa) {
-    // 1. Filtra histórico COMPLETO do veículo, independente de abastecimento no dia
-    // Considera apenas operações não canceladas
     var ops = CACHE_OPERACOES.filter(function(op) {
-        return op.veiculoPlaca === placa && 
-               op.status !== 'CANCELADA';
+        return op.veiculoPlaca === placa && op.status !== 'CANCELADA';
     });
 
     if (ops.length === 0) return 0;
@@ -453,42 +358,31 @@ window.calcularMediaGlobalVeiculo = function(placa) {
     var totalKm = 0;
     var totalLitros = 0;
 
-    // 2. Soma Km e Litros de todas as viagens
     ops.forEach(function(op) {
         var km = Number(op.kmRodado) || 0;
         var valorAbastecido = Number(op.combustivel) || 0;
         var preco = Number(op.precoLitro) || 0;
-        
         totalKm += km;
-        
-        if (valorAbastecido > 0 && preco > 0) {
-            totalLitros += (valorAbastecido / preco);
-        }
+        if (valorAbastecido > 0 && preco > 0) { totalLitros += (valorAbastecido / preco); }
     });
 
-    // 3. Retorna Média Global
     return totalLitros > 0 ? (totalKm / totalLitros) : 0;
 };
 
-// Helper para obter preço médio do diesel (caso na operação do dia não tenha abastecimento)
 window.obterPrecoMedioCombustivel = function(placa) {
     var ops = CACHE_OPERACOES.filter(o => o.veiculoPlaca === placa && Number(o.precoLitro) > 0);
     if (ops.length === 0) return 0;
-    
-    // Pega as últimas 10 operações para uma média recente
     var ultimas = ops.slice(-10);
     var somaPrecos = ultimas.reduce((acc, curr) => acc + Number(curr.precoLitro), 0);
     return somaPrecos / ultimas.length;
 };
 
 // =============================================================================
-// MODAL DE DETALHES DO DIA (LÓGICA FINANCEIRA CORRIGIDA)
+// MODAL DE DETALHES DO DIA
 // =============================================================================
 
 window.abrirModalDetalhesDia = function(dataString) {
     var listaOperacoes = CACHE_OPERACOES;
-    
-    // Filtra operações do dia
     var operacoesDoDia = listaOperacoes.filter(function(op) {
         return op.data === dataString && op.status !== 'CANCELADA';
     });
@@ -499,18 +393,15 @@ window.abrirModalDetalhesDia = function(dataString) {
 
     if (!modalBody) return;
 
-    // Título
     var dataFormatada = formatarDataParaBrasileiro(dataString);
     if (modalTitle) modalTitle.textContent = 'DETALHES COMPLETOS: ' + dataFormatada;
 
-    // Totais do Dia
     var totalFaturamento = 0;
     var totalCustoCalculadoDiesel = 0;
     var totalOutrasDespesas = 0;
 
     var htmlLista = '<div style="max-height:400px; overflow-y:auto;">';
     
-    // Tabela Expandida com todas as colunas solicitadas
     htmlLista += `
     <table class="data-table" style="width:100%; font-size:0.75rem; margin-bottom:0;">
         <thead>
@@ -526,7 +417,6 @@ window.abrirModalDetalhesDia = function(dataString) {
     `;
 
     operacoesDoDia.forEach(function(op) {
-        // --- DADOS BÁSICOS ---
         var motorista = buscarFuncionarioPorId(op.motoristaId);
         var nomeMot = motorista ? motorista.nome.split(' ')[0] : '---';
         var nomesAjudantes = [];
@@ -546,10 +436,8 @@ window.abrirModalDetalhesDia = function(dataString) {
         var cliente = buscarContratantePorCnpj(op.contratanteCNPJ);
         var nomeCli = cliente ? cliente.razaoSocial.substring(0, 15) : 'CLIENTE';
 
-        // --- CÁLCULOS FINANCEIROS ---
         var receita = Number(op.faturamento) || 0;
         
-        // Custos Variáveis (Sem Combustível de Caixa)
         // Se teve falta, zera comissão
         var custoPessoal = 0;
         if (!op.checkins || !op.checkins.faltaMotorista) {
@@ -559,28 +447,23 @@ window.abrirModalDetalhesDia = function(dataString) {
         if(op.ajudantes) op.ajudantes.forEach(aj => custoPessoal += (Number(aj.diaria)||0));
         var custoExtra = Number(op.despesas) || 0;
         
-        // --- CÁLCULO DE CONSUMO (BASEADO NA MÉDIA GLOBAL) ---
         var kmNaViagem = Number(op.kmRodado) || 0;
         var mediaGlobal = calcularMediaGlobalVeiculo(op.veiculoPlaca);
         var precoLitroRef = Number(op.precoLitro) > 0 ? Number(op.precoLitro) : obterPrecoMedioCombustivel(op.veiculoPlaca);
         
-        // Se não tiver preço nem média, assume 0
         var custoDieselCalculado = 0;
         if (mediaGlobal > 0 && kmNaViagem > 0 && precoLitroRef > 0) {
             var litrosConsumidos = kmNaViagem / mediaGlobal;
             custoDieselCalculado = litrosConsumidos * precoLitroRef;
         }
 
-        // --- CUSTO TOTAL DA VIAGEM E LUCRO ---
         var custoTotalViagem = custoPessoal + custoExtra + custoDieselCalculado;
         var lucroOp = receita - custoTotalViagem;
 
-        // Acumula Totais
         totalFaturamento += receita;
         totalCustoCalculadoDiesel += custoDieselCalculado;
         totalOutrasDespesas += (custoPessoal + custoExtra);
 
-        // HTML da Linha
         htmlLista += `
             <tr style="border-bottom:1px solid #ddd;">
                 <td>
@@ -589,9 +472,7 @@ window.abrirModalDetalhesDia = function(dataString) {
                 </td>
                 <td>
                     <strong>${op.veiculoPlaca}</strong><br>
-                    <small style="color:${mediaGlobal > 0 ? 'blue' : '#999'}">
-                        G: ${mediaGlobal > 0 ? mediaGlobal.toFixed(2) + ' Km/L' : 'S/ Média'}
-                    </small>
+                    <small style="color:${mediaGlobal > 0 ? 'blue' : '#999'}">G: ${mediaGlobal > 0 ? mediaGlobal.toFixed(2) + ' Km/L' : 'S/ Média'}</small>
                 </td>
                 <td>${stringEquipe}</td>
                 <td>
@@ -615,7 +496,6 @@ window.abrirModalDetalhesDia = function(dataString) {
 
     var totalLucroLiquido = totalFaturamento - (totalCustoCalculadoDiesel + totalOutrasDespesas);
 
-    // Atualiza Resumo
     if (modalSummary) {
         modalSummary.innerHTML = `
             <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:10px; background:#e0f2f1; padding:10px; border-radius:6px; margin-bottom:10px; border:1px solid #b2dfdb;">
@@ -637,14 +517,12 @@ window.abrirModalDetalhesDia = function(dataString) {
                 </div>
             </div>
             <div style="text-align:center; font-size:0.7rem; color:#666; margin-bottom:5px;">
-                *O custo de diesel é calculado com base na Média Global do veículo e na KM percorrida hoje, não no valor abastecido na bomba.
+                *O custo de diesel é calculado com base na Média Global do veículo e na KM percorrida hoje.
             </div>
         `;
     }
 
     modalBody.innerHTML = htmlLista || '<p style="text-align:center; padding:20px;">Nenhuma operação registrada neste dia.</p>';
-    
-    // Exibe o modal
     document.getElementById('modalDayOperations').style.display = 'block';
 };
 // =============================================================================
@@ -706,7 +584,6 @@ document.addEventListener('submit', async function(e) {
                 cursoDescricao: funcao === 'motorista' ? document.getElementById('funcCursoDescricao').value : ''
             };
 
-            // Atualiza lista local
             var lista = CACHE_FUNCIONARIOS.filter(f => f.email !== email && f.id !== id);
             lista.push(funcionarioObj);
             
@@ -869,11 +746,9 @@ window.excluirFuncionario = async function(id) {
     if(!confirm("ATENÇÃO: Excluir este funcionário removerá permanentemente seu acesso ao sistema (Login) e seus dados cadastrais. Continuar?")) return;
     
     try {
-        // 1. Remove do banco de dados de login (Users)
         const { db, doc, deleteDoc } = window.dbRef;
         await deleteDoc(doc(db, "users", id));
         
-        // 2. Remove da lista local da empresa
         const novaLista = CACHE_FUNCIONARIOS.filter(f => String(f.id) !== String(id));
         await salvarListaFuncionarios(novaLista);
         
@@ -881,7 +756,6 @@ window.excluirFuncionario = async function(id) {
         preencherTodosSelects();
     } catch (e) {
         console.error(e);
-        // Mesmo se falhar na nuvem (ex: permissão), removemos localmente
         alert("Aviso: Cadastro local removido. Se houver erro de permissão na nuvem, contate o suporte. " + e.message);
         const novaLista = CACHE_FUNCIONARIOS.filter(f => String(f.id) !== String(id));
         await salvarListaFuncionarios(novaLista);
@@ -920,8 +794,6 @@ window.toggleDriverFields = function() {
     
     if (select && divMotorista) {
         divMotorista.style.display = (select.value === 'motorista') ? 'block' : 'none';
-        
-        // Se não for motorista, limpa campos obrigatórios para não travar HTML5 validation
         var inputs = divMotorista.querySelectorAll('input, select');
         inputs.forEach(input => {
             if (select.value !== 'motorista') input.value = '';
@@ -935,7 +807,6 @@ window.toggleDespesaParcelas = function() {
     if (div) div.style.display = (modo === 'parcelado') ? 'flex' : 'none';
 };
 
-// Gerenciamento de Ajudantes na Tela de Operação
 window.renderizarListaAjudantesAdicionados = function() {
     var ul = document.getElementById('listaAjudantesAdicionados');
     if (!ul) return;
@@ -964,7 +835,6 @@ document.getElementById('btnManualAddAjudante')?.addEventListener('click', funct
     var idAj = sel.value;
     if (!idAj) return alert("Selecione um ajudante na lista primeiro.");
     
-    // Verifica duplicidade
     if (window._operacaoAjudantesTempList.find(x => x.id === idAj)) {
         return alert("Este ajudante já está na lista.");
     }
@@ -976,7 +846,7 @@ document.getElementById('btnManualAddAjudante')?.addEventListener('click', funct
         
         window._operacaoAjudantesTempList.push({ id: idAj, diaria: valNum });
         renderizarListaAjudantesAdicionados();
-        sel.value = ""; // Reseta select
+        sel.value = ""; 
     }
 });
 
@@ -988,57 +858,46 @@ document.getElementById('btnManualAddAjudante')?.addEventListener('click', funct
 function preencherTodosSelects() {
     console.log("Atualizando selects e tabelas...");
     
-    // Helper interno
     const fill = (id, dados, valKey, textKey, defText) => {
         var el = document.getElementById(id);
         if (!el) return;
         var atual = el.value;
         el.innerHTML = `<option value="">${defText}</option>` + 
             dados.map(d => `<option value="${d[valKey]}">${d[textKey]}</option>`).join('');
-        if(atual) el.value = atual; // Tenta manter seleção
+        if(atual) el.value = atual; 
     };
 
-    // Operações
     fill('selectMotoristaOperacao', CACHE_FUNCIONARIOS.filter(f => f.funcao === 'motorista'), 'id', 'nome', 'SELECIONE MOTORISTA...');
     fill('selectVeiculoOperacao', CACHE_VEICULOS, 'placa', 'placa', 'SELECIONE VEÍCULO...');
     fill('selectContratanteOperacao', CACHE_CONTRATANTES, 'cnpj', 'razaoSocial', 'SELECIONE CLIENTE...');
-    fill('selectAtividadeOperacao', CACHE_ATIVIDADES, 'id', 'nome', 'SELECIONE TIPO DE SERVIÇO...'); // RESTAURADO
+    fill('selectAtividadeOperacao', CACHE_ATIVIDADES, 'id', 'nome', 'SELECIONE TIPO DE SERVIÇO...'); 
     fill('selectAjudantesOperacao', CACHE_FUNCIONARIOS.filter(f => f.funcao === 'ajudante'), 'id', 'nome', 'ADICIONAR AJUDANTE...');
 
-    // Relatórios
     fill('selectMotoristaRelatorio', CACHE_FUNCIONARIOS, 'id', 'nome', 'TODOS OS MOTORISTAS');
     fill('selectVeiculoRelatorio', CACHE_VEICULOS, 'placa', 'placa', 'TODOS OS VEÍCULOS');
     fill('selectContratanteRelatorio', CACHE_CONTRATANTES, 'cnpj', 'razaoSocial', 'TODOS OS CLIENTES');
-    fill('selectAtividadeRelatorio', CACHE_ATIVIDADES, 'id', 'nome', 'TODAS AS ATIVIDADES'); // NOVO FILTRO
+    fill('selectAtividadeRelatorio', CACHE_ATIVIDADES, 'id', 'nome', 'TODAS AS ATIVIDADES'); 
 
-    // Recibos
     fill('selectMotoristaRecibo', CACHE_FUNCIONARIOS, 'id', 'nome', 'SELECIONE O FUNCIONÁRIO...');
     fill('selectVeiculoRecibo', CACHE_VEICULOS, 'placa', 'placa', 'TODOS');
     fill('selectContratanteRecibo', CACHE_CONTRATANTES, 'cnpj', 'razaoSocial', 'TODOS');
 
-    // Despesas Gerais
     fill('selectVeiculoDespesaGeral', CACHE_VEICULOS, 'placa', 'placa', 'SEM VÍNCULO (GERAL)');
-    
-    // Mensagens Admin
     fill('msgRecipientSelect', CACHE_FUNCIONARIOS, 'id', 'nome', 'TODOS OS FUNCIONÁRIOS');
 
-    // Renderiza Tabelas
     renderizarTabelaFuncionarios();
     renderizarTabelaVeiculos();
     renderizarTabelaContratantes();
-    renderizarTabelaAtividades(); // RESTAURADO
+    renderizarTabelaAtividades(); 
     renderizarTabelaOperacoes();
     renderizarInformacoesEmpresa();
     
-    // Atualiza tabelas ADMIN se existirem na tela
     if(typeof renderizarTabelaProfileRequests === 'function') renderizarTabelaProfileRequests();
     if(typeof renderizarTabelaMonitoramento === 'function') {
         renderizarTabelaMonitoramento();
-        renderizarTabelaFaltas(); // NOVA FUNÇÃO DE FALTAS
+        renderizarTabelaFaltas(); 
     }
 }
-
-// Renderizadores de Tabelas Individuais
 
 function renderizarTabelaFuncionarios() {
     var tbody = document.querySelector('#tabelaFuncionarios tbody');
@@ -1108,7 +967,7 @@ function renderizarTabelaOperacoes() {
     var lista = CACHE_OPERACOES.slice().sort((a,b) => new Date(b.data) - new Date(a.data));
     
     lista.forEach(op => {
-        if(op.status === 'CANCELADA') return; // Opcional: mostrar ou não canceladas
+        if(op.status === 'CANCELADA') return; 
         
         var mot = buscarFuncionarioPorId(op.motoristaId);
         var nomeMot = mot ? mot.nome : 'Excluído';
@@ -1675,8 +1534,6 @@ window.renderizarPainelEquipe = async function() {
     if (!window.dbRef || !window.USUARIO_ATUAL) return;
     const { db, collection, query, where, getDocs, doc, updateDoc } = window.dbRef;
     const empresa = window.USUARIO_ATUAL.company;
-    
-    // Lista Ativos
     const tbodyAtivos = document.querySelector('#tabelaCompanyAtivos tbody');
     if (tbodyAtivos) {
         tbodyAtivos.innerHTML = '<tr><td colspan="5" style="text-align:center;">Carregando dados da nuvem...</td></tr>';
@@ -1694,33 +1551,17 @@ window.renderizarPainelEquipe = async function() {
             });
         } catch (e) { console.error("Erro ao listar ativos:", e); tbodyAtivos.innerHTML = '<tr><td colspan="5" style="color:red; text-align:center;">Erro de conexão.</td></tr>'; }
     }
-    
-    // Lista Pendentes (Com Lixeira)
     const tbodyPendentes = document.querySelector('#tabelaCompanyPendentes tbody');
     if (tbodyPendentes) {
         try {
             const qP = query(collection(db, "users"), where("company", "==", empresa), where("approved", "==", false));
             const snapP = await getDocs(qP);
             tbodyPendentes.innerHTML = '';
-            if (snapP.empty) { 
-                tbodyPendentes.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">Nenhuma solicitação pendente.</td></tr>'; 
-            } else { 
-                const badge = document.getElementById('badgeAccess'); 
-                if(badge) { badge.style.display = 'inline-block'; badge.textContent = snapP.size; } 
-            }
+            if (snapP.empty) { tbodyPendentes.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">Nenhuma solicitação pendente.</td></tr>'; } else { const badge = document.getElementById('badgeAccess'); if(badge) { badge.style.display = 'inline-block'; badge.textContent = snapP.size; } }
             snapP.forEach((docSnap) => {
                 const u = docSnap.data();
                 const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${u.name}</td>
-                    <td>${u.email}</td>
-                    <td>${u.role}</td>
-                    <td>${new Date(u.createdAt).toLocaleDateString()}</td>
-                    <td>
-                        <button class="btn-mini btn-success" onclick="aprovarUsuario('${docSnap.id}')"><i class="fas fa-check"></i></button>
-                        <button class="btn-mini btn-danger" onclick="excluirUsuarioPendente('${docSnap.id}')" title="Excluir Solicitação"><i class="fas fa-trash"></i></button>
-                    </td>
-                `;
+                tr.innerHTML = `<td>${u.name}</td><td>${u.email}</td><td>${u.role}</td><td>${new Date(u.createdAt).toLocaleDateString()}</td><td><button class="btn-mini btn-success" onclick="aprovarUsuario('${docSnap.id}')"><i class="fas fa-check"></i></button><button class="btn-mini btn-danger" onclick="excluirUsuarioPendente('${docSnap.id}')"><i class="fas fa-trash"></i></button></td>`;
                 tbodyPendentes.appendChild(tr);
             });
         } catch (e) { console.error(e); }
@@ -1771,12 +1612,12 @@ function configurarNavegacao() {
             
             if (pageId === 'home') { renderizarCalendario(); atualizarDashboard(); }
             if (pageId === 'despesas') renderizarTabelaDespesasGerais();
-            if (pageId === 'checkins-pendentes') preencherTodosSelects(); 
+            if (pageId === 'checkins-pendentes') preencherTodosSelects(); // Atualiza Monitoramento e Faltas
             if (pageId === 'access-management') { renderizarPainelEquipe(); renderizarTabelaProfileRequests(); }
             
-            // Perfil Funcionário
+            // Perfil Funcionário: Busca mensagens e sync
             if (pageId === 'employee-home' && window.USUARIO_ATUAL && window.USUARIO_ATUAL.role !== 'admin') { 
-                verificarNovasMensagens(); // Verifica mensagens ao entrar
+                verificarNovasMensagens();
                 sincronizarDadosDaNuvem().then(() => renderizarPainelCheckinFuncionario());
             }
             if (pageId === 'meus-dados') { carregarDadosMeuPerfil(window.USUARIO_ATUAL.email); }
@@ -1799,7 +1640,7 @@ function configurarNavegacao() {
 }
 
 // -----------------------------------------------------------------------------
-// SISTEMA DE MENSAGENS (CORRIGIDO PARA NÃO REPETIR)
+// SISTEMA DE MENSAGENS PARA FUNCIONÁRIOS (CORRIGIDO: FECHA E MARCA AO CLICAR)
 // -----------------------------------------------------------------------------
 
 // Variável para bloquear mensagens já lidas nesta sessão (evita delay do banco)
@@ -1825,31 +1666,20 @@ window.verificarNovasMensagens = async function() {
             const myId = window.USUARIO_ATUAL.uid;
             const msgId = msgDoc.id;
             
-            // Lógica de Filtragem Rigorosa:
-            // 1. É para mim (ou todos)?
-            // 2. Eu já li no banco (readBy)?
-            // 3. Eu acabei de ler nesta sessão (_idsLidosLocalmente)?
-            
             const isForMe = (data.to === 'all' || data.to === myId);
             const alreadyReadDB = data.readBy && data.readBy.includes(myId);
             const justReadLocal = window._idsLidosLocalmente.includes(msgId);
             
             if (isForMe && !alreadyReadDB && !justReadLocal) {
-                // Guarda ID globalmente para confirmar leitura
-                window._mensagemAtualId = msgId;
+                window._mensagemAtualId = msgId; 
                 
-                // Exibe Modal
                 document.getElementById('notificationMessageText').innerText = data.content;
                 document.getElementById('notificationSender').innerText = "Enviado por: " + data.from;
                 document.getElementById('modalNotification').style.display = 'block';
-                
-                // Para o loop para mostrar apenas UMA mensagem por vez e não inundar o usuário
                 break; 
             }
         }
-    } catch (e) {
-        console.error("Erro ao buscar mensagens:", e);
-    }
+    } catch (e) { console.error("Erro msg:", e); }
 };
 
 window.confirmarLeituraMensagem = async function() {
@@ -1862,7 +1692,6 @@ window.confirmarLeituraMensagem = async function() {
     const myId = window.USUARIO_ATUAL.uid;
 
     // 2. BLOQUEIO LOCAL IMEDIATO
-    // Adiciona na lista negra local para garantir que não apareça de novo mesmo se a internet cair
     window._idsLidosLocalmente.push(msgId);
     
     // 3. ATUALIZA NO BANCO EM SEGUNDO PLANO
@@ -1871,27 +1700,19 @@ window.confirmarLeituraMensagem = async function() {
         await updateDoc(doc(db, "messages", msgId), {
             readBy: arrayUnion(myId)
         });
-        
         window._mensagemAtualId = null;
-        
-        // Verifica se tem mais mensagens na fila após um pequeno delay
         setTimeout(window.verificarNovasMensagens, 1500);
-        
-    } catch(e) { 
-        console.error("Erro ao confirmar leitura no banco:", e); 
-        // Mesmo com erro no banco, a lista local impede que a mensagem volte agora
-    }
+    } catch(e) { console.error("Erro ao confirmar leitura no banco:", e); }
 };
 
-// Garante que o botão use a nova função
 document.addEventListener('DOMContentLoaded', function() {
-    var btnModal = document.querySelector('#modalNotification button');
-    if(btnModal) {
-        btnModal.onclick = window.confirmarLeituraMensagem;
+    var btn = document.querySelector('#modalNotification button');
+    if(btn) { 
+        btn.removeAttribute('onclick');
+        btn.onclick = window.confirmarLeituraMensagem;
     }
     configurarNavegacao();
 });
-
 
 // -----------------------------------------------------------------------------
 // FUNÇÕES DO PERFIL DE FUNCIONÁRIO (CHECK-IN E HISTÓRICO)
@@ -1921,9 +1742,12 @@ window.renderizarPainelCheckinFuncionario = function() {
     var hoje = new Date().toLocaleDateString('pt-BR').split('/').reverse().join('-');
     
     var minhasOps = CACHE_OPERACOES.filter(op => {
-        return String(op.motoristaId) === String(funcionario.id) && 
-               (op.status === 'AGENDADA' || op.status === 'EM_ANDAMENTO') &&
-               op.data === hoje;
+        // Mostra TUDO que for do motorista e estiver EM ANDAMENTO (independente do dia)
+        // OU se estiver AGENDADA para HOJE ou FUTURO
+        if (String(op.motoristaId) !== String(funcionario.id)) return false;
+        if (op.status === 'EM_ANDAMENTO') return true;
+        if (op.status === 'AGENDADA' && op.data >= hoje) return true;
+        return false;
     });
 
     var btnRefresh = `<button class="btn-secondary btn-mini" onclick="sincronizarDadosDaNuvem(true)" style="width:100%; margin-bottom:15px;"><i class="fas fa-sync"></i> ATUALIZAR VIAGENS</button>`;
