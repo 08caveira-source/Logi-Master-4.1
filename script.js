@@ -140,7 +140,7 @@ window.atualizarDashboard = function() {
 
     // 2. Variáveis de Acumulação
     var faturamentoMes = 0;
-    var custosMes = 0; // Soma de: Combustível + Despesas Op + Comissão + Ajudantes + Despesas Gerais
+    var custosMes = 0; // Soma de: Combustível (Real/Caixa) + Despesas Op + Comissão + Ajudantes + Despesas Gerais
     var receitaHistorico = 0;
     
     // 3. Processar Operações (Receitas e Custos Diretos)
@@ -150,7 +150,7 @@ window.atualizarDashboard = function() {
 
         var valorFat = Number(op.faturamento) || 0;
         
-        // Custo Direto da Operação
+        // No Dashboard Geral, mantemos o regime de CAIXA (o que realmente saiu do bolso no mês)
         var custoOp = (Number(op.despesas) || 0) + 
                       (Number(op.combustivel) || 0) + 
                       (Number(op.comissao) || 0);
@@ -164,7 +164,6 @@ window.atualizarDashboard = function() {
         receitaHistorico += valorFat;
 
         // Filtra pelo mês atual do calendário
-        // Tratamento de fuso horário simples para garantir mês correto
         var dataOp = new Date(op.data + 'T12:00:00'); 
         if (dataOp.getMonth() === mesAtual && dataOp.getFullYear() === anoAtual) {
             faturamentoMes += valorFat;
@@ -215,7 +214,7 @@ function atualizarGraficoPrincipal(mes, ano) {
     var ctx = document.getElementById('mainChart');
     if (!ctx) return; // Se o elemento não existir na página atual, aborta
 
-    // Destrói gráfico anterior para não sobrepor (Erro comum de "Canvas is already in use")
+    // Destrói gráfico anterior para não sobrepor
     if (window.chartInstance) {
         window.chartInstance.destroy();
     }
@@ -262,7 +261,7 @@ function atualizarGraficoPrincipal(mes, ano) {
                     'rgba(198, 40, 40, 0.7)',   // Combustível (Vermelho)
                     'rgba(255, 152, 0, 0.7)',   // Pessoal (Laranja)
                     'rgba(156, 39, 176, 0.7)',  // Manutenção (Roxo)
-                    (lucro >= 0 ? 'rgba(0, 200, 83, 0.9)' : 'rgba(183, 28, 28, 0.9)') // Lucro (Verde Neon ou Vermelho Sangue)
+                    (lucro >= 0 ? 'rgba(0, 200, 83, 0.9)' : 'rgba(183, 28, 28, 0.9)') // Lucro
                 ],
                 borderColor: [
                     '#1b5e20', '#b71c1c', '#e65100', '#4a148c', '#000'
@@ -286,9 +285,7 @@ function atualizarGraficoPrincipal(mes, ano) {
             scales: {
                 y: {
                     beginAtZero: true,
-                    ticks: {
-                        callback: function(value) { return 'R$ ' + value; }
-                    }
+                    ticks: { callback: function(value) { return 'R$ ' + value; } }
                 }
             }
         }
@@ -310,52 +307,40 @@ window.renderizarCalendario = function() {
     var mes = now.getMonth();
     var ano = now.getFullYear();
 
-    // Nome do Mês em Português
     var nomeMes = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     label.textContent = nomeMes.toUpperCase();
 
-    // Lógica de dias
-    var primeiroDiaSemana = new Date(ano, mes, 1).getDay(); // 0 (Dom) a 6 (Sab)
+    var primeiroDiaSemana = new Date(ano, mes, 1).getDay(); 
     var diasNoMes = new Date(ano, mes + 1, 0).getDate();
 
-    // Preenche espaços vazios antes do dia 1
     for (var i = 0; i < primeiroDiaSemana; i++) {
         var emptyCell = document.createElement('div');
         emptyCell.classList.add('day-cell', 'empty');
         grid.appendChild(emptyCell);
     }
 
-    // Preenche os dias
     for (var dia = 1; dia <= diasNoMes; dia++) {
         var cell = document.createElement('div');
         cell.className = 'day-cell';
         
-        // Data formatada YYYY-MM-DD para comparação
         var dateStr = `${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
-        
-        // HTML interno da célula
         var cellContent = `<span>${dia}</span>`;
         
-        // Verifica se há operações neste dia
         var opsDoDia = CACHE_OPERACOES.filter(o => o.data === dateStr && o.status !== 'CANCELADA');
         
         if (opsDoDia.length > 0) {
             cell.classList.add('has-operation');
             var totalDia = opsDoDia.reduce((acc, curr) => acc + (Number(curr.faturamento)||0), 0);
             
-            // Bolinha indicadora
             cellContent += `<div class="event-dot"></div>`;
-            // Valor financeiro pequeno
             cellContent += `<div style="font-size:0.7em; margin-top:auto; color:var(--primary-dark); font-weight:bold;">${opsDoDia.length} VIAGENS</div>`;
             cellContent += `<div style="font-size:0.65em; color:green;">${formatarValorMoeda(totalDia)}</div>`;
             
-            // Evento para abrir o modal
             cell.onclick = (function(ds) {
                 return function() { abrirModalDetalhesDia(ds); };
             })(dateStr);
 
         } else {
-            // Se não tem operação, clica para adicionar nova nesta data
             cell.onclick = (function(dateString) {
                 return function() { 
                     document.getElementById('operacaoData').value = dateString;
@@ -371,10 +356,9 @@ window.renderizarCalendario = function() {
 };
 
 window.changeMonth = function(direction) {
-    // direction: -1 (anterior) ou 1 (próximo)
     window.currentDate.setMonth(window.currentDate.getMonth() + direction);
     renderizarCalendario();
-    atualizarDashboard(); // Recalcula totais ao mudar o mês
+    atualizarDashboard(); 
 };
 
 // =============================================================================
@@ -382,15 +366,13 @@ window.changeMonth = function(direction) {
 // =============================================================================
 
 window.calcularMediaGlobalVeiculo = function(placa) {
-    // CORREÇÃO CRÍTICA: Filtra TODO o histórico de operações (global), não apenas do dia.
-    // Considera apenas operações válidas com KM rodado > 0 e Abastecimento > 0.
-    
+    // 1. Filtra histórico COMPLETO do veículo
     var ops = CACHE_OPERACOES.filter(function(op) {
         return op.veiculoPlaca === placa && 
                op.status !== 'CANCELADA' &&
                Number(op.kmRodado) > 0 && 
                Number(op.combustivel) > 0 &&
-               Number(op.precoLitro) > 0; // Necessário preço para saber litragem
+               Number(op.precoLitro) > 0;
     });
 
     if (ops.length === 0) return 0;
@@ -398,24 +380,35 @@ window.calcularMediaGlobalVeiculo = function(placa) {
     var totalKm = 0;
     var totalLitros = 0;
 
+    // 2. Soma Km e Litros de todas as viagens
     ops.forEach(function(op) {
         var valorAbastecido = Number(op.combustivel);
         var preco = Number(op.precoLitro);
         
         if (preco > 0) {
             var litros = valorAbastecido / preco;
-            
             totalKm += Number(op.kmRodado);
             totalLitros += litros;
         }
     });
 
-    // Retorna KM / Litros (Média Global)
+    // 3. Retorna Média Global
     return totalLitros > 0 ? (totalKm / totalLitros) : 0;
 };
 
+// Helper para obter preço médio do diesel (caso na operação do dia não tenha abastecimento)
+window.obterPrecoMedioCombustivel = function(placa) {
+    var ops = CACHE_OPERACOES.filter(o => o.veiculoPlaca === placa && Number(o.precoLitro) > 0);
+    if (ops.length === 0) return 0;
+    
+    // Pega as últimas 10 operações para uma média recente
+    var ultimas = ops.slice(-10);
+    var somaPrecos = ultimas.reduce((acc, curr) => acc + Number(curr.precoLitro), 0);
+    return somaPrecos / ultimas.length;
+};
+
 // =============================================================================
-// MODAL DE DETALHES DO DIA (ATUALIZADO COM MÉDIA GLOBAL E EQUIPE)
+// MODAL DE DETALHES DO DIA (LÓGICA DE CONSUMO REFINADA)
 // =============================================================================
 
 window.abrirModalDetalhesDia = function(dataString) {
@@ -432,67 +425,74 @@ window.abrirModalDetalhesDia = function(dataString) {
 
     if (!modalBody) return;
 
-    // Título
     var dataFormatada = formatarDataParaBrasileiro(dataString);
     if (modalTitle) modalTitle.textContent = 'DETALHES COMPLETOS: ' + dataFormatada;
 
     // Totais do Dia
     var totalFaturamento = 0;
-    var totalCustosGerais = 0; // Despesas + Combustível + Pessoal
-    var totalConsumoCombustivelReais = 0;
+    var totalCustoCalculadoDiesel = 0;
+    var totalOutrasDespesas = 0;
 
     var htmlLista = '<div style="max-height:400px; overflow-y:auto;">';
     
-    // Tabela Expandida com todas as colunas solicitadas
     htmlLista += `
     <table class="data-table" style="width:100%; font-size:0.75rem; margin-bottom:0;">
         <thead>
             <tr style="background:#263238; color:white;">
-                <th width="15%">CLIENTE / ID</th>
+                <th width="15%">CLIENTE</th>
                 <th width="15%">VEÍCULO (MÉDIA GLOBAL)</th>
-                <th width="20%">EQUIPE (MOT + AJUD)</th>
+                <th width="20%">EQUIPE</th>
                 <th width="30%">FINANCEIRO (FAT / CUSTO / LUCRO)</th>
-                <th width="20%">CONSUMO (R$)</th>
+                <th width="20%">CONSUMO CALCULADO</th>
             </tr>
         </thead>
         <tbody>
     `;
 
     operacoesDoDia.forEach(function(op) {
-        // 1. Dados Básicos e Equipe
+        // --- DADOS BÁSICOS ---
         var motorista = buscarFuncionarioPorId(op.motoristaId);
         var nomeMot = motorista ? motorista.nome.split(' ')[0] : '---';
         var nomesAjudantes = [];
-        if(op.ajudantes && op.ajudantes.length > 0) {
-            op.ajudantes.forEach(aj => {
-                var funcAj = buscarFuncionarioPorId(aj.id);
-                if(funcAj) nomesAjudantes.push(funcAj.nome.split(' ')[0]);
-            });
-        }
-        var stringEquipe = `<strong>Mot:</strong> ${nomeMot}`;
-        if(nomesAjudantes.length > 0) stringEquipe += `<br><strong>Ajud:</strong> ${nomesAjudantes.join(', ')}`;
-
+        if(op.ajudantes) op.ajudantes.forEach(aj => {
+            var f = buscarFuncionarioPorId(aj.id);
+            if(f) nomesAjudantes.push(f.nome.split(' ')[0]);
+        });
+        var stringEquipe = `<strong>Mot:</strong> ${nomeMot}` + (nomesAjudantes.length ? `<br><strong>Ajud:</strong> ${nomesAjudantes.join(', ')}` : '');
+        
         var cliente = buscarContratantePorCnpj(op.contratanteCNPJ);
         var nomeCli = cliente ? cliente.razaoSocial.substring(0, 15) : 'CLIENTE';
 
-        // 2. Cálculos Financeiros
+        // --- CÁLCULOS FINANCEIROS ---
         var receita = Number(op.faturamento) || 0;
         
-        var abastecimento = Number(op.combustivel) || 0;
-        var outrasDespesas = (Number(op.comissao)||0) + (Number(op.despesas)||0);
-        var custoAjudantes = 0;
-        if(op.ajudantes) op.ajudantes.forEach(aj => custoAjudantes += (Number(aj.diaria)||0));
-
-        var custoTotalOp = abastecimento + outrasDespesas + custoAjudantes;
-        var lucroOp = receita - custoTotalOp;
-
-        totalFaturamento += receita;
-        totalCustosGerais += custoTotalOp;
-        totalConsumoCombustivelReais += abastecimento;
-
-        // 3. Dados de Performance (Média Global)
-        var mediaGlobal = calcularMediaGlobalVeiculo(op.veiculoPlaca);
+        // Custos Variáveis (Sem Combustível de Caixa)
+        var custoPessoal = Number(op.comissao) || 0;
+        if(op.ajudantes) op.ajudantes.forEach(aj => custoPessoal += (Number(aj.diaria)||0));
+        var custoExtra = Number(op.despesas) || 0;
         
+        // --- CÁLCULO DE CONSUMO (BASEADO NA MÉDIA GLOBAL) ---
+        var kmNaViagem = Number(op.kmRodado) || 0;
+        var mediaGlobal = calcularMediaGlobalVeiculo(op.veiculoPlaca);
+        var precoLitroRef = Number(op.precoLitro) > 0 ? Number(op.precoLitro) : obterPrecoMedioCombustivel(op.veiculoPlaca);
+        
+        // Se não tiver preço nem média, assume 0
+        var custoDieselCalculado = 0;
+        if (mediaGlobal > 0 && kmNaViagem > 0 && precoLitroRef > 0) {
+            var litrosConsumidos = kmNaViagem / mediaGlobal;
+            custoDieselCalculado = litrosConsumidos * precoLitroRef;
+        }
+
+        // --- CUSTO TOTAL DA VIAGEM E LUCRO ---
+        // Aqui o custo do diesel é o CALCULADO, não o valor do abastecimento no posto.
+        var custoTotalViagem = custoPessoal + custoExtra + custoDieselCalculado;
+        var lucroOp = receita - custoTotalViagem;
+
+        // Acumula Totais
+        totalFaturamento += receita;
+        totalCustoCalculadoDiesel += custoDieselCalculado;
+        totalOutrasDespesas += (custoPessoal + custoExtra);
+
         // HTML da Linha
         htmlLista += `
             <tr style="border-bottom:1px solid #ddd;">
@@ -503,23 +503,22 @@ window.abrirModalDetalhesDia = function(dataString) {
                 <td>
                     <strong>${op.veiculoPlaca}</strong><br>
                     <small style="color:${mediaGlobal > 0 ? 'blue' : '#999'}">
-                        ${mediaGlobal > 0 ? 'G: ' + mediaGlobal.toFixed(2) + ' Km/L' : 'S/ Média'}
+                        G: ${mediaGlobal > 0 ? mediaGlobal.toFixed(2) + ' Km/L' : 'S/ Dados'}
                     </small>
                 </td>
-                <td>
-                    ${stringEquipe}
-                </td>
+                <td>${stringEquipe}</td>
                 <td>
                     <div style="display:flex; justify-content:space-between;">
                         <span style="color:var(--success-color);">Fat: ${formatarValorMoeda(receita)}</span>
-                        <span style="color:var(--danger-color);">Custo: ${formatarValorMoeda(custoTotalOp)}</span>
+                        <span style="color:var(--danger-color);">Op: ${formatarValorMoeda(custoTotalViagem)}</span>
                     </div>
                     <div style="border-top:1px dashed #ccc; margin-top:2px; padding-top:2px;">
                         <strong>Lucro: <span style="color:${lucroOp>=0?'green':'red'}">${formatarValorMoeda(lucroOp)}</span></strong>
                     </div>
                 </td>
-                <td style="text-align:center; background:#fff3e0;">
-                    <strong style="color:#e65100;">${formatarValorMoeda(abastecimento)}</strong>
+                <td style="text-align:center; background:#fff8e1;">
+                    <strong style="color:#f57f17;">${formatarValorMoeda(custoDieselCalculado)}</strong><br>
+                    <small style="font-size:0.65em; color:#666;">Ref: ${kmNaViagem}km</small>
                 </td>
             </tr>
         `;
@@ -527,9 +526,9 @@ window.abrirModalDetalhesDia = function(dataString) {
 
     htmlLista += '</tbody></table></div>';
 
-    var totalLucroLiquido = totalFaturamento - totalCustosGerais;
+    var totalLucroLiquido = totalFaturamento - (totalCustoCalculadoDiesel + totalOutrasDespesas);
 
-    // Atualiza o Resumo no topo do modal
+    // Atualiza Resumo
     if (modalSummary) {
         modalSummary.innerHTML = `
             <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:10px; background:#e0f2f1; padding:10px; border-radius:6px; margin-bottom:10px; border:1px solid #b2dfdb;">
@@ -538,24 +537,26 @@ window.abrirModalDetalhesDia = function(dataString) {
                     <span style="font-weight:800; color:#004d40;">${formatarValorMoeda(totalFaturamento)}</span>
                 </div>
                 <div style="text-align:center;">
-                    <small style="color:#c62828; font-weight:bold;">DESPESAS TOTAIS</small><br>
-                    <span style="font-weight:800; color:#c62828;">${formatarValorMoeda(totalCustosGerais)}</span>
+                    <small style="color:#c62828; font-weight:bold;">DESPESAS OPER.</small><br>
+                    <span style="font-weight:800; color:#c62828;">${formatarValorMoeda(totalOutrasDespesas)}</span>
                 </div>
                 <div style="text-align:center;">
-                    <small style="color:#e65100; font-weight:bold;">CONSUMO (COMB)</small><br>
-                    <span style="font-weight:800; color:#e65100;">${formatarValorMoeda(totalConsumoCombustivelReais)}</span>
+                    <small style="color:#f57f17; font-weight:bold;">DIESEL (CALC)</small><br>
+                    <span style="font-weight:800; color:#f57f17;">${formatarValorMoeda(totalCustoCalculadoDiesel)}</span>
                 </div>
                 <div style="text-align:center; background:${totalLucroLiquido>=0?'#c8e6c9':'#ffcdd2'}; border-radius:4px;">
                     <small style="color:#1b5e20; font-weight:bold;">LUCRO LÍQUIDO</small><br>
                     <span style="font-weight:800; color:${totalLucroLiquido>=0?'#1b5e20':'#b71c1c'};">${formatarValorMoeda(totalLucroLiquido)}</span>
                 </div>
             </div>
+            <div style="text-align:center; font-size:0.7rem; color:#666; margin-bottom:5px;">
+                *O custo de diesel é calculado com base na Média Global do veículo e na KM percorrida hoje, não no valor abastecido na bomba.
+            </div>
         `;
     }
 
     modalBody.innerHTML = htmlLista || '<p style="text-align:center; padding:20px;">Nenhuma operação registrada neste dia.</p>';
     
-    // Exibe o modal
     document.getElementById('modalDayOperations').style.display = 'block';
 };
 // =============================================================================
@@ -1128,509 +1129,6 @@ window.excluirOperacao = function(id) {
         atualizarDashboard();
     });
 };
-// =============================================================================
-// ARQUIVO: script.js
-// PARTE 4: RELATÓRIOS, RECIBOS E SISTEMA (FINAL)
-// =============================================================================
-
-// -----------------------------------------------------------------------------
-// 14. MÓDULO DE RELATÓRIOS (COM FILTROS COMPLETOS)
-// -----------------------------------------------------------------------------
-
-window.gerarRelatorioGeral = function() {
-    var dataIni = document.getElementById('dataInicioRelatorio').value;
-    var dataFim = document.getElementById('dataFimRelatorio').value;
-    var motId = document.getElementById('selectMotoristaRelatorio').value;
-    var veiculo = document.getElementById('selectVeiculoRelatorio').value;
-    var contratante = document.getElementById('selectContratanteRelatorio').value;
-    var atividadeId = document.getElementById('selectAtividadeRelatorio').value; // FILTRO RESTAURADO
-
-    if (!dataIni || !dataFim) return alert("Selecione as datas inicial e final.");
-
-    var divResultados = document.getElementById('reportResults');
-    var divConteudo = document.getElementById('reportContent');
-    divResultados.style.display = 'block';
-
-    // Lógica de Filtragem
-    var opsFiltradas = CACHE_OPERACOES.filter(function(op) {
-        if (op.status === 'CANCELADA') return false;
-        if (op.data < dataIni || op.data > dataFim) return false;
-        
-        if (motId && String(op.motoristaId) !== String(motId)) return false;
-        if (veiculo && op.veiculoPlaca !== veiculo) return false;
-        if (contratante && op.contratanteCNPJ !== contratante) return false;
-        if (atividadeId && String(op.atividadeId) !== String(atividadeId)) return false; // Lógica do filtro
-        
-        return true;
-    });
-
-    // Cabeçalho do Relatório
-    var html = '<h3 style="text-align:center; border-bottom:2px solid #ccc; padding-bottom:10px;">RELATÓRIO GERAL DE OPERAÇÕES</h3>';
-    html += '<p><strong>Período:</strong> ' + formatarDataParaBrasileiro(dataIni) + ' a ' + formatarDataParaBrasileiro(dataFim) + '</p>';
-    
-    // Resumo de Filtros Aplicados
-    var filtrosTexto = [];
-    if(motId) filtrosTexto.push("Motorista: " + (buscarFuncionarioPorId(motId)?.nome || motId));
-    if(veiculo) filtrosTexto.push("Veículo: " + veiculo);
-    if(contratante) filtrosTexto.push("Cliente: " + (buscarContratantePorCnpj(contratante)?.razaoSocial || contratante));
-    if(atividadeId) filtrosTexto.push("Atividade: " + (buscarAtividadePorId(atividadeId)?.nome || atividadeId));
-    if(filtrosTexto.length > 0) html += '<p style="font-size:0.85rem; color:#666;">Filtros: ' + filtrosTexto.join(' | ') + '</p>';
-
-    // Tabela
-    html += '<table class="data-table" style="width:100%; border-collapse:collapse; margin-top:15px; font-size:0.85rem;">';
-    html += '<thead><tr style="background:#eee;"><th>DATA</th><th>CLIENTE / ATIVIDADE</th><th>VEÍCULO</th><th>MOTORISTA</th><th>FATURAMENTO</th><th>CUSTOS TOTAIS</th><th>LUCRO</th></tr></thead><tbody>';
-
-    var totalFat = 0;
-    var totalCusto = 0;
-    var totalLucro = 0;
-
-    opsFiltradas.forEach(function(op) {
-        var mot = buscarFuncionarioPorId(op.motoristaId);
-        var cli = buscarContratantePorCnpj(op.contratanteCNPJ);
-        var ativ = buscarAtividadePorId(op.atividadeId);
-        
-        var custo = (Number(op.combustivel)||0) + (Number(op.despesas)||0) + (Number(op.comissao)||0);
-        if(op.ajudantes) op.ajudantes.forEach(aj => custo += (Number(aj.diaria)||0));
-
-        var lucro = (Number(op.faturamento)||0) - custo;
-
-        totalFat += (Number(op.faturamento)||0);
-        totalCusto += custo;
-        totalLucro += lucro;
-
-        html += '<tr>';
-        html += '<td>' + formatarDataParaBrasileiro(op.data) + '</td>';
-        html += '<td>' + (cli ? cli.razaoSocial : op.contratanteCNPJ) + '<br><small>' + (ativ ? ativ.nome : '') + '</small></td>';
-        html += '<td>' + op.veiculoPlaca + '</td>';
-        html += '<td>' + (mot ? mot.nome : 'N/A') + '</td>';
-        html += '<td style="color:green;">' + formatarValorMoeda(op.faturamento) + '</td>';
-        html += '<td style="color:red;">' + formatarValorMoeda(custo) + '</td>';
-        html += '<td><strong>' + formatarValorMoeda(lucro) + '</strong></td>';
-        html += '</tr>';
-    });
-
-    // Rodapé de Totais
-    html += '</tbody><tfoot><tr style="background:#ddd; font-weight:bold;">';
-    html += '<td colspan="4" style="text-align:right;">TOTAIS GERAIS:</td>';
-    html += '<td style="color:green;">' + formatarValorMoeda(totalFat) + '</td>';
-    html += '<td style="color:red;">' + formatarValorMoeda(totalCusto) + '</td>';
-    html += '<td style="background:#ccc;">' + formatarValorMoeda(totalLucro) + '</td>';
-    html += '</tr></tfoot></table>';
-
-    divConteudo.innerHTML = html;
-};
-
-window.gerarRelatorioCobranca = function() {
-    // Versão simplificada focada no cliente para envio
-    var dataIni = document.getElementById('dataInicioRelatorio').value;
-    var dataFim = document.getElementById('dataFimRelatorio').value;
-    var contratante = document.getElementById('selectContratanteRelatorio').value;
-
-    if (!contratante) return alert("Para relatório de cobrança, selecione um CONTRATANTE específico.");
-    if (!dataIni || !dataFim) return alert("Selecione as datas.");
-
-    var divResultados = document.getElementById('reportResults');
-    var divConteudo = document.getElementById('reportContent');
-    divResultados.style.display = 'block';
-
-    var cliData = buscarContratantePorCnpj(contratante);
-    var nomeCli = cliData ? cliData.razaoSocial : contratante;
-
-    var ops = CACHE_OPERACOES.filter(op => 
-        op.contratanteCNPJ === contratante && 
-        op.data >= dataIni && 
-        op.data <= dataFim && 
-        op.status !== 'CANCELADA'
-    );
-
-    var html = `<div style="padding:20px; font-family:Arial;">
-        <h2 style="text-align:center;">DEMONSTRATIVO DE SERVIÇOS PRESTADOS</h2>
-        <p><strong>CLIENTE:</strong> ${nomeCli}</p>
-        <p><strong>CNPJ:</strong> ${contratante}</p>
-        <p><strong>PERÍODO:</strong> ${formatarDataParaBrasileiro(dataIni)} a ${formatarDataParaBrasileiro(dataFim)}</p>
-        <hr>
-        <table style="width:100%; border-collapse:collapse; text-align:left;">
-            <tr style="border-bottom:2px solid #000;"><th>DATA</th><th>VEÍCULO</th><th>SERVIÇO</th><th>VALOR</th></tr>`;
-            
-    var total = 0;
-    ops.forEach(op => {
-        var ativ = buscarAtividadePorId(op.atividadeId);
-        html += `<tr>
-            <td style="padding:8px;">${formatarDataParaBrasileiro(op.data)}</td>
-            <td>${op.veiculoPlaca}</td>
-            <td>${ativ ? ativ.nome : 'FRETE'}</td>
-            <td>${formatarValorMoeda(op.faturamento)}</td>
-        </tr>`;
-        total += (Number(op.faturamento)||0);
-    });
-
-    html += `<tr style="border-top:2px solid #000; font-weight:bold;">
-        <td colspan="3" style="padding-top:10px;">TOTAL A PAGAR</td>
-        <td style="padding-top:10px;">${formatarValorMoeda(total)}</td>
-    </tr></table>
-    <br><br>
-    <p style="text-align:center; font-size:0.8rem;">Emitido por: ${CACHE_MINHA_EMPRESA.razaoSocial || 'LOGIMASTER SISTEMAS'}</p>
-    </div>`;
-
-    divConteudo.innerHTML = html;
-};
-
-window.exportarRelatorioPDF = function() {
-    var element = document.getElementById('reportContent');
-    if (!element || element.innerHTML.trim() === '') return alert("Gere um relatório primeiro.");
-    
-    var opt = {
-        margin:       0.5,
-        filename:     'relatorio_logimaster.pdf',
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2 },
-        jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' }
-    };
-    html2pdf().set(opt).from(element).save();
-};
-
-// -----------------------------------------------------------------------------
-// 15. RECIBOS DE PAGAMENTO
-// -----------------------------------------------------------------------------
-
-window.gerarReciboPagamento = function() {
-    var funcId = document.getElementById('selectMotoristaRecibo').value;
-    var dataIni = document.getElementById('dataInicioRecibo').value;
-    var dataFim = document.getElementById('dataFimRecibo').value;
-
-    if (!funcId || !dataIni || !dataFim) return alert("Preencha funcionário e datas.");
-
-    var func = buscarFuncionarioPorId(funcId);
-    if (!func) return alert("Funcionário não encontrado.");
-
-    var ops = CACHE_OPERACOES.filter(o => o.data >= dataIni && o.data <= dataFim && o.status !== 'CANCELADA');
-    
-    var totalPagar = 0;
-    var descritivo = '';
-
-    ops.forEach(op => {
-        // Se for o Motorista Principal
-        if (String(op.motoristaId) === String(funcId)) {
-            // Verifica se não tem falta
-            if (!op.checkins || !op.checkins.faltaMotorista) {
-                var com = Number(op.comissao) || 0;
-                if (com > 0) {
-                    totalPagar += com;
-                    descritivo += `<tr><td>${formatarDataParaBrasileiro(op.data)}</td><td>COMISSÃO (Placa ${op.veiculoPlaca})</td><td align="right">${formatarValorMoeda(com)}</td></tr>`;
-                }
-            }
-        }
-        
-        // Se for Ajudante
-        if (op.ajudantes) {
-            op.ajudantes.forEach(aj => {
-                if (String(aj.id) === String(funcId)) {
-                     // Lógica de falta de ajudante poderia ser adicionada aqui
-                     var diaria = Number(aj.diaria) || 0;
-                     totalPagar += diaria;
-                     descritivo += `<tr><td>${formatarDataParaBrasileiro(op.data)}</td><td>DIÁRIA AJUDANTE (Placa ${op.veiculoPlaca})</td><td align="right">${formatarValorMoeda(diaria)}</td></tr>`;
-                }
-            });
-        }
-    });
-
-    var divRecibo = document.getElementById('reciboContent');
-    var html = `
-    <div style="border:2px solid #000; padding:30px; font-family:'Courier New', monospace; background:#fff;">
-        <h2 style="text-align:center; margin-bottom:5px;">RECIBO DE PAGAMENTO</h2>
-        <p style="text-align:center; font-size:0.8rem; margin-top:0;">${CACHE_MINHA_EMPRESA.razaoSocial || 'MINHA EMPRESA'}</p>
-        <hr style="border:1px dashed #000;">
-        <p><strong>BENEFICIÁRIO:</strong> ${func.nome}</p>
-        <p><strong>CPF:</strong> ${func.documento} | <strong>PIX:</strong> ${func.pix || '-'}</p>
-        <br>
-        <table style="width:100%;">
-            <tr style="border-bottom:1px solid #000;">
-                <th align="left">DATA</th><th align="left">DESCRIÇÃO</th><th align="right">VALOR</th>
-            </tr>
-            ${descritivo || '<tr><td colspan="3" align="center">Nenhum serviço encontrado no período.</td></tr>'}
-        </table>
-        <br>
-        <hr style="border:1px solid #000;">
-        <h3 style="text-align:right;">TOTAL LÍQUIDO: ${formatarValorMoeda(totalPagar)}</h3>
-        <br><br><br>
-        <div style="display:flex; justify-content:space-between; margin-top:30px;">
-            <div style="text-align:center; width:45%; border-top:1px solid #000; padding-top:5px;">ASSINATURA DO EMPREGADOR</div>
-            <div style="text-align:center; width:45%; border-top:1px solid #000; padding-top:5px;">ASSINATURA DO BENEFICIÁRIO</div>
-        </div>
-        <p style="text-align:center; font-size:0.8em; margin-top:20px;">Data de Emissão: ${new Date().toLocaleDateString()}</p>
-    </div>
-    <button onclick="var c=document.getElementById('reciboContent').innerHTML; var w=window.open(); w.document.write(c); w.print();" class="btn-primary" style="margin-top:15px; width:100%;">
-        <i class="fas fa-print"></i> IMPRIMIR RECIBO
-    </button>
-    `;
-
-    divRecibo.innerHTML = html;
-};
-
-// -----------------------------------------------------------------------------
-// 16. MÓDULO DE DESPESAS GERAIS (CRUD)
-// -----------------------------------------------------------------------------
-
-document.addEventListener('submit', function(e) {
-    if (e.target.id === 'formDespesaGeral') {
-        e.preventDefault();
-        var novo = {
-            id: Date.now().toString(),
-            data: document.getElementById('despesaGeralData').value,
-            veiculoPlaca: document.getElementById('selectVeiculoDespesaGeral').value,
-            descricao: document.getElementById('despesaGeralDescricao').value.toUpperCase(),
-            valor: document.getElementById('despesaGeralValor').value,
-            formaPagamento: document.getElementById('despesaFormaPagamento').value,
-            modoPagamento: document.getElementById('despesaModoPagamento').value,
-            // Dados de parcelamento
-            parcelas: document.getElementById('despesaParcelas').value,
-            parcelasPagas: document.getElementById('despesaParcelasPagas').value
-        };
-        
-        CACHE_DESPESAS.push(novo);
-        salvarListaDespesas(CACHE_DESPESAS).then(() => {
-            alert("Despesa Lançada!");
-            e.target.reset();
-            renderizarTabelaDespesasGerais();
-            atualizarDashboard();
-        });
-    }
-});
-
-function renderizarTabelaDespesasGerais() {
-    var tbody = document.querySelector('#tabelaDespesasGerais tbody');
-    if(!tbody) return;
-    tbody.innerHTML = '';
-    
-    CACHE_DESPESAS.sort((a,b) => new Date(b.data) - new Date(a.data)).forEach(d => {
-        var status = (d.modoPagamento === 'parcelado') 
-            ? `PARCELADO (${d.parcelasPagas}/${d.parcelas})` 
-            : 'À VISTA';
-            
-        var tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${formatarDataParaBrasileiro(d.data)}</td>
-            <td>${d.veiculoPlaca || 'GERAL'}</td>
-            <td>${d.descricao}</td>
-            <td style="color:red;">${formatarValorMoeda(d.valor)}</td>
-            <td><small>${status}</small></td>
-            <td><button class="btn-mini delete-btn" onclick="excluirDespesa('${d.id}')">X</button></td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
-window.excluirDespesa = function(id) {
-    if(!confirm("Excluir despesa?")) return;
-    CACHE_DESPESAS = CACHE_DESPESAS.filter(d => d.id !== String(id));
-    salvarListaDespesas(CACHE_DESPESAS).then(() => {
-        renderizarTabelaDespesasGerais();
-        atualizarDashboard();
-    });
-};
-
-// -----------------------------------------------------------------------------
-// 17. BACKUP, IMPORTAÇÃO E RESET (MANUTENÇÃO)
-// -----------------------------------------------------------------------------
-
-window.exportDataBackup = function() {
-    var dataFull = {
-        funcionarios: CACHE_FUNCIONARIOS,
-        veiculos: CACHE_VEICULOS,
-        contratantes: CACHE_CONTRATANTES,
-        operacoes: CACHE_OPERACOES,
-        minhaEmpresa: CACHE_MINHA_EMPRESA,
-        despesas: CACHE_DESPESAS,
-        atividades: CACHE_ATIVIDADES,
-        profileRequests: CACHE_PROFILE_REQUESTS
-    };
-    var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataFull));
-    var downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", "backup_logimaster_" + new Date().toISOString().slice(0,10) + ".json");
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
-};
-
-window.importDataBackup = function(event) {
-    var reader = new FileReader();
-    reader.onload = function(event) {
-        try {
-            var jsonObj = JSON.parse(event.target.result);
-            if (confirm("Isso substituirá TODOS os dados atuais. Confirmar importação?")) {
-                CACHE_FUNCIONARIOS = jsonObj.funcionarios || [];
-                CACHE_VEICULOS = jsonObj.veiculos || [];
-                CACHE_CONTRATANTES = jsonObj.contratantes || [];
-                CACHE_OPERACOES = jsonObj.operacoes || [];
-                CACHE_MINHA_EMPRESA = jsonObj.minhaEmpresa || {};
-                CACHE_DESPESAS = jsonObj.despesas || [];
-                CACHE_ATIVIDADES = jsonObj.atividades || [];
-                CACHE_PROFILE_REQUESTS = jsonObj.profileRequests || [];
-                
-                // Salva tudo em lote
-                salvarListaFuncionarios(CACHE_FUNCIONARIOS);
-                salvarListaVeiculos(CACHE_VEICULOS);
-                salvarListaContratantes(CACHE_CONTRATANTES);
-                salvarListaOperacoes(CACHE_OPERACOES);
-                salvarDadosMinhaEmpresa(CACHE_MINHA_EMPRESA);
-                salvarListaDespesas(CACHE_DESPESAS);
-                salvarListaAtividades(CACHE_ATIVIDADES);
-                
-                alert("Importação Concluída com Sucesso!");
-                window.location.reload();
-            }
-        } catch (e) {
-            alert("Erro ao ler arquivo JSON: " + e);
-        }
-    };
-    reader.readAsText(event.target.files[0]);
-};
-
-window.resetSystemData = function() {
-    if (confirm("ATENÇÃO: ISSO APAGARÁ TUDO! TEM CERTEZA ABSOLUTA?")) {
-        localStorage.clear();
-        alert("Sistema zerado. A página será recarregada.");
-        window.location.reload();
-    }
-};
-
-// =============================================================================
-// GESTÃO DE EQUIPE E COMUNICAÇÃO
-// =============================================================================
-
-// Carrega as tabelas da aba "Equipe e Avisos"
-window.renderizarPainelEquipe = async function() {
-    if (!window.dbRef || !window.USUARIO_ATUAL) return;
-    
-    const { db, collection, query, where, getDocs, doc, updateDoc } = window.dbRef;
-    const empresa = window.USUARIO_ATUAL.company;
-
-    // 1. LISTAR FUNCIONÁRIOS ATIVOS (Com status de Login)
-    const tbodyAtivos = document.querySelector('#tabelaCompanyAtivos tbody');
-    if (tbodyAtivos) {
-        tbodyAtivos.innerHTML = '<tr><td colspan="5" style="text-align:center;">Carregando dados da nuvem...</td></tr>';
-        
-        try {
-            // Busca usuários no Firebase que pertencem a esta empresa
-            const q = query(collection(db, "users"), where("company", "==", empresa), where("approved", "==", true));
-            const querySnapshot = await getDocs(q);
-            
-            tbodyAtivos.innerHTML = '';
-            
-            if (querySnapshot.empty) {
-                tbodyAtivos.innerHTML = '<tr><td colspan="5" style="text-align:center;">Nenhum usuário ativo com login encontrado.</td></tr>';
-            }
-
-            querySnapshot.forEach((docSnap) => {
-                const u = docSnap.data();
-                // Tenta cruzar com dados locais para pegar telefone/detalhes
-                const localData = CACHE_FUNCIONARIOS.find(f => f.email === u.email) || {};
-                
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${u.name}</td>
-                    <td>${u.email}</td>
-                    <td><span class="status-pill pill-active">${u.role}</span></td>
-                    <td>${localData.telefone ? formatarTelefoneBrasil(localData.telefone) : '-'}</td>
-                    <td>
-                        <button class="btn-mini delete-btn" onclick="bloquearAcessoUsuario('${docSnap.id}')" title="Revogar Acesso"><i class="fas fa-ban"></i></button>
-                    </td>
-                `;
-                tbodyAtivos.appendChild(tr);
-            });
-        } catch (e) {
-            console.error("Erro ao listar ativos:", e);
-            tbodyAtivos.innerHTML = '<tr><td colspan="5" style="color:red; text-align:center;">Erro de conexão.</td></tr>';
-        }
-    }
-
-    // 2. LISTAR PENDENTES DE APROVAÇÃO
-    const tbodyPendentes = document.querySelector('#tabelaCompanyPendentes tbody');
-    if (tbodyPendentes) {
-        try {
-            const qP = query(collection(db, "users"), where("company", "==", empresa), where("approved", "==", false));
-            const snapP = await getDocs(qP);
-            
-            tbodyPendentes.innerHTML = '';
-            
-            if (snapP.empty) {
-                tbodyPendentes.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">Nenhuma solicitação pendente.</td></tr>';
-            } else {
-                // Atualiza badge de aviso no menu
-                const badge = document.getElementById('badgeAccess');
-                if(badge) { badge.style.display = 'inline-block'; badge.textContent = snapP.size; }
-            }
-
-            snapP.forEach((docSnap) => {
-                const u = docSnap.data();
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${u.name}</td>
-                    <td>${u.email}</td>
-                    <td>${u.role}</td>
-                    <td>${new Date(u.createdAt).toLocaleDateString()}</td>
-                    <td>
-                        <button class="btn-mini btn-success" onclick="aprovarUsuario('${docSnap.id}')"><i class="fas fa-check"></i></button>
-                        <button class="btn-mini btn-danger" onclick="rejeitarUsuario('${docSnap.id}')"><i class="fas fa-times"></i></button>
-                    </td>
-                `;
-                tbodyPendentes.appendChild(tr);
-            });
-        } catch (e) { console.error(e); }
-    }
-};
-
-// Funções de Ação
-window.aprovarUsuario = async function(uid) {
-    if(!confirm("Aprovar acesso deste usuário?")) return;
-    try {
-        const { db, doc, updateDoc } = window.dbRef;
-        await updateDoc(doc(db, "users", uid), { approved: true });
-        alert("Usuário aprovado!");
-        renderizarPainelEquipe();
-    } catch(e) { alert("Erro: " + e.message); }
-};
-
-window.bloquearAcessoUsuario = async function(uid) {
-    if(!confirm("Bloquear acesso? O usuário não conseguirá mais logar.")) return;
-    try {
-        const { db, doc, updateDoc } = window.dbRef;
-        await updateDoc(doc(db, "users", uid), { approved: false });
-        alert("Acesso revogado.");
-        renderizarPainelEquipe();
-    } catch(e) { alert("Erro: " + e.message); }
-};
-
-// ENVIO DE MENSAGENS (AVISOS)
-document.addEventListener('submit', async function(e) {
-    if (e.target.id === 'formAdminMessage') {
-        e.preventDefault();
-        
-        var texto = document.getElementById('msgTextAdmin').value;
-        var destinatario = document.getElementById('msgRecipientSelect').value;
-        
-        if (!texto) return;
-
-        try {
-            const { db, collection, addDoc } = window.dbRef;
-            
-            await addDoc(collection(db, "messages"), {
-                company: window.USUARIO_ATUAL.company,
-                from: window.USUARIO_ATUAL.email,
-                to: destinatario, // 'all' ou ID do usuário
-                content: texto,
-                createdAt: new Date().toISOString(),
-                readBy: []
-            });
-            
-            alert("Mensagem enviada com sucesso!");
-            e.target.reset();
-        } catch (err) {
-            alert("Erro ao enviar mensagem: " + err.message);
-        }
-    }
-});
 // =============================================================================
 // ARQUIVO: script.js
 // PARTE 5: NAVEGAÇÃO, INICIALIZAÇÃO E SUPER ADMIN (FINAL)
