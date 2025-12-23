@@ -1771,12 +1771,12 @@ function configurarNavegacao() {
             
             if (pageId === 'home') { renderizarCalendario(); atualizarDashboard(); }
             if (pageId === 'despesas') renderizarTabelaDespesasGerais();
-            if (pageId === 'checkins-pendentes') preencherTodosSelects(); // Atualiza Monitoramento e Faltas
+            if (pageId === 'checkins-pendentes') preencherTodosSelects(); 
             if (pageId === 'access-management') { renderizarPainelEquipe(); renderizarTabelaProfileRequests(); }
             
-            // Perfil Funcionário: Busca mensagens e sync
+            // Perfil Funcionário
             if (pageId === 'employee-home' && window.USUARIO_ATUAL && window.USUARIO_ATUAL.role !== 'admin') { 
-                verificarNovasMensagens();
+                verificarNovasMensagens(); // Verifica mensagens ao entrar
                 sincronizarDadosDaNuvem().then(() => renderizarPainelCheckinFuncionario());
             }
             if (pageId === 'meus-dados') { carregarDadosMeuPerfil(window.USUARIO_ATUAL.email); }
@@ -1799,13 +1799,19 @@ function configurarNavegacao() {
 }
 
 // -----------------------------------------------------------------------------
-// SISTEMA DE MENSAGENS PARA FUNCIONÁRIOS (CORRIGIDO)
+// SISTEMA DE MENSAGENS (CORRIGIDO PARA NÃO REPETIR)
 // -----------------------------------------------------------------------------
+
+// Variável para bloquear mensagens já lidas nesta sessão (evita delay do banco)
+window._idsLidosLocalmente = []; 
 
 window.verificarNovasMensagens = async function() {
     if (!window.dbRef || !window.USUARIO_ATUAL) return;
     const { db, collection, query, where, getDocs } = window.dbRef;
     
+    // Se já tiver um modal aberto, não busca outra para não sobrepor
+    if(document.getElementById('modalNotification').style.display === 'block') return;
+
     try {
         const q = query(
             collection(db, "messages"), 
@@ -1814,32 +1820,31 @@ window.verificarNovasMensagens = async function() {
         
         const snap = await getDocs(q);
         
-        // Varre mensagens
         for (const msgDoc of snap.docs) {
             const data = msgDoc.data();
             const myId = window.USUARIO_ATUAL.uid;
+            const msgId = msgDoc.id;
             
-            // Verifica se é para mim e se eu já li
+            // Lógica de Filtragem Rigorosa:
+            // 1. É para mim (ou todos)?
+            // 2. Eu já li no banco (readBy)?
+            // 3. Eu acabei de ler nesta sessão (_idsLidosLocalmente)?
+            
             const isForMe = (data.to === 'all' || data.to === myId);
-            const alreadyRead = data.readBy && data.readBy.includes(myId);
+            const alreadyReadDB = data.readBy && data.readBy.includes(myId);
+            const justReadLocal = window._idsLidosLocalmente.includes(msgId);
             
-            if (isForMe && !alreadyRead) {
-                // Guarda ID globalmente
-                window._mensagemAtualId = msgDoc.id;
+            if (isForMe && !alreadyReadDB && !justReadLocal) {
+                // Guarda ID globalmente para confirmar leitura
+                window._mensagemAtualId = msgId;
                 
                 // Exibe Modal
-                var modal = document.getElementById('modalNotification');
-                var txt = document.getElementById('notificationMessageText');
-                var sender = document.getElementById('notificationSender');
+                document.getElementById('notificationMessageText').innerText = data.content;
+                document.getElementById('notificationSender').innerText = "Enviado por: " + data.from;
+                document.getElementById('modalNotification').style.display = 'block';
                 
-                if(modal && txt && sender) {
-                    txt.innerText = data.content;
-                    sender.innerText = "Enviado por: " + data.from;
-                    modal.style.display = 'block';
-                    
-                    // Interrompe o loop para mostrar uma mensagem por vez
-                    break; 
-                }
+                // Para o loop para mostrar apenas UMA mensagem por vez e não inundar o usuário
+                break; 
             }
         }
     } catch (e) {
@@ -1848,37 +1853,40 @@ window.verificarNovasMensagens = async function() {
 };
 
 window.confirmarLeituraMensagem = async function() {
-    // 1. Fecha o modal IMEDIATAMENTE para não travar a UI
+    // 1. FECHA O MODAL IMEDIATAMENTE (Feedback Instantâneo)
     document.getElementById('modalNotification').style.display = 'none';
 
-    // 2. Se não tiver ID ou conexão, aborta silenciosamente
     if(!window._mensagemAtualId || !window.dbRef || !window.USUARIO_ATUAL) return;
     
-    const { db, doc, updateDoc, arrayUnion } = window.dbRef;
-    const myId = window.USUARIO_ATUAL.uid;
     const msgId = window._mensagemAtualId;
+    const myId = window.USUARIO_ATUAL.uid;
+
+    // 2. BLOQUEIO LOCAL IMEDIATO
+    // Adiciona na lista negra local para garantir que não apareça de novo mesmo se a internet cair
+    window._idsLidosLocalmente.push(msgId);
     
+    // 3. ATUALIZA NO BANCO EM SEGUNDO PLANO
+    const { db, doc, updateDoc, arrayUnion } = window.dbRef;
     try {
-        // 3. Atualiza no banco em background
         await updateDoc(doc(db, "messages", msgId), {
             readBy: arrayUnion(myId)
         });
+        
         window._mensagemAtualId = null;
         
-        // Opcional: Verificar se há mais mensagens
-        setTimeout(window.verificarNovasMensagens, 1000);
+        // Verifica se tem mais mensagens na fila após um pequeno delay
+        setTimeout(window.verificarNovasMensagens, 1500);
         
     } catch(e) { 
         console.error("Erro ao confirmar leitura no banco:", e); 
+        // Mesmo com erro no banco, a lista local impede que a mensagem volte agora
     }
 };
 
-// Vincula a função ao botão do modal de forma segura
+// Garante que o botão use a nova função
 document.addEventListener('DOMContentLoaded', function() {
     var btnModal = document.querySelector('#modalNotification button');
     if(btnModal) {
-        // Remove onclick antigo inline para evitar conflito
-        btnModal.removeAttribute('onclick'); 
         btnModal.onclick = window.confirmarLeituraMensagem;
     }
     configurarNavegacao();
@@ -1921,7 +1929,7 @@ window.renderizarPainelCheckinFuncionario = function() {
     var btnRefresh = `<button class="btn-secondary btn-mini" onclick="sincronizarDadosDaNuvem(true)" style="width:100%; margin-bottom:15px;"><i class="fas fa-sync"></i> ATUALIZAR VIAGENS</button>`;
 
     if (minhasOps.length === 0) {
-        container.innerHTML = btnRefresh + '<p style="text-align:center; padding:20px; color:#666;">Nenhuma viagem para hoje.</p>';
+        container.innerHTML = btnRefresh + '<p style="text-align:center; padding:20px; color:#666;">Nenhuma viagem agendada para hoje.</p>';
         return;
     }
 
