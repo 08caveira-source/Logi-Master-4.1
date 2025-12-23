@@ -1469,7 +1469,8 @@ function configurarNavegacao() {
             if (pageId === 'despesas') renderizarTabelaDespesasGerais();
             if (pageId === 'checkins-pendentes' && typeof renderizarTabelaMonitoramento === 'function') renderizarTabelaMonitoramento();
             if (pageId === 'access-management' && typeof renderizarPainelEquipe === 'function') renderizarPainelEquipe();
-            // Atualiza painel do funcionário e força sync ao entrar na aba
+            
+            // Perfil Funcionário: Busca mensagens e sync
             if (pageId === 'employee-home' && window.USUARIO_ATUAL && window.USUARIO_ATUAL.role !== 'admin') { 
                 verificarNovasMensagens();
                 sincronizarDadosDaNuvem().then(() => renderizarPainelCheckinFuncionario());
@@ -1494,12 +1495,12 @@ function configurarNavegacao() {
 }
 
 // -----------------------------------------------------------------------------
-// SISTEMA DE MENSAGENS PARA FUNCIONÁRIOS
+// SISTEMA DE MENSAGENS PARA FUNCIONÁRIOS (CORRIGIDO)
 // -----------------------------------------------------------------------------
 
 window.verificarNovasMensagens = async function() {
     if (!window.dbRef || !window.USUARIO_ATUAL) return;
-    const { db, collection, query, where, getDocs, doc, updateDoc, arrayUnion } = window.dbRef;
+    const { db, collection, query, where, getDocs } = window.dbRef;
     
     try {
         const q = query(
@@ -1509,49 +1510,74 @@ window.verificarNovasMensagens = async function() {
         
         const snap = await getDocs(q);
         
-        snap.forEach((msgDoc) => {
+        // Varre mensagens
+        for (const msgDoc of snap.docs) {
             const data = msgDoc.data();
             const myId = window.USUARIO_ATUAL.uid;
             
-            // Verifica se é para mim e se já li
+            // Verifica se é para mim e se eu já li
             const isForMe = (data.to === 'all' || data.to === myId);
             const alreadyRead = data.readBy && data.readBy.includes(myId);
             
             if (isForMe && !alreadyRead) {
-                // Guarda ID globalmente para confirmar leitura
+                // Guarda ID globalmente
                 window._mensagemAtualId = msgDoc.id;
                 
-                document.getElementById('notificationMessageText').innerText = data.content;
-                document.getElementById('notificationSender').innerText = "Enviado por: " + data.from;
-                document.getElementById('modalNotification').style.display = 'block';
-                // Obs: Só marca como lido ao clicar no botão "Entendido"
+                // Exibe Modal
+                var modal = document.getElementById('modalNotification');
+                var txt = document.getElementById('notificationMessageText');
+                var sender = document.getElementById('notificationSender');
+                
+                if(modal && txt && sender) {
+                    txt.innerText = data.content;
+                    sender.innerText = "Enviado por: " + data.from;
+                    modal.style.display = 'block';
+                    
+                    // Interrompe o loop para mostrar uma mensagem por vez
+                    break; 
+                }
             }
-        });
+        }
     } catch (e) {
         console.error("Erro ao buscar mensagens:", e);
     }
 };
 
 window.confirmarLeituraMensagem = async function() {
-    if(!window._mensagemAtualId || !window.dbRef) {
-        document.getElementById('modalNotification').style.display = 'none';
-        return;
-    }
+    // 1. Fecha o modal IMEDIATAMENTE para não travar a UI
+    document.getElementById('modalNotification').style.display = 'none';
+
+    // 2. Se não tiver ID ou conexão, aborta silenciosamente
+    if(!window._mensagemAtualId || !window.dbRef || !window.USUARIO_ATUAL) return;
     
     const { db, doc, updateDoc, arrayUnion } = window.dbRef;
     const myId = window.USUARIO_ATUAL.uid;
+    const msgId = window._mensagemAtualId;
     
     try {
-        await updateDoc(doc(db, "messages", window._mensagemAtualId), {
+        // 3. Atualiza no banco em background
+        await updateDoc(doc(db, "messages", msgId), {
             readBy: arrayUnion(myId)
         });
-        document.getElementById('modalNotification').style.display = 'none';
         window._mensagemAtualId = null;
-    } catch(e) { console.error(e); }
+        
+        // Opcional: Verificar se há mais mensagens
+        setTimeout(window.verificarNovasMensagens, 1000);
+        
+    } catch(e) { 
+        console.error("Erro ao confirmar leitura no banco:", e); 
+    }
 };
 
-// Vincula a função ao botão do modal (Isso sobrescreve o onclick do HTML)
-document.querySelector('#modalNotification button').onclick = window.confirmarLeituraMensagem;
+// Vincula a função ao botão do modal de forma segura
+document.addEventListener('DOMContentLoaded', function() {
+    var btnModal = document.querySelector('#modalNotification button');
+    if(btnModal) {
+        // Remove onclick antigo inline para evitar conflito
+        btnModal.removeAttribute('onclick'); 
+        btnModal.onclick = window.confirmarLeituraMensagem;
+    }
+});
 
 
 // -----------------------------------------------------------------------------
@@ -1571,13 +1597,14 @@ window.renderizarPainelCheckinFuncionario = function() {
             <div style="text-align:center; padding:30px; color:#c62828;">
                 <i class="fas fa-exclamation-circle" style="font-size:2rem; margin-bottom:10px;"></i><br>
                 <strong>PERFIL NÃO VINCULADO</strong><br>
-                <small>Seu email (${emailLogado}) não foi encontrado.<br>Peça ao administrador para verificar seu cadastro.</small>
+                <small>Seu email (${emailLogado}) não foi encontrado na lista.<br>Peça ao administrador para verificar seu cadastro.</small>
                 <br><br>
                 <button class="btn-secondary btn-mini" onclick="sincronizarDadosDaNuvem(true)">Forçar Sincronização</button>
             </div>`; 
         return; 
     }
 
+    // AJUSTE DE DATA (LOCAL)
     var hoje = new Date().toLocaleDateString('pt-BR').split('/').reverse().join('-');
     
     var minhasOps = CACHE_OPERACOES.filter(op => {
@@ -1631,10 +1658,10 @@ window.iniciarViagemFuncionario = function(opId) {
     var op = CACHE_OPERACOES.find(o => String(o.id) === String(opId));
     if(op) {
         op.status = 'EM_ANDAMENTO';
-        op.kmInicial = Number(kmPainel); // Salva o KM Inicial
+        op.kmInicial = Number(kmPainel); 
         
         salvarListaOperacoes(CACHE_OPERACOES).then(() => {
-            alert("Boa viagem! KM Inicial registrado: " + kmPainel);
+            alert("Boa viagem! KM Inicial registrado.");
             renderizarPainelCheckinFuncionario();
         });
     }
