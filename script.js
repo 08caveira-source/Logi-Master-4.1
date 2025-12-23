@@ -381,31 +381,41 @@ window.changeMonth = function(direction) {
 // CÁLCULOS AVANÇADOS DE FROTA (GLOBAL)
 // =============================================================================
 
-function calcularMediaGlobalVeiculo(placa) {
-    // Filtra todas as operações deste veículo que tenham KM e Litragem válidos
-    var ops = CACHE_OPERACOES.filter(op => 
-        op.veiculoPlaca === placa && 
-        op.status !== 'CANCELADA' &&
-        Number(op.kmRodado) > 0 && 
-        Number(op.combustivel) > 0 &&
-        Number(op.precoLitro) > 0
-    );
+window.calcularMediaGlobalVeiculo = function(placa) {
+    // CORREÇÃO CRÍTICA: Filtra TODO o histórico de operações (global), não apenas do dia.
+    // Considera apenas operações válidas com KM rodado > 0 e Abastecimento > 0.
+    
+    var ops = CACHE_OPERACOES.filter(function(op) {
+        return op.veiculoPlaca === placa && 
+               op.status !== 'CANCELADA' &&
+               Number(op.kmRodado) > 0 && 
+               Number(op.combustivel) > 0 &&
+               Number(op.precoLitro) > 0; // Necessário preço para saber litragem
+    });
 
     if (ops.length === 0) return 0;
 
     var totalKm = 0;
     var totalLitros = 0;
 
-    ops.forEach(op => {
-        totalKm += Number(op.kmRodado);
-        totalLitros += (Number(op.combustivel) / Number(op.precoLitro));
+    ops.forEach(function(op) {
+        var valorAbastecido = Number(op.combustivel);
+        var preco = Number(op.precoLitro);
+        
+        if (preco > 0) {
+            var litros = valorAbastecido / preco;
+            
+            totalKm += Number(op.kmRodado);
+            totalLitros += litros;
+        }
     });
 
+    // Retorna KM / Litros (Média Global)
     return totalLitros > 0 ? (totalKm / totalLitros) : 0;
-}
+};
 
 // =============================================================================
-// MODAL DE DETALHES DO DIA (ATUALIZADO CONFORME PEDIDO)
+// MODAL DE DETALHES DO DIA (ATUALIZADO COM MÉDIA GLOBAL E EQUIPE)
 // =============================================================================
 
 window.abrirModalDetalhesDia = function(dataString) {
@@ -429,17 +439,17 @@ window.abrirModalDetalhesDia = function(dataString) {
     // Totais do Dia
     var totalFaturamento = 0;
     var totalCustosGerais = 0; // Despesas + Combustível + Pessoal
-    var totalConsumoCombustivel = 0;
+    var totalConsumoCombustivelReais = 0;
 
     var htmlLista = '<div style="max-height:400px; overflow-y:auto;">';
     
-    // Tabela Expandida
+    // Tabela Expandida com todas as colunas solicitadas
     htmlLista += `
     <table class="data-table" style="width:100%; font-size:0.75rem; margin-bottom:0;">
         <thead>
             <tr style="background:#263238; color:white;">
                 <th width="15%">CLIENTE / ID</th>
-                <th width="15%">VEÍCULO (GLOBAL)</th>
+                <th width="15%">VEÍCULO (MÉDIA GLOBAL)</th>
                 <th width="20%">EQUIPE (MOT + AJUD)</th>
                 <th width="30%">FINANCEIRO (FAT / CUSTO / LUCRO)</th>
                 <th width="20%">CONSUMO (R$)</th>
@@ -478,9 +488,9 @@ window.abrirModalDetalhesDia = function(dataString) {
 
         totalFaturamento += receita;
         totalCustosGerais += custoTotalOp;
-        totalConsumoCombustivel += abastecimento;
+        totalConsumoCombustivelReais += abastecimento;
 
-        // 3. Dados de Performance
+        // 3. Dados de Performance (Média Global)
         var mediaGlobal = calcularMediaGlobalVeiculo(op.veiculoPlaca);
         
         // HTML da Linha
@@ -493,7 +503,7 @@ window.abrirModalDetalhesDia = function(dataString) {
                 <td>
                     <strong>${op.veiculoPlaca}</strong><br>
                     <small style="color:${mediaGlobal > 0 ? 'blue' : '#999'}">
-                        ${mediaGlobal > 0 ? mediaGlobal.toFixed(2) + ' Km/L' : 'S/ Média'}
+                        ${mediaGlobal > 0 ? 'G: ' + mediaGlobal.toFixed(2) + ' Km/L' : 'S/ Média'}
                     </small>
                 </td>
                 <td>
@@ -533,7 +543,7 @@ window.abrirModalDetalhesDia = function(dataString) {
                 </div>
                 <div style="text-align:center;">
                     <small style="color:#e65100; font-weight:bold;">CONSUMO (COMB)</small><br>
-                    <span style="font-weight:800; color:#e65100;">${formatarValorMoeda(totalConsumoCombustivel)}</span>
+                    <span style="font-weight:800; color:#e65100;">${formatarValorMoeda(totalConsumoCombustivelReais)}</span>
                 </div>
                 <div style="text-align:center; background:${totalLucroLiquido>=0?'#c8e6c9':'#ffcdd2'}; border-radius:4px;">
                     <small style="color:#1b5e20; font-weight:bold;">LUCRO LÍQUIDO</small><br>
