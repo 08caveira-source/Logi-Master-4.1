@@ -383,7 +383,6 @@ button:hover { filter: brightness(90%); }
 .cadastro-form.active { display: block; }
 
 /* IMPRESSÃO (RECIBOS/RELATÓRIOS) */
-.no-print { }
 
 @media print {
     .sidebar, .mobile-nav, .no-print, .form-actions, .tab-controls, .calendar-controls { display: none !important; }
