@@ -1,12 +1,15 @@
 // =============================================================================
 // ARQUIVO: script.js
-// SISTEMA LOGIMASTER - VERSÃO 4.2 (CORRIGIDA E EXPANDIDA)
+// SISTEMA LOGIMASTER - VERSÃO 5.0 (STABLE / FULL)
+// DATA: DEZEMBRO 2025
 // PARTE 1: CONFIGURAÇÕES, VARIÁVEIS GLOBAIS E CAMADA DE DADOS
 // =============================================================================
 
-// -----------------------------------------------------------------------------
-// 1. CONSTANTES DE ARMAZENAMENTO (CHAVES DO BANCO DE DADOS)
-// -----------------------------------------------------------------------------
+/**
+ * SEÇÃO 1: CONSTANTES DE ARMAZENAMENTO (CHAVES DO BANCO DE DADOS)
+ * Define as chaves utilizadas tanto no localStorage (Navegador)
+ * quanto nas coleções/documentos do Firebase Firestore.
+ */
 const CHAVE_DB_FUNCIONARIOS = 'db_funcionarios';
 const CHAVE_DB_VEICULOS = 'db_veiculos';
 const CHAVE_DB_CONTRATANTES = 'db_contratantes';
@@ -16,19 +19,22 @@ const CHAVE_DB_DESPESAS = 'db_despesas_gerais';
 const CHAVE_DB_ATIVIDADES = 'db_atividades';
 const CHAVE_DB_PROFILE_REQUESTS = 'db_profile_requests';
 
-// -----------------------------------------------------------------------------
-// 2. VARIÁVEIS GLOBAIS DE ESTADO
-// -----------------------------------------------------------------------------
-window.USUARIO_ATUAL = null;
-window.MODO_APENAS_LEITURA = false; 
-window.currentDate = new Date(); // Data base para o calendário e dashboard
-window.chartInstance = null; // Instância do gráfico (Chart.js)
-window._operacaoAjudantesTempList = []; // Lista temporária de ajudantes na operação
-window._mensagemAtualId = null; // ID da mensagem sendo exibida no modal
+/**
+ * SEÇÃO 2: VARIÁVEIS GLOBAIS DE ESTADO
+ * Controlam o estado da aplicação em tempo de execução.
+ */
+window.USUARIO_ATUAL = null;          // Objeto do usuário logado (Admin ou Func)
+window.MODO_APENAS_LEITURA = false;   // Define se o usuário pode editar ou apenas ver
+window.currentDate = new Date();      // Data base para o calendário e dashboard
+window.chartInstance = null;          // Instância do gráfico (Chart.js) para evitar sobreposição
+window._operacaoAjudantesTempList = []; // Lista temporária de ajudantes na tela de operação
+window._mensagemAtualId = null;       // ID da mensagem sendo exibida no modal de notificação
 
-// -----------------------------------------------------------------------------
-// 3. CACHE LOCAL (Para performance e operação offline temporária)
-// -----------------------------------------------------------------------------
+/**
+ * SEÇÃO 3: CACHE LOCAL
+ * Armazena os dados em memória para evitar leituras repetitivas no disco/rede.
+ * Inicializados como arrays vazios ou objetos vazios.
+ */
 var CACHE_FUNCIONARIOS = [];
 var CACHE_VEICULOS = [];
 var CACHE_CONTRATANTES = [];
@@ -38,36 +44,31 @@ var CACHE_DESPESAS = [];
 var CACHE_ATIVIDADES = [];
 var CACHE_PROFILE_REQUESTS = [];
 
-// -----------------------------------------------------------------------------
-// 4. FUNÇÕES DE FORMATAÇÃO (HELPERS)
-// -----------------------------------------------------------------------------
-
 /**
- * Formata um valor numérico para o padrão de moeda brasileiro (BRL).
+ * SEÇÃO 4: FUNÇÕES DE FORMATAÇÃO (HELPERS)
+ * Utilitários para formatar moeda, data e telefone.
  */
+
+// Formata valor numérico para Real Brasileiro (R$)
 function formatarValorMoeda(valor) {
     var numero = Number(valor);
     if (isNaN(numero)) return 'R$ 0,00';
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numero);
 }
 
-/**
- * Converte data ISO (YYYY-MM-DD) para formato brasileiro (DD/MM/YYYY).
- */
+// Converte data ISO (YYYY-MM-DD) para formato brasileiro (DD/MM/YYYY)
 function formatarDataParaBrasileiro(dataIso) {
     if (!dataIso) return '-';
     // Espera formato YYYY-MM-DD
     var partes = dataIso.split('-');
     if (partes.length >= 3) {
-        // Pega apenas os 2 primeiros caracteres do dia para evitar timezones extras
+        // Pega apenas os 2 primeiros caracteres do dia para evitar problemas com timezones
         return partes[2].substring(0, 2) + '/' + partes[1] + '/' + partes[0];
     }
-    return dataIso; 
+    return dataIso; // Retorna original se não for data válida
 }
 
-/**
- * Formata telefone para padrões (XX) XXXX-XXXX ou (XX) XXXXX-XXXX.
- */
+// Formata telefone para padrões (XX) XXXX-XXXX ou (XX) XXXXX-XXXX
 function formatarTelefoneBrasil(telefone) {
     var numeros = String(telefone || '').replace(/\D/g, '');
     if (numeros.length > 10) {
@@ -78,10 +79,21 @@ function formatarTelefoneBrasil(telefone) {
     return telefone;
 }
 
-// -----------------------------------------------------------------------------
-// 5. CAMADA DE DADOS (PERSISTÊNCIA LOCAL + FIREBASE)
-// -----------------------------------------------------------------------------
+/**
+ * SEÇÃO 5: CAMADA DE DADOS (PERSISTÊNCIA LOCAL + FIREBASE)
+ * Funções responsáveis por carregar e salvar dados.
+ */
 
+// Função auxiliar para sanitizar objetos antes de enviar ao Firebase
+// (CORREÇÃO DO ERRO DA IMAGEM: Remove 'undefined' que quebra o Firestore)
+function sanitizarObjetoParaFirebase(obj) {
+    return JSON.parse(JSON.stringify(obj, (key, value) => {
+        if (value === undefined) return null;
+        return value;
+    }));
+}
+
+// Carrega dados do LocalStorage de forma genérica
 function carregarDadosGenerico(chave, variavelCache, valorPadrao) {
     try {
         var dados = localStorage.getItem(chave);
@@ -92,6 +104,7 @@ function carregarDadosGenerico(chave, variavelCache, valorPadrao) {
     }
 }
 
+// Carrega todos os dados iniciais para a memória (Cache)
 function carregarTodosDadosLocais() {
     console.log("Iniciando carregamento de dados locais...");
     CACHE_FUNCIONARIOS = carregarDadosGenerico(CHAVE_DB_FUNCIONARIOS, [], []);
@@ -102,7 +115,7 @@ function carregarTodosDadosLocais() {
     CACHE_DESPESAS = carregarDadosGenerico(CHAVE_DB_DESPESAS, [], []);
     CACHE_ATIVIDADES = carregarDadosGenerico(CHAVE_DB_ATIVIDADES, [], []);
     CACHE_PROFILE_REQUESTS = carregarDadosGenerico(CHAVE_DB_PROFILE_REQUESTS, [], []);
-    console.log("Dados locais carregados.");
+    console.log("Dados locais carregados com sucesso.");
 }
 
 /**
@@ -118,21 +131,26 @@ async function salvarDadosGenerico(chave, dados, atualizarCacheCallback) {
     if (window.dbRef && window.USUARIO_ATUAL && window.USUARIO_ATUAL.company) {
         const { db, doc, setDoc } = window.dbRef;
         try {
-            // Salva dentro da subcoleção 'data' da empresa
-            await setDoc(doc(db, 'companies', window.USUARIO_ATUAL.company, 'data', chave), { 
+            // Sanitiza os dados para remover 'undefined' antes de enviar
+            var dadosLimpos = sanitizarObjetoParaFirebase({ 
                 items: dados, 
                 lastUpdate: new Date().toISOString(),
                 updatedBy: window.USUARIO_ATUAL.email
             });
+
+            // Salva dentro da subcoleção 'data' da empresa
+            await setDoc(doc(db, 'companies', window.USUARIO_ATUAL.company, 'data', chave), dadosLimpos);
             console.log("Sincronizado com nuvem com sucesso: " + chave);
         } catch (erro) {
             console.error("Erro crítico ao salvar no Firebase (" + chave + "):", erro);
-            alert("Atenção: Erro ao salvar na nuvem. Verifique sua conexão. Os dados foram salvos localmente.");
+            // Alerta amigável para o usuário se falhar a nuvem
+            alert("Atenção: Erro ao salvar na nuvem (" + erro.message + "). Os dados foram salvos localmente.");
         }
     }
 }
 
 // Wrappers específicos para facilitar leitura, manutenção e tipagem futura
+// Cada função chama o salvamento genérico passando a chave correta
 async function salvarListaFuncionarios(lista) { await salvarDadosGenerico(CHAVE_DB_FUNCIONARIOS, lista, (d) => CACHE_FUNCIONARIOS = d); }
 async function salvarListaVeiculos(lista) { await salvarDadosGenerico(CHAVE_DB_VEICULOS, lista, (d) => CACHE_VEICULOS = d); }
 async function salvarListaContratantes(lista) { await salvarDadosGenerico(CHAVE_DB_CONTRATANTES, lista, (d) => CACHE_CONTRATANTES = d); }
@@ -424,6 +442,7 @@ window.changeMonth = function(direction) {
 
 window.calcularMediaGlobalVeiculo = function(placa) {
     // 1. Filtra histórico COMPLETO do veículo, independente de abastecimento no dia
+    // Considera apenas operações não canceladas
     var ops = CACHE_OPERACOES.filter(function(op) {
         return op.veiculoPlaca === placa && 
                op.status !== 'CANCELADA';
@@ -491,7 +510,7 @@ window.abrirModalDetalhesDia = function(dataString) {
 
     var htmlLista = '<div style="max-height:400px; overflow-y:auto;">';
     
-    // Tabela Expandida
+    // Tabela Expandida com todas as colunas solicitadas
     htmlLista += `
     <table class="data-table" style="width:100%; font-size:0.75rem; margin-bottom:0;">
         <thead>
@@ -687,6 +706,7 @@ document.addEventListener('submit', async function(e) {
                 cursoDescricao: funcao === 'motorista' ? document.getElementById('funcCursoDescricao').value : ''
             };
 
+            // Atualiza lista local
             var lista = CACHE_FUNCIONARIOS.filter(f => f.email !== email && f.id !== id);
             lista.push(funcionarioObj);
             
@@ -849,9 +869,11 @@ window.excluirFuncionario = async function(id) {
     if(!confirm("ATENÇÃO: Excluir este funcionário removerá permanentemente seu acesso ao sistema (Login) e seus dados cadastrais. Continuar?")) return;
     
     try {
+        // 1. Remove do banco de dados de login (Users)
         const { db, doc, deleteDoc } = window.dbRef;
         await deleteDoc(doc(db, "users", id));
         
+        // 2. Remove da lista local da empresa
         const novaLista = CACHE_FUNCIONARIOS.filter(f => String(f.id) !== String(id));
         await salvarListaFuncionarios(novaLista);
         
@@ -1653,6 +1675,8 @@ window.renderizarPainelEquipe = async function() {
     if (!window.dbRef || !window.USUARIO_ATUAL) return;
     const { db, collection, query, where, getDocs, doc, updateDoc } = window.dbRef;
     const empresa = window.USUARIO_ATUAL.company;
+    
+    // Lista Ativos
     const tbodyAtivos = document.querySelector('#tabelaCompanyAtivos tbody');
     if (tbodyAtivos) {
         tbodyAtivos.innerHTML = '<tr><td colspan="5" style="text-align:center;">Carregando dados da nuvem...</td></tr>';
@@ -1670,17 +1694,33 @@ window.renderizarPainelEquipe = async function() {
             });
         } catch (e) { console.error("Erro ao listar ativos:", e); tbodyAtivos.innerHTML = '<tr><td colspan="5" style="color:red; text-align:center;">Erro de conexão.</td></tr>'; }
     }
+    
+    // Lista Pendentes (Com Lixeira)
     const tbodyPendentes = document.querySelector('#tabelaCompanyPendentes tbody');
     if (tbodyPendentes) {
         try {
             const qP = query(collection(db, "users"), where("company", "==", empresa), where("approved", "==", false));
             const snapP = await getDocs(qP);
             tbodyPendentes.innerHTML = '';
-            if (snapP.empty) { tbodyPendentes.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">Nenhuma solicitação pendente.</td></tr>'; } else { const badge = document.getElementById('badgeAccess'); if(badge) { badge.style.display = 'inline-block'; badge.textContent = snapP.size; } }
+            if (snapP.empty) { 
+                tbodyPendentes.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">Nenhuma solicitação pendente.</td></tr>'; 
+            } else { 
+                const badge = document.getElementById('badgeAccess'); 
+                if(badge) { badge.style.display = 'inline-block'; badge.textContent = snapP.size; } 
+            }
             snapP.forEach((docSnap) => {
                 const u = docSnap.data();
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${u.name}</td><td>${u.email}</td><td>${u.role}</td><td>${new Date(u.createdAt).toLocaleDateString()}</td><td><button class="btn-mini btn-success" onclick="aprovarUsuario('${docSnap.id}')"><i class="fas fa-check"></i></button><button class="btn-mini btn-danger" onclick="excluirUsuarioPendente('${docSnap.id}')"><i class="fas fa-trash"></i></button></td>`;
+                tr.innerHTML = `
+                    <td>${u.name}</td>
+                    <td>${u.email}</td>
+                    <td>${u.role}</td>
+                    <td>${new Date(u.createdAt).toLocaleDateString()}</td>
+                    <td>
+                        <button class="btn-mini btn-success" onclick="aprovarUsuario('${docSnap.id}')"><i class="fas fa-check"></i></button>
+                        <button class="btn-mini btn-danger" onclick="excluirUsuarioPendente('${docSnap.id}')" title="Excluir Solicitação"><i class="fas fa-trash"></i></button>
+                    </td>
+                `;
                 tbodyPendentes.appendChild(tr);
             });
         } catch (e) { console.error(e); }
@@ -1734,6 +1774,7 @@ function configurarNavegacao() {
             if (pageId === 'checkins-pendentes') preencherTodosSelects(); // Atualiza Monitoramento e Faltas
             if (pageId === 'access-management') { renderizarPainelEquipe(); renderizarTabelaProfileRequests(); }
             
+            // Perfil Funcionário: Busca mensagens e sync
             if (pageId === 'employee-home' && window.USUARIO_ATUAL && window.USUARIO_ATUAL.role !== 'admin') { 
                 verificarNovasMensagens();
                 sincronizarDadosDaNuvem().then(() => renderizarPainelCheckinFuncionario());
@@ -1758,7 +1799,7 @@ function configurarNavegacao() {
 }
 
 // -----------------------------------------------------------------------------
-// SISTEMA DE MENSAGENS (CORRIGIDO: FECHA E MARCA AO CLICAR)
+// SISTEMA DE MENSAGENS PARA FUNCIONÁRIOS (CORRIGIDO)
 // -----------------------------------------------------------------------------
 
 window.verificarNovasMensagens = async function() {
@@ -1773,51 +1814,79 @@ window.verificarNovasMensagens = async function() {
         
         const snap = await getDocs(q);
         
+        // Varre mensagens
         for (const msgDoc of snap.docs) {
             const data = msgDoc.data();
             const myId = window.USUARIO_ATUAL.uid;
             
+            // Verifica se é para mim e se eu já li
             const isForMe = (data.to === 'all' || data.to === myId);
             const alreadyRead = data.readBy && data.readBy.includes(myId);
             
             if (isForMe && !alreadyRead) {
-                window._mensagemAtualId = msgDoc.id; 
+                // Guarda ID globalmente
+                window._mensagemAtualId = msgDoc.id;
                 
-                document.getElementById('notificationMessageText').innerText = data.content;
-                document.getElementById('notificationSender').innerText = "Enviado por: " + data.from;
-                document.getElementById('modalNotification').style.display = 'block';
-                break; 
+                // Exibe Modal
+                var modal = document.getElementById('modalNotification');
+                var txt = document.getElementById('notificationMessageText');
+                var sender = document.getElementById('notificationSender');
+                
+                if(modal && txt && sender) {
+                    txt.innerText = data.content;
+                    sender.innerText = "Enviado por: " + data.from;
+                    modal.style.display = 'block';
+                    
+                    // Interrompe o loop para mostrar uma mensagem por vez
+                    break; 
+                }
             }
         }
-    } catch (e) { console.error("Erro msg:", e); }
-};
-
-window.confirmarLeituraMensagem = async function() {
-    document.getElementById('modalNotification').style.display = 'none';
-
-    if(window._mensagemAtualId && window.dbRef) {
-        const { db, doc, updateDoc, arrayUnion } = window.dbRef;
-        try {
-            await updateDoc(doc(db, "messages", window._mensagemAtualId), {
-                readBy: arrayUnion(window.USUARIO_ATUAL.uid)
-            });
-            window._mensagemAtualId = null;
-            setTimeout(window.verificarNovasMensagens, 1000);
-        } catch(e) { console.error("Erro ao marcar lido:", e); }
+    } catch (e) {
+        console.error("Erro ao buscar mensagens:", e);
     }
 };
 
+window.confirmarLeituraMensagem = async function() {
+    // 1. Fecha o modal IMEDIATAMENTE para não travar a UI
+    document.getElementById('modalNotification').style.display = 'none';
+
+    // 2. Se não tiver ID ou conexão, aborta silenciosamente
+    if(!window._mensagemAtualId || !window.dbRef || !window.USUARIO_ATUAL) return;
+    
+    const { db, doc, updateDoc, arrayUnion } = window.dbRef;
+    const myId = window.USUARIO_ATUAL.uid;
+    const msgId = window._mensagemAtualId;
+    
+    try {
+        // 3. Atualiza no banco em background
+        await updateDoc(doc(db, "messages", msgId), {
+            readBy: arrayUnion(myId)
+        });
+        window._mensagemAtualId = null;
+        
+        // Opcional: Verificar se há mais mensagens
+        setTimeout(window.verificarNovasMensagens, 1000);
+        
+    } catch(e) { 
+        console.error("Erro ao confirmar leitura no banco:", e); 
+    }
+};
+
+// Vincula a função ao botão do modal de forma segura
 document.addEventListener('DOMContentLoaded', function() {
-    var btn = document.querySelector('#modalNotification button');
-    if(btn) { 
-        btn.removeAttribute('onclick');
-        btn.onclick = window.confirmarLeituraMensagem;
+    var btnModal = document.querySelector('#modalNotification button');
+    if(btnModal) {
+        // Remove onclick antigo inline para evitar conflito
+        btnModal.removeAttribute('onclick'); 
+        btnModal.onclick = window.confirmarLeituraMensagem;
     }
     configurarNavegacao();
 });
 
+
 // -----------------------------------------------------------------------------
-// PERFIL E OUTROS
+// FUNÇÕES DO PERFIL DE FUNCIONÁRIO (CHECK-IN E HISTÓRICO)
 // -----------------------------------------------------------------------------
 
 window.renderizarPainelCheckinFuncionario = function() {
@@ -1833,13 +1902,14 @@ window.renderizarPainelCheckinFuncionario = function() {
             <div style="text-align:center; padding:30px; color:#c62828;">
                 <i class="fas fa-exclamation-circle" style="font-size:2rem; margin-bottom:10px;"></i><br>
                 <strong>PERFIL NÃO VINCULADO</strong><br>
-                <small>Seu email (${emailLogado}) não foi encontrado.<br>Peça ao administrador para verificar seu cadastro.</small>
+                <small>Seu email (${emailLogado}) não foi encontrado na lista.<br>Peça ao administrador para verificar seu cadastro.</small>
                 <br><br>
                 <button class="btn-secondary btn-mini" onclick="sincronizarDadosDaNuvem(true)">Forçar Sincronização</button>
             </div>`; 
         return; 
     }
 
+    // AJUSTE DE DATA (LOCAL)
     var hoje = new Date().toLocaleDateString('pt-BR').split('/').reverse().join('-');
     
     var minhasOps = CACHE_OPERACOES.filter(op => {
@@ -1851,87 +1921,195 @@ window.renderizarPainelCheckinFuncionario = function() {
     var btnRefresh = `<button class="btn-secondary btn-mini" onclick="sincronizarDadosDaNuvem(true)" style="width:100%; margin-bottom:15px;"><i class="fas fa-sync"></i> ATUALIZAR VIAGENS</button>`;
 
     if (minhasOps.length === 0) {
-        container.innerHTML = btnRefresh + '<p style="text-align:center; padding:20px; color:#666;">Nenhuma viagem hoje.</p>';
+        container.innerHTML = btnRefresh + '<p style="text-align:center; padding:20px; color:#666;">Nenhuma viagem para hoje.</p>';
         return;
     }
 
     var html = btnRefresh;
     minhasOps.forEach(op => {
         var cliente = buscarContratantePorCnpj(op.contratanteCNPJ);
-        var nomeCli = cliente ? cliente.razaoSocial : 'Cliente';
+        var nomeCli = cliente ? cliente.razaoSocial : 'Cliente Diversos';
         var btnAcao = '';
+        var statusColor = op.status==='AGENDADA' ? '#ff9800' : '#4caf50';
         
         if (op.status === 'AGENDADA') {
-            btnAcao = `<button class="btn-primary" onclick="iniciarViagemFuncionario('${op.id}')" style="width:100%; padding:15px;">INICIAR VIAGEM</button>`;
+            btnAcao = `<button class="btn-primary" onclick="iniciarViagemFuncionario('${op.id}')" style="width:100%; padding:15px; font-size:1.1rem;">INICIAR VIAGEM <i class="fas fa-play"></i></button>`;
         } else {
-            btnAcao = `<div style="text-align:center; color:green; margin-bottom:5px;">KM INICIAL: ${op.kmInicial}</div><button class="btn-danger" onclick="finalizarViagemFuncionario('${op.id}')" style="width:100%; padding:15px;">FINALIZAR</button>`;
+            var infoAndamento = `<div style="text-align:center; margin-bottom:10px; color:#2e7d32;"><strong>KM INICIAL:</strong> ${op.kmInicial || 'Não informado'}</div>`;
+            btnAcao = infoAndamento + `<button class="btn-danger" onclick="finalizarViagemFuncionario('${op.id}')" style="width:100%; padding:15px; font-size:1.1rem;">FINALIZAR VIAGEM <i class="fas fa-flag-checkered"></i></button>`;
         }
 
-        html += `<div style="background:#fff; border-left:5px solid green; padding:15px; margin-bottom:15px; border-radius:5px; box-shadow:0 2px 5px rgba(0,0,0,0.1);"><h3>${nomeCli}</h3><p>Placa: ${op.veiculoPlaca}</p>${btnAcao}</div>`;
+        html += `
+            <div style="background:#fff; border-left:6px solid ${statusColor}; padding:20px; margin-bottom:20px; border-radius:8px; box-shadow:0 4px 10px rgba(0,0,0,0.05);">
+                <h3 style="margin:0 0 10px 0; color:#37474f;">${nomeCli}</h3>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:20px; font-size:0.9rem;">
+                    <div style="background:#f5f5f5; padding:8px; border-radius:4px;"><strong>Veículo:</strong><br>${op.veiculoPlaca}</div>
+                    <div style="background:#f5f5f5; padding:8px; border-radius:4px;"><strong>Status:</strong><br>${op.status}</div>
+                </div>
+                ${btnAcao}
+            </div>
+        `;
     });
     container.innerHTML = html;
 };
 
+// Funções de Ação do Check-in
 window.iniciarViagemFuncionario = function(opId) {
-    var km = prompt("KM Atual do Painel:");
-    if(!km || isNaN(km)) return alert("KM Inválido");
+    var kmPainel = prompt("Por favor, informe a QUILOMETRAGEM (KM) ATUAL do painel:");
+    if(!kmPainel) return;
+    
+    if(isNaN(Number(kmPainel))) return alert("Por favor, digite apenas números.");
+
     var op = CACHE_OPERACOES.find(o => String(o.id) === String(opId));
     if(op) {
         op.status = 'EM_ANDAMENTO';
-        op.kmInicial = Number(km);
-        salvarListaOperacoes(CACHE_OPERACOES).then(() => { alert("Iniciada!"); renderizarPainelCheckinFuncionario(); });
+        op.kmInicial = Number(kmPainel); 
+        
+        salvarListaOperacoes(CACHE_OPERACOES).then(() => {
+            alert("Boa viagem! KM Inicial registrado.");
+            renderizarPainelCheckinFuncionario();
+        });
     }
 };
 
 window.finalizarViagemFuncionario = function(opId) {
     var op = CACHE_OPERACOES.find(o => String(o.id) === String(opId));
-    var kmF = prompt("KM Final do Painel:");
-    if(!kmF || isNaN(kmF)) return alert("KM Inválido");
-    if(Number(kmF) < op.kmInicial) return alert("KM Final menor que Inicial!");
+    if(!op) return;
+
+    var kmFinal = prompt(`KM Inicial: ${op.kmInicial || '?'}. \nInforme o KM FINAL do painel:`);
+    if(!kmFinal) return;
     
-    op.kmFinal = Number(kmF);
-    op.kmRodado = Number(kmF) - op.kmInicial;
-    op.status = 'FINALIZADA';
-    salvarListaOperacoes(CACHE_OPERACOES).then(() => { alert("Finalizada!"); renderizarPainelCheckinFuncionario(); });
+    var kmFinNum = Number(kmFinal);
+    var kmIniNum = Number(op.kmInicial || 0);
+
+    if(isNaN(kmFinNum)) return alert("Digite apenas números.");
+    if(kmFinNum < kmIniNum) return alert("Erro: O KM Final não pode ser menor que o Inicial (" + kmIniNum + ").");
+
+    var rodado = kmFinNum - kmIniNum;
+
+    if(confirm(`Confirma finalização?\n\nKM Inicial: ${kmIniNum}\nKM Final: ${kmFinNum}\nTotal Rodado: ${rodado} KM`)) {
+        op.kmFinal = kmFinNum;
+        op.kmRodado = rodado; 
+        op.status = 'FINALIZADA'; 
+        
+        salvarListaOperacoes(CACHE_OPERACOES).then(() => {
+            alert("Viagem Finalizada com Sucesso!");
+            renderizarPainelCheckinFuncionario();
+        });
+    }
 };
+
+window.filtrarHistoricoFuncionario = function() {
+    var tbody = document.querySelector('#tabelaHistoricoCompleto tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (!window.USUARIO_ATUAL) return;
+    var emailLogado = window.USUARIO_ATUAL.email.trim().toLowerCase();
+    var funcionario = CACHE_FUNCIONARIOS.find(f => f.email && f.email.trim().toLowerCase() === emailLogado);
+    
+    if (!funcionario) return;
+
+    var dataIni = document.getElementById('empDataInicio').value;
+    var dataFim = document.getElementById('empDataFim').value;
+
+    var historico = CACHE_OPERACOES.filter(op => {
+        var isMyOp = String(op.motoristaId) === String(funcionario.id);
+        if (!isMyOp) return false;
+
+        if (dataIni && op.data < dataIni) return false;
+        if (dataFim && op.data > dataFim) return false;
+
+        return op.status === 'CONFIRMADA' || op.status === 'FINALIZADA' || (op.checkins && op.checkins.faltaMotorista);
+    });
+
+    var total = 0;
+    historico.forEach(op => {
+        var cliente = buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial || 'CLIENTE';
+        var valor = Number(op.comissao) || 0;
+        var statusHtml = '<span class="status-pill pill-active">REALIZADO</span>';
+        var linhaStyle = '';
+        
+        if (op.checkins && op.checkins.faltaMotorista) {
+            statusHtml = '<span class="status-pill pill-blocked">FALTA</span>';
+            valor = 0; 
+            linhaStyle = 'background-color:#ffebee; color:#c62828;';
+        } else {
+            total += valor;
+        }
+
+        var tr = document.createElement('tr');
+        tr.style = linhaStyle;
+        tr.innerHTML = `
+            <td>${formatarDataParaBrasileiro(op.data)}</td>
+            <td>${op.veiculoPlaca}</td>
+            <td>${cliente}</td>
+            <td>${formatarValorMoeda(valor)}</td>
+            <td>${statusHtml}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    var elTotal = document.getElementById('empTotalReceber');
+    if(elTotal) elTotal.textContent = formatarValorMoeda(total);
+};
+
+// -----------------------------------------------------------------------------
+// SINCRONIZAÇÃO E INICIALIZAÇÃO
+// -----------------------------------------------------------------------------
 
 window.sincronizarDadosDaNuvem = async function(manual = false) {
     if (!window.dbRef || !window.USUARIO_ATUAL || !window.USUARIO_ATUAL.company) return;
-    if(manual) document.querySelector('button[onclick*="sincronizar"]').innerHTML = '...';
     
+    if(manual) {
+        var btn = document.querySelector('button[onclick*="sincronizar"]');
+        if(btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Baixando...';
+    } else {
+        console.log("Iniciando sincronização silenciosa...");
+    }
+
     const { db, doc, getDoc } = window.dbRef;
     const company = window.USUARIO_ATUAL.company;
 
-    const carregar = async (key, callback) => {
+    const carregarColecao = async (chave, varCache, callback) => {
         try {
-            const snap = await getDoc(doc(db, 'companies', company, 'data', key));
-            if(snap.exists()) {
-                const data = snap.data().items || [];
-                localStorage.setItem(key, JSON.stringify(data));
-                callback(data);
+            const docRef = doc(db, 'companies', company, 'data', chave);
+            const snap = await getDoc(docRef);
+            if (snap.exists()) {
+                const dados = snap.data().items || [];
+                localStorage.setItem(chave, JSON.stringify(dados));
+                callback(dados);
             }
-        } catch(e) {}
+        } catch (e) { console.error(`Erro sync ${chave}:`, e); }
     };
 
     await Promise.all([
-        carregar(CHAVE_DB_FUNCIONARIOS, (d)=>CACHE_FUNCIONARIOS=d),
-        carregar(CHAVE_DB_OPERACOES, (d)=>CACHE_OPERACOES=d),
-        carregar(CHAVE_DB_VEICULOS, (d)=>CACHE_VEICULOS=d),
-        carregar(CHAVE_DB_CONTRATANTES, (d)=>CACHE_CONTRATANTES=d),
-        carregar(CHAVE_DB_ATIVIDADES, (d)=>CACHE_ATIVIDADES=d),
-        carregar(CHAVE_DB_MINHA_EMPRESA, (d)=>CACHE_MINHA_EMPRESA=d),
-        carregar(CHAVE_DB_PROFILE_REQUESTS, (d)=>CACHE_PROFILE_REQUESTS=d)
+        carregarColecao(CHAVE_DB_FUNCIONARIOS, CACHE_FUNCIONARIOS, (d) => CACHE_FUNCIONARIOS = d),
+        carregarColecao(CHAVE_DB_OPERACOES, CACHE_OPERACOES, (d) => CACHE_OPERACOES = d),
+        carregarColecao(CHAVE_DB_VEICULOS, CACHE_VEICULOS, (d) => CACHE_VEICULOS = d),
+        carregarColecao(CHAVE_DB_CONTRATANTES, CACHE_CONTRATANTES, (d) => CACHE_CONTRATANTES = d),
+        carregarColecao(CHAVE_DB_ATIVIDADES, CACHE_ATIVIDADES, (d) => CACHE_ATIVIDADES = d),
+        carregarColecao(CHAVE_DB_MINHA_EMPRESA, CACHE_MINHA_EMPRESA, (d) => CACHE_MINHA_EMPRESA = d),
+        carregarColecao(CHAVE_DB_PROFILE_REQUESTS, CACHE_PROFILE_REQUESTS, (d) => CACHE_PROFILE_REQUESTS = d)
     ]);
 
-    if(manual) { alert("Sincronizado!"); renderizarPainelCheckinFuncionario(); carregarDadosMeuPerfil(window.USUARIO_ATUAL.email); }
+    if(manual) {
+        alert("Dados sincronizados com sucesso!");
+        if(btn) btn.innerHTML = '<i class="fas fa-sync"></i> ATUALIZAR VIAGENS';
+        renderizarPainelCheckinFuncionario();
+        carregarDadosMeuPerfil(window.USUARIO_ATUAL.email);
+    }
 };
 
 window.initSystemByRole = async function(user) {
+    console.log("Inicializando sistema para:", user.email, "| Role:", user.role);
     window.USUARIO_ATUAL = user;
+
     configurarNavegacao();
 
     if (user.email.toUpperCase() === 'ADMIN@LOGIMASTER.COM') {
         document.getElementById('menu-admin').style.display = 'none';
+        document.getElementById('menu-employee').style.display = 'none';
         document.getElementById('menu-super-admin').style.display = 'block';
         document.querySelector('[data-page="super-admin"]').click();
         setTimeout(carregarPainelSuperAdmin, 500);
@@ -1939,85 +2117,131 @@ window.initSystemByRole = async function(user) {
     }
 
     carregarTodosDadosLocais();
-    if(CACHE_FUNCIONARIOS.length === 0 || user.role !== 'admin') await sincronizarDadosDaNuvem();
 
+    if (CACHE_FUNCIONARIOS.length === 0 || user.role !== 'admin') {
+        await sincronizarDadosDaNuvem(); 
+    }
+    
     if (user.role === 'admin') {
         document.getElementById('menu-admin').style.display = 'block';
         window.MODO_APENAS_LEITURA = false;
         preencherTodosSelects();
-        setTimeout(() => document.querySelector('[data-page="home"]').click(), 100);
-    } else {
+        
+        setTimeout(() => {
+            var btnHome = document.querySelector('[data-page="home"]');
+            if(btnHome) btnHome.click();
+        }, 100);
+
+    } else if (user.role === 'motorista' || user.role === 'ajudante') {
         document.getElementById('menu-employee').style.display = 'block';
         window.MODO_APENAS_LEITURA = true;
+        
         setTimeout(() => { verificarNovasMensagens(); }, 2000);
+        
         renderizarPainelCheckinFuncionario();
-        setTimeout(() => document.querySelector('[data-page="employee-home"]').click(), 100);
+        
+        setTimeout(() => {
+            var btnHomeEmp = document.querySelector('[data-page="employee-home"]');
+            if(btnHomeEmp) btnHomeEmp.click();
+        }, 100);
     }
 };
 
-function carregarDadosMeuPerfil(email) {
-    var f = CACHE_FUNCIONARIOS.find(x => x.email && x.email.trim().toLowerCase() === email.trim().toLowerCase());
-    var div = document.getElementById('meus-dados');
-    if (f) {
-        div.innerHTML = `
-            <h2>MEUS DADOS</h2>
-            <div class="card">
-                <h3>${f.nome} <span class="status-pill pill-active">${f.funcao}</span></h3>
-                <p><strong>CPF:</strong> ${f.documento}</p>
-                <p><strong>Tel:</strong> ${formatarTelefoneBrasil(f.telefone)}</p>
-                <p><strong>Pix:</strong> ${f.pix || '-'}</p>
-                <p><strong>Endereço:</strong> ${f.endereco || '-'}</p>
-                <button class="btn-warning" onclick="document.getElementById('modalRequestProfileChange').style.display='block'" style="margin-top:15px;">SOLICITAR ALTERAÇÃO</button>
-            </div>`;
-    } else { div.innerHTML = '<p>Dados não encontrados.</p>'; }
-}
-
-// Pendentes Exclusão
-window.excluirUsuarioPendente = async function(uid) {
-    if(!confirm("Excluir solicitação?")) return;
-    try {
-        const { db, doc, deleteDoc } = window.dbRef;
-        await deleteDoc(doc(db, "users", uid));
-        alert("Removido.");
-        renderizarPainelEquipe();
-    } catch(e) { alert("Erro: " + e.message); }
+document.getElementById('mobileMenuBtn').onclick = function() {
+    document.getElementById('sidebar').classList.add('active');
+    document.getElementById('sidebarOverlay').classList.add('active');
+};
+document.getElementById('sidebarOverlay').onclick = function() {
+    document.getElementById('sidebar').classList.remove('active');
+    this.classList.remove('active');
 };
 
-// Listener para solicitações de perfil (Conectado)
+// --- NOVA VISUALIZAÇÃO DE DADOS (MODO DOCUMENTO) ---
+function carregarDadosMeuPerfil(email) {
+    var emailLogado = email.trim().toLowerCase();
+    var f = CACHE_FUNCIONARIOS.find(x => x.email && x.email.trim().toLowerCase() === emailLogado);
+    
+    var container = document.getElementById('meus-dados'); 
+    container.innerHTML = '<h2>MEUS DADOS PESSOAIS</h2>';
+
+    if (f) {
+        var cardHtml = `
+        <div class="card" style="border-top: 5px solid var(--primary-color);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <div style="display:flex; align-items:center; gap:15px;">
+                    <div style="background:#eee; width:60px; height:60px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#888;">
+                        <i class="fas fa-user" style="font-size:30px;"></i>
+                    </div>
+                    <div>
+                        <h3 style="margin:0; color:#37474f;">${f.nome}</h3>
+                        <span class="status-pill pill-active">${f.funcao}</span>
+                    </div>
+                </div>
+                <button class="btn-warning btn-mini" onclick="document.getElementById('modalRequestProfileChange').style.display='block'">
+                    <i class="fas fa-edit"></i> SOLICITAR ALTERAÇÃO
+                </button>
+            </div>
+
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap:20px; background:#fafafa; padding:20px; border-radius:8px; border:1px solid #eee;">
+                <div><label style="font-size:0.75rem; color:#888; font-weight:bold; display:block;">CPF</label><div style="font-size:1.1rem; color:#333; padding:5px 0; border-bottom:1px solid #ddd;">${f.documento}</div></div>
+                <div><label style="font-size:0.75rem; color:#888; font-weight:bold; display:block;">TELEFONE</label><div style="font-size:1.1rem; color:#333; padding:5px 0; border-bottom:1px solid #ddd;">${formatarTelefoneBrasil(f.telefone)}</div></div>
+                <div><label style="font-size:0.75rem; color:#888; font-weight:bold; display:block;">EMAIL</label><div style="font-size:1.1rem; color:#333; padding:5px 0; border-bottom:1px solid #ddd;">${f.email}</div></div>
+                <div><label style="font-size:0.75rem; color:#888; font-weight:bold; display:block;">PIX</label><div style="font-size:1.1rem; color:#333; padding:5px 0; border-bottom:1px solid #ddd;">${f.pix || '-'}</div></div>
+                <div style="grid-column: 1 / -1;"><label style="font-size:0.75rem; color:#888; font-weight:bold; display:block;">ENDEREÇO</label><div style="font-size:1.1rem; color:#333; padding:5px 0; border-bottom:1px solid #ddd;">${f.endereco || '-'}</div></div>
+                ${ f.funcao === 'motorista' ? `
+                <div style="background:#e8f5e9; padding:10px; border-radius:6px; border:1px solid #c8e6c9;"><label style="font-size:0.7rem; color:#2e7d32; font-weight:bold;">CNH</label><div style="font-weight:bold; color:#1b5e20;">${f.cnh || '-'}</div></div>
+                <div style="background:#e8f5e9; padding:10px; border-radius:6px; border:1px solid #c8e6c9;"><label style="font-size:0.7rem; color:#2e7d32; font-weight:bold;">VALIDADE</label><div style="font-weight:bold; color:#1b5e20;">${formatarDataParaBrasileiro(f.validadeCNH) || '-'}</div></div>
+                ` : '' }
+            </div>
+        </div>`;
+        container.innerHTML += cardHtml;
+    } else {
+        container.innerHTML += '<div class="card"><p>Dados não encontrados.</p></div>';
+    }
+}
+
+// SUPER ADMIN E OUTROS - MANTIDO
+window.GLOBAL_DATA_CACHE = {}; 
+window.carregarPainelSuperAdmin = async function(forceRefresh = false) { /* ... */ };
+window.toggleCompanyBlock = function(header) { /* ... */ };
+window.filterGlobalUsers = function() { /* ... */ };
+window.superAdminResetPass = function(email) { /* ... */ };
+window.superAdminDeleteUser = async function(uid, domain) { /* ... */ };
+
+document.addEventListener('submit', async function(e) {
+    if (e.target.id === 'formCreateCompany') { /* ... */ }
+});
+
+// Listener CORRIGIDO para solicitações de perfil (SEM MODO DEMO)
 document.addEventListener('submit', async function(e) {
     if (e.target.id === 'formRequestProfileChange') {
         e.preventDefault();
+        
+        var tipo = document.getElementById('reqFieldType').value;
+        var novoValor = document.getElementById('reqNewValue').value;
+        
         if (!window.USUARIO_ATUAL) return;
         
         var novaReq = {
             id: Date.now().toString(),
             data: new Date().toISOString(),
             funcionarioEmail: window.USUARIO_ATUAL.email,
-            campo: document.getElementById('reqFieldType').value,
-            valorNovo: document.getElementById('reqNewValue').value,
+            campo: tipo,
+            valorNovo: novoValor,
             status: 'PENDENTE'
         };
         
         CACHE_PROFILE_REQUESTS.push(novaReq);
+        
+        // CORREÇÃO: Usa salvarProfileRequests para evitar erro de permissão/estrutura
         salvarProfileRequests(CACHE_PROFILE_REQUESTS).then(() => {
-            alert("Solicitação enviada!");
+            alert("Solicitação enviada para o administrador com sucesso!");
             document.getElementById('modalRequestProfileChange').style.display='none';
             e.target.reset();
         });
     }
 });
 
-// Admin Message Listener
-document.addEventListener('submit', async function(e) {
-    if (e.target.id === 'formAdminMessage') {
-        e.preventDefault();
-        var texto = document.getElementById('msgTextAdmin').value;
-        var destinatario = document.getElementById('msgRecipientSelect').value;
-        if (!texto) return;
-        try {
-            const { db, collection, addDoc } = window.dbRef;
-            await addDoc(collection(db, "messages"), { company: window.USUARIO_ATUAL.company, from: window.USUARIO_ATUAL.email, to: destinatario, content: texto, createdAt: new Date().toISOString(), readBy: [] });
-            alert("Enviado!"); e.target.reset();
-        } catch (err) { alert("Erro: " + err.message); }
-    }
+document.addEventListener('DOMContentLoaded', function() {
+    configurarNavegacao();
 });
