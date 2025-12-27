@@ -544,7 +544,7 @@ window.abrirModalDetalhesDia = function(dataString) {
 };
 // =============================================================================
 // ARQUIVO: script.js
-// PARTE 3: GESTÃO DE CADASTROS (CRUD) E INTERFACE DE FORMULÁRIOS
+// PARTE 3: GESTÃO DE CADASTROS (CRUD), INTERFACE DE FORMULÁRIOS E VISUALIZAÇÃO
 // =============================================================================
 
 document.addEventListener('submit', async function(e) {
@@ -745,6 +745,8 @@ function renderizarTabelaFuncionarios() { var tbody = document.querySelector('#t
 function renderizarTabelaVeiculos() { var tbody = document.querySelector('#tabelaVeiculos tbody'); if (!tbody) return; tbody.innerHTML = ''; CACHE_VEICULOS.forEach(v => { var tr = document.createElement('tr'); var btnActions = window.MODO_APENAS_LEITURA ? '' : `<button class="btn-mini edit-btn" onclick="preencherFormularioVeiculo('${v.placa}')"><i class="fas fa-edit"></i></button><button class="btn-mini delete-btn" onclick="excluirVeiculo('${v.placa}')"><i class="fas fa-trash"></i></button>`; tr.innerHTML = `<td>${v.placa}</td><td>${v.modelo}</td><td>${v.ano}</td><td>${btnActions}</td>`; tbody.appendChild(tr); }); }
 function renderizarTabelaContratantes() { var tbody = document.querySelector('#tabelaContratantes tbody'); if (!tbody) return; tbody.innerHTML = ''; CACHE_CONTRATANTES.forEach(c => { var tr = document.createElement('tr'); var btnActions = window.MODO_APENAS_LEITURA ? '' : `<button class="btn-mini edit-btn" onclick="preencherFormularioContratante('${c.cnpj}')"><i class="fas fa-edit"></i></button><button class="btn-mini delete-btn" onclick="excluirContratante('${c.cnpj}')"><i class="fas fa-trash"></i></button>`; tr.innerHTML = `<td>${c.razaoSocial}</td><td>${c.cnpj}</td><td>${formatarTelefoneBrasil(c.telefone)}</td><td>${btnActions}</td>`; tbody.appendChild(tr); }); }
 function renderizarTabelaAtividades() { var tbody = document.querySelector('#tabelaAtividades tbody'); if (!tbody) return; tbody.innerHTML = ''; CACHE_ATIVIDADES.forEach(a => { var tr = document.createElement('tr'); var btnActions = window.MODO_APENAS_LEITURA ? '' : `<button class="btn-mini delete-btn" onclick="excluirAtividade('${a.id}')"><i class="fas fa-trash"></i></button>`; tr.innerHTML = `<td>${a.id.substr(-4)}</td><td>${a.nome}</td><td>${btnActions}</td>`; tbody.appendChild(tr); }); }
+
+// ALTERAÇÃO: Adicionado botão VISUALIZAR na tabela
 function renderizarTabelaOperacoes() { 
     var tbody = document.querySelector('#tabelaOperacoes tbody'); 
     if (!tbody) return; 
@@ -763,15 +765,91 @@ function renderizarTabelaOperacoes() {
         
         var styleAdd = (op.status === 'EM_ANDAMENTO') ? 'style="background:orange; color:white;"' : '';
 
-        var btnActions = `<button class="btn-mini btn-primary" onclick="alert('Detalhes no calendário.')"><i class="fas fa-eye"></i></button>`; 
+        // Botão de Visualização sempre disponível
+        var btnView = `<button class="btn-mini btn-primary" onclick="visualizarOperacao('${op.id}')" title="Ver Detalhes"><i class="fas fa-eye"></i></button>`;
+        
+        var btnActions = btnView; 
         if (!window.MODO_APENAS_LEITURA) { 
-            btnActions = `<button class="btn-mini edit-btn" onclick="preencherFormularioOperacao('${op.id}')"><i class="fas fa-edit"></i></button><button class="btn-mini delete-btn" onclick="excluirOperacao('${op.id}')"><i class="fas fa-trash"></i></button>`; 
+            btnActions += ` <button class="btn-mini edit-btn" onclick="preencherFormularioOperacao('${op.id}')"><i class="fas fa-edit"></i></button> <button class="btn-mini delete-btn" onclick="excluirOperacao('${op.id}')"><i class="fas fa-trash"></i></button>`; 
         } 
         var tr = document.createElement('tr'); 
         tr.innerHTML = `<td>${formatarDataParaBrasileiro(op.data)}</td><td><strong>${nomeMot}</strong><br><small>${op.veiculoPlaca}</small></td><td><span class="status-pill ${statusClass}" ${styleAdd}>${statusLabel}</span></td><td style="color:green; font-weight:bold;">${formatarValorMoeda(op.faturamento)}</td><td>${btnActions}</td>`; 
         tbody.appendChild(tr); 
     }); 
 }
+
+// IMPLEMENTAÇÃO DA FUNÇÃO VISUALIZAR OPERAÇÃO COMPLETA
+window.visualizarOperacao = function(id) {
+    var op = CACHE_OPERACOES.find(o => String(o.id) === String(id));
+    if (!op) return;
+
+    var mot = buscarFuncionarioPorId(op.motoristaId);
+    var nomeMot = mot ? mot.nome : 'N/A';
+    var cliente = buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial || 'N/A';
+    var atividade = buscarAtividadePorId(op.atividadeId)?.nome || 'N/A';
+    
+    // Lista de Ajudantes
+    var htmlAjudantes = 'Nenhum';
+    if(op.ajudantes && op.ajudantes.length > 0) {
+        htmlAjudantes = '<ul style="margin:0; padding-left:20px;">' + 
+            op.ajudantes.map(aj => {
+                var f = buscarFuncionarioPorId(aj.id);
+                return `<li>${f ? f.nome : 'Excluído'} (R$ ${formatarValorMoeda(aj.diaria)})</li>`;
+            }).join('') + '</ul>';
+    }
+
+    var html = `
+        <div style="font-size: 0.95rem; color:#333;">
+            <div style="background:#f5f5f5; padding:10px; border-radius:6px; margin-bottom:15px; border-left: 4px solid var(--primary-color);">
+                <h4 style="margin:0 0 5px 0; color:var(--primary-color);">RESUMO DA VIAGEM #${op.id.substr(-4)}</h4>
+                <p><strong>Status:</strong> ${op.status}</p>
+                <p><strong>Data:</strong> ${formatarDataParaBrasileiro(op.data)}</p>
+                <p><strong>Cliente:</strong> ${cliente}</p>
+                <p><strong>Atividade:</strong> ${atividade}</p>
+                <p><strong>Veículo:</strong> ${op.veiculoPlaca}</p>
+            </div>
+
+            <div style="margin-bottom:15px;">
+                <h4 style="border-bottom:1px solid #eee; padding-bottom:5px;">EQUIPE</h4>
+                <p><strong>Motorista:</strong> ${nomeMot}</p>
+                <p><strong>Ajudantes:</strong></p>
+                ${htmlAjudantes}
+            </div>
+
+            <div style="background:#e8f5e9; padding:10px; border-radius:6px; margin-bottom:15px;">
+                <h4 style="margin:0 0 10px 0; color:var(--success-color);">FINANCEIRO (ADMIN)</h4>
+                <p><strong>Faturamento:</strong> ${formatarValorMoeda(op.faturamento)}</p>
+                <p><strong>Adiantamento:</strong> ${formatarValorMoeda(op.adiantamento)}</p>
+                <p><strong>Comissão Mot.:</strong> ${formatarValorMoeda(op.comissao)}</p>
+            </div>
+
+            <div style="background:#fff3e0; padding:10px; border-radius:6px; border:1px solid #ffe0b2;">
+                <h4 style="margin:0 0 10px 0; color:#e65100;">DADOS DO MOTORISTA (CHECK-IN)</h4>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <div><strong>KM Inicial:</strong> ${op.kmInicial || '-'}</div>
+                    <div><strong>KM Final:</strong> ${op.kmFinal || '-'}</div>
+                    <div><strong>KM Rodado:</strong> ${op.kmRodado || '-'}</div>
+                    <div><strong>Abastecimento:</strong> ${formatarValorMoeda(op.combustivel)}</div>
+                    <div><strong>Despesas/Pedágio:</strong> ${formatarValorMoeda(op.despesas)}</div>
+                    <div><strong>Preço Litro:</strong> R$ ${op.precoLitro || '0,00'}</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    var modalContent = document.getElementById('viewItemBody');
+    if(modalContent) {
+        modalContent.innerHTML = html;
+        document.getElementById('viewItemModal').style.display = 'flex';
+    }
+};
+
+// Funções de Fechar Modal (Helpers)
+window.closeViewModal = function() { document.getElementById('viewItemModal').style.display = 'none'; };
+window.closeModal = function() { document.getElementById('operationDetailsModal').style.display = 'none'; };
+window.closeCheckinConfirmModal = function() { document.getElementById('modalCheckinConfirm').style.display = 'none'; };
+window.closeAdicionarAjudanteModal = function() { document.getElementById('modalAdicionarAjudante').style.display = 'none'; };
+
 function renderizarInformacoesEmpresa() { var div = document.getElementById('viewMinhaEmpresaContent'); if (CACHE_MINHA_EMPRESA.razaoSocial) { div.innerHTML = `<strong>${CACHE_MINHA_EMPRESA.razaoSocial}</strong><br>CNPJ: ${CACHE_MINHA_EMPRESA.cnpj}<br>Tel: ${formatarTelefoneBrasil(CACHE_MINHA_EMPRESA.telefone)}`; } else { div.innerHTML = "Nenhum dado cadastrado."; } }
 
 window.preencherFormularioFuncionario = function(id) { var f = buscarFuncionarioPorId(id); if (!f) return; document.getElementById('funcionarioId').value = f.id; document.getElementById('funcNome').value = f.nome; document.getElementById('funcFuncao').value = f.funcao; document.getElementById('funcDocumento').value = f.documento; document.getElementById('funcEmail').value = f.email || ''; document.getElementById('funcTelefone').value = f.telefone; document.getElementById('funcPix').value = f.pix || ''; document.getElementById('funcEndereco').value = f.endereco || ''; toggleDriverFields(); if (f.funcao === 'motorista') { document.getElementById('funcCNH').value = f.cnh || ''; document.getElementById('funcValidadeCNH').value = f.validadeCNH || ''; document.getElementById('funcCategoriaCNH').value = f.categoriaCNH || ''; document.getElementById('funcCursoDescricao').value = f.cursoDescricao || ''; } document.querySelector('[data-page="cadastros"]').click(); document.querySelector('[data-tab="funcionarios"]').click(); window.scrollTo(0,0); };
@@ -944,34 +1022,62 @@ window.removerFaltaIndividual = function(opId, funcId) {
     }
 };
 
-// Tabela 2: Faltas Registradas (Apenas Motoristas - Ajudantes aparecem na lista acima como falhos)
+// Tabela 2: Faltas Registradas (CORRIGIDO: Agora exibe Motoristas E Ajudantes)
 window.renderizarTabelaFaltas = function() {
     var tbody = document.querySelector('#tabelaFaltas tbody');
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    var faltasMot = CACHE_OPERACOES.filter(op => op.checkins && op.checkins.faltaMotorista);
+    var encontrouFalta = false;
 
-    if (faltasMot.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">Nenhuma falta de motorista registrada.</td></tr>';
-        return;
-    }
+    // Itera todas as operações para buscar faltas de motoristas e ajudantes
+    CACHE_OPERACOES.forEach(op => {
+        if (!op.checkins) return;
 
-    faltasMot.forEach(op => {
-        var mot = buscarFuncionarioPorId(op.motoristaId);
-        var tr = document.createElement('tr');
-        tr.style.backgroundColor = '#ffebee';
-        tr.innerHTML = `
-            <td>${formatarDataParaBrasileiro(op.data)}</td>
-            <td>${mot ? mot.nome : 'N/A'}</td>
-            <td>MOTORISTA</td>
-            <td style="color:red; font-weight:bold;">FALTA REGISTRADA</td>
-            <td>
-                <button class="btn-mini btn-secondary" onclick="removerFaltaMotorista('${op.id}')" title="Desfazer"><i class="fas fa-undo"></i></button>
-            </td>
-        `;
-        tbody.appendChild(tr);
+        // 1. Verifica falta de Motorista
+        if (op.checkins.faltaMotorista) {
+            encontrouFalta = true;
+            var mot = buscarFuncionarioPorId(op.motoristaId);
+            var tr = document.createElement('tr');
+            tr.style.backgroundColor = '#ffebee';
+            tr.innerHTML = `
+                <td>${formatarDataParaBrasileiro(op.data)}</td>
+                <td>${mot ? mot.nome : 'N/A'}</td>
+                <td>MOTORISTA</td>
+                <td style="color:red; font-weight:bold;">FALTA REGISTRADA</td>
+                <td>
+                    <button class="btn-mini btn-secondary" onclick="removerFaltaMotorista('${op.id}')" title="Desfazer"><i class="fas fa-undo"></i></button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        }
+
+        // 2. Verifica falta de Ajudantes
+        if (op.checkins.faltas) {
+            Object.keys(op.checkins.faltas).forEach(ajudanteId => {
+                if (op.checkins.faltas[ajudanteId] === true) {
+                    encontrouFalta = true;
+                    var aj = buscarFuncionarioPorId(ajudanteId);
+                    var trAj = document.createElement('tr');
+                    trAj.style.backgroundColor = '#ffebee';
+                    trAj.innerHTML = `
+                        <td>${formatarDataParaBrasileiro(op.data)}</td>
+                        <td>${aj ? aj.nome : 'N/A'}</td>
+                        <td>AJUDANTE</td>
+                        <td style="color:red; font-weight:bold;">FALTA REGISTRADA</td>
+                        <td>
+                            <button class="btn-mini btn-secondary" onclick="removerFaltaIndividual('${op.id}', '${ajudanteId}')" title="Desfazer"><i class="fas fa-undo"></i></button>
+                        </td>
+                    `;
+                    tbody.appendChild(trAj);
+                }
+            });
+        }
     });
+
+    if (!encontrouFalta) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">Nenhuma falta ou ocorrência registrada.</td></tr>';
+    }
 };
 
 window.removerFaltaMotorista = function(opId) {
@@ -1514,12 +1620,106 @@ window.confirmarPresencaAjudante = function(opId) {
 };
 
 // -----------------------------------------------------------------------------
-// SINCRONIZAÇÃO E INICIALIZAÇÃO
+// SINCRONIZAÇÃO E INICIALIZAÇÃO (CORRIGIDA)
 // -----------------------------------------------------------------------------
 
+// CORREÇÃO: Filtro agora considera Motorista E Ajudante para exibir histórico financeiro
 window.filtrarHistoricoFuncionario = function() {
-    /* Mantido igual versão anterior */
-    var tbody = document.querySelector('#tabelaHistoricoCompleto tbody'); if (!tbody) return; tbody.innerHTML = ''; if (!window.USUARIO_ATUAL) return; var emailLogado = window.USUARIO_ATUAL.email.trim().toLowerCase(); var funcionario = CACHE_FUNCIONARIOS.find(f => f.email && f.email.trim().toLowerCase() === emailLogado); if (!funcionario) return; var dataIni = document.getElementById('empDataInicio').value; var dataFim = document.getElementById('empDataFim').value; var historico = CACHE_OPERACOES.filter(op => { var isMyOp = String(op.motoristaId) === String(funcionario.id); if (!isMyOp) return false; if (dataIni && op.data < dataIni) return false; if (dataFim && op.data > dataFim) return false; return op.status === 'CONFIRMADA' || op.status === 'FINALIZADA' || (op.checkins && op.checkins.faltaMotorista); }); var total = 0; historico.forEach(op => { var cliente = buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial || 'CLIENTE'; var valor = Number(op.comissao) || 0; var statusHtml = '<span class="status-pill pill-active">REALIZADO</span>'; var linhaStyle = ''; if (op.checkins && op.checkins.faltaMotorista) { statusHtml = '<span class="status-pill pill-blocked">FALTA</span>'; valor = 0; linhaStyle = 'background-color:#ffebee; color:#c62828;'; } else { total += valor; } var tr = document.createElement('tr'); tr.style = linhaStyle; tr.innerHTML = `<td>${formatarDataParaBrasileiro(op.data)}</td><td>${op.veiculoPlaca}</td><td>${cliente}</td><td>${formatarValorMoeda(valor)}</td><td>${statusHtml}</td>`; tbody.appendChild(tr); }); var elTotal = document.getElementById('empTotalReceber'); if(elTotal) elTotal.textContent = formatarValorMoeda(total);
+    var tbody = document.querySelector('#tabelaHistoricoCompleto tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (!window.USUARIO_ATUAL) return;
+
+    var emailLogado = window.USUARIO_ATUAL.email.trim().toLowerCase();
+    var funcionario = CACHE_FUNCIONARIOS.find(f => f.email && f.email.trim().toLowerCase() === emailLogado);
+    
+    if (!funcionario) {
+        tbody.innerHTML = '<tr><td colspan="5">Funcionário não encontrado.</td></tr>';
+        return;
+    }
+
+    var dataIni = document.getElementById('empDataInicio').value;
+    var dataFim = document.getElementById('empDataFim').value;
+
+    var historico = CACHE_OPERACOES.filter(op => {
+        // Verifica se é o motorista
+        var souMotorista = String(op.motoristaId) === String(funcionario.id);
+        
+        // Verifica se é um dos ajudantes
+        var souAjudante = false;
+        if (op.ajudantes && Array.isArray(op.ajudantes)) {
+            souAjudante = op.ajudantes.some(a => String(a.id) === String(funcionario.id));
+        }
+
+        // Se não faz parte da viagem, ignora
+        if (!souMotorista && !souAjudante) return false;
+
+        // Filtro de Data
+        if (dataIni && op.data < dataIni) return false;
+        if (dataFim && op.data > dataFim) return false;
+
+        // Exibe apenas operações válidas ou com falta registrada
+        return op.status === 'CONFIRMADA' || op.status === 'FINALIZADA' || (op.checkins && (op.checkins.faltaMotorista || op.checkins.faltas));
+    });
+
+    if (historico.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Nenhum serviço encontrado no período.</td></tr>';
+        document.getElementById('empTotalReceber').textContent = 'R$ 0,00';
+        return;
+    }
+
+    var total = 0;
+
+    historico.forEach(op => {
+        var cliente = buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial || 'CLIENTE';
+        var valorReceber = 0;
+        var teveFalta = false;
+        var souMotorista = String(op.motoristaId) === String(funcionario.id);
+
+        // Lógica de valores e faltas
+        if (souMotorista) {
+            valorReceber = Number(op.comissao) || 0;
+            if (op.checkins && op.checkins.faltaMotorista) {
+                teveFalta = true;
+            }
+        } else {
+            // Sou Ajudante: Encontrar meu valor na lista de ajudantes
+            var dadosAj = op.ajudantes.find(a => String(a.id) === String(funcionario.id));
+            if (dadosAj) {
+                valorReceber = Number(dadosAj.diaria) || 0;
+            }
+            // Verificar se tive falta
+            if (op.checkins && op.checkins.faltas && op.checkins.faltas[funcionario.id]) {
+                teveFalta = true;
+            }
+        }
+
+        var statusHtml = '<span class="status-pill pill-active">REALIZADO</span>';
+        var linhaStyle = '';
+
+        if (teveFalta) {
+            statusHtml = '<span class="status-pill pill-blocked">FALTA</span>';
+            valorReceber = 0; // Se faltou, não recebe
+            linhaStyle = 'background-color:#ffebee; color:#c62828;';
+        } else {
+            total += valorReceber;
+        }
+
+        var tr = document.createElement('tr');
+        tr.style = linhaStyle;
+        tr.innerHTML = `
+            <td>${formatarDataParaBrasileiro(op.data)}</td>
+            <td>${op.veiculoPlaca}</td>
+            <td>${cliente}</td>
+            <td>${formatarValorMoeda(valorReceber)}</td>
+            <td>${statusHtml}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    var elTotal = document.getElementById('empTotalReceber');
+    if(elTotal) elTotal.textContent = formatarValorMoeda(total);
 };
 
 window.sincronizarDadosDaNuvem = async function(manual = false) {
