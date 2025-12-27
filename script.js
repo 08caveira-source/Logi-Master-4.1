@@ -199,7 +199,7 @@ window.atualizarDashboard = function() {
         }
     });
 
-    // Soma Despesas Gerais do Mês (Sem vínculo direto com operações)
+    // Soma Despesas Gerais do Mês
     CACHE_DESPESAS.forEach(function(desp) {
         var dataDesp = new Date(desp.data + 'T12:00:00');
         if (dataDesp.getMonth() === mesAtual && dataDesp.getFullYear() === anoAtual) {
@@ -228,12 +228,12 @@ window.atualizarDashboard = function() {
     if (elHist) elHist.textContent = formatarValorMoeda(receitaHistorico);
     if (elMargem) elMargem.textContent = margem.toFixed(1) + '%';
 
-    // Atualiza o Gráfico (Passando os dados atuais)
+    // Atualiza o Gráfico
     atualizarGraficoPrincipal(mesAtual, anoAtual);
 };
 
 // -----------------------------------------------------------------------------
-// 7. GRÁFICOS (CHART.JS) COM FILTRO DE VEÍCULO
+// 7. GRÁFICOS (CHART.JS) COM PAINEL DE DADOS DO VEÍCULO
 // -----------------------------------------------------------------------------
 
 function atualizarGraficoPrincipal(mes, ano) {
@@ -241,7 +241,69 @@ function atualizarGraficoPrincipal(mes, ano) {
     if (!ctx) return; 
 
     // Verifica filtro de veículo selecionado
-    var filtroVeiculo = document.getElementById('filtroVeiculoGrafico') ? document.getElementById('filtroVeiculoGrafico').value : "";
+    var elSelect = document.getElementById('filtroVeiculoGrafico');
+    var filtroVeiculo = elSelect ? elSelect.value : "";
+
+    // === INJEÇÃO DE RESUMO DO VEÍCULO ===
+    // Remove resumo anterior se existir
+    var existingSummary = document.getElementById('chartVehicleSummary');
+    if (existingSummary) existingSummary.remove();
+
+    if (filtroVeiculo) {
+        // Calcula Estatísticas do Veículo no Mês Selecionado
+        var kmMes = 0;
+        var custoTotalVeiculo = 0;
+        var litrosTotal = 0;
+
+        CACHE_OPERACOES.forEach(op => {
+            if (op.veiculoPlaca !== filtroVeiculo || op.status === 'CANCELADA') return;
+            var d = new Date(op.data + 'T12:00:00');
+            if (d.getMonth() === mes && d.getFullYear() === ano) {
+                kmMes += (Number(op.kmRodado) || 0);
+                custoTotalVeiculo += (Number(op.combustivel) || 0) + (Number(op.despesas) || 0);
+                
+                // Soma Litros para média
+                var preco = Number(op.precoLitro) || 0;
+                var valorAbast = Number(op.combustivel) || 0;
+                if (preco > 0 && valorAbast > 0) litrosTotal += (valorAbast / preco);
+            }
+        });
+
+        // Adiciona Despesas Gerais do Veículo
+        CACHE_DESPESAS.forEach(d => {
+            if (d.veiculoPlaca === filtroVeiculo) {
+                var dt = new Date(d.data + 'T12:00:00');
+                if (dt.getMonth() === mes && dt.getFullYear() === ano) {
+                    custoTotalVeiculo += (Number(d.valor) || 0);
+                }
+            }
+        });
+
+        var media = (litrosTotal > 0) ? (kmMes / litrosTotal) : 0;
+
+        // Cria o HTML do Card
+        var summaryDiv = document.createElement('div');
+        summaryDiv.id = 'chartVehicleSummary';
+        summaryDiv.style.marginBottom = '15px';
+        summaryDiv.style.padding = '10px';
+        summaryDiv.style.background = '#e3f2fd';
+        summaryDiv.style.border = '1px solid #90caf9';
+        summaryDiv.style.borderRadius = '6px';
+        summaryDiv.style.display = 'flex';
+        summaryDiv.style.justifyContent = 'space-around';
+        summaryDiv.style.fontSize = '0.9rem';
+
+        summaryDiv.innerHTML = `
+            <div style="text-align:center;"><strong>VEÍCULO:</strong><br>${filtroVeiculo}</div>
+            <div style="text-align:center;"><strong>KM (MÊS):</strong><br>${kmMes.toFixed(1)} km</div>
+            <div style="text-align:center;"><strong>MÉDIA:</strong><br>${media > 0 ? media.toFixed(2) + ' Km/L' : 'N/A'}</div>
+            <div style="text-align:center;"><strong>CUSTO (MÊS):</strong><br>${formatarValorMoeda(custoTotalVeiculo)}</div>
+        `;
+
+        // Insere antes do canvas
+        ctx.parentNode.insertBefore(summaryDiv, ctx);
+    }
+    // === FIM INJEÇÃO ===
 
     if (window.chartInstance) {
         window.chartInstance.destroy();
@@ -252,24 +314,20 @@ function atualizarGraficoPrincipal(mes, ano) {
     var pessoal = 0; 
     var manutencaoGeral = 0; 
     
-    // Itera Operações
+    // Itera Operações para o Gráfico
     CACHE_OPERACOES.forEach(op => {
-        // Filtro de Veículo
         if (filtroVeiculo && op.veiculoPlaca !== filtroVeiculo) return;
 
         var d = new Date(op.data + 'T12:00:00');
         
-        // Considera apenas Confirmadas/Finalizadas para estatística
         if ((op.status === 'CONFIRMADA' || op.status === 'FINALIZADA') && d.getMonth() === mes && d.getFullYear() === ano) {
             receita += Number(op.faturamento || 0);
             combustivel += Number(op.combustivel || 0);
             
-            // Custo Pessoal (Motorista)
             if (!op.checkins || !op.checkins.faltaMotorista) {
                 pessoal += Number(op.comissao || 0);
             }
             
-            // Custo Pessoal (Ajudantes)
             if (op.ajudantes) {
                 op.ajudantes.forEach(aj => {
                     var faltou = (op.checkins && op.checkins.faltas && op.checkins.faltas[aj.id]);
@@ -281,12 +339,8 @@ function atualizarGraficoPrincipal(mes, ano) {
         }
     });
 
-    // Itera Despesas Gerais
     CACHE_DESPESAS.forEach(d => {
-        // Se filtro de veículo estiver ativo, só soma se a despesa for vinculada àquele veículo
-        if (filtroVeiculo) {
-            if (d.veiculoPlaca !== filtroVeiculo) return;
-        }
+        if (filtroVeiculo && d.veiculoPlaca !== filtroVeiculo) return;
 
         var dt = new Date(d.data + 'T12:00:00');
         if (dt.getMonth() === mes && dt.getFullYear() === ano) {
@@ -296,20 +350,19 @@ function atualizarGraficoPrincipal(mes, ano) {
 
     var lucro = receita - (combustivel + pessoal + manutencaoGeral);
 
-    // Renderiza Gráfico
     window.chartInstance = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: ['FATURAMENTO', 'CUSTO COMBUSTÍVEL', 'PESSOAL', 'MANUTENÇÃO/GERAL', 'LUCRO LÍQUIDO'],
             datasets: [{
-                label: filtroVeiculo ? 'Resultados (' + filtroVeiculo + ')' : 'Resultados Gerais do Mês',
+                label: filtroVeiculo ? 'Dados: ' + filtroVeiculo : 'Resultados Gerais',
                 data: [receita, combustivel, pessoal, manutencaoGeral, lucro],
                 backgroundColor: [
-                    'rgba(46, 125, 50, 0.7)',  // Fat (Verde)
-                    'rgba(198, 40, 40, 0.7)',  // Comb (Vermelho)
-                    'rgba(255, 152, 0, 0.7)',  // Pessoal (Laranja)
-                    'rgba(156, 39, 176, 0.7)', // Geral (Roxo)
-                    (lucro >= 0 ? 'rgba(0, 200, 83, 0.9)' : 'rgba(183, 28, 28, 0.9)') // Lucro
+                    'rgba(46, 125, 50, 0.7)',
+                    'rgba(198, 40, 40, 0.7)',
+                    'rgba(255, 152, 0, 0.7)',
+                    'rgba(156, 39, 176, 0.7)',
+                    (lucro >= 0 ? 'rgba(0, 200, 83, 0.9)' : 'rgba(183, 28, 28, 0.9)')
                 ],
                 borderColor: [ '#1b5e20', '#b71c1c', '#e65100', '#4a148c', '#000' ],
                 borderWidth: 1
@@ -318,10 +371,7 @@ function atualizarGraficoPrincipal(mes, ano) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { 
-                legend: { display: false }, 
-                tooltip: { callbacks: { label: function(context) { return formatarValorMoeda(context.raw); } } } 
-            },
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(context) { return formatarValorMoeda(context.raw); } } } },
             scales: { y: { beginAtZero: true, ticks: { callback: function(value) { return 'R$ ' + value; } } } }
         }
     });
@@ -346,29 +396,24 @@ window.renderizarCalendario = function() {
     var primeiroDiaSemana = new Date(ano, mes, 1).getDay(); 
     var diasNoMes = new Date(ano, mes + 1, 0).getDate();
 
-    // Dias Vazios do início
     for (var i = 0; i < primeiroDiaSemana; i++) {
         var emptyCell = document.createElement('div');
         emptyCell.classList.add('day-cell', 'empty');
         grid.appendChild(emptyCell);
     }
 
-    // Dias do Mês
     for (var dia = 1; dia <= diasNoMes; dia++) {
         var cell = document.createElement('div');
         cell.className = 'day-cell';
         
         var dateStr = `${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
         var cellContent = `<span>${dia}</span>`;
-        
-        // Busca operações do dia
         var opsDoDia = CACHE_OPERACOES.filter(o => o.data === dateStr && o.status !== 'CANCELADA');
         
         if (opsDoDia.length > 0) {
             cell.classList.add('has-operation');
             var totalDia = opsDoDia.reduce((acc, curr) => acc + (Number(curr.faturamento)||0), 0);
             
-            // Lógica das bolinhas coloridas (Status)
             var temEmAndamento = opsDoDia.some(o => o.status === 'EM_ANDAMENTO');
             var temPendente = opsDoDia.some(o => o.status === 'AGENDADA');
             var dotColor = temEmAndamento ? 'orange' : (temPendente ? '#999' : 'green');
@@ -378,7 +423,6 @@ window.renderizarCalendario = function() {
             cellContent += `<div style="font-size:0.65em; color:green;">${formatarValorMoeda(totalDia)}</div>`;
             cell.onclick = (function(ds) { return function() { abrirModalDetalhesDia(ds); }; })(dateStr);
         } else {
-            // Se clicar em dia vazio, vai para lançar operação
             cell.onclick = (function(dateString) {
                 return function() { 
                     document.getElementById('operacaoData').value = dateString;
@@ -399,7 +443,7 @@ window.changeMonth = function(direction) {
 };
 
 // =============================================================================
-// CÁLCULOS AVANÇADOS DE FROTA (MÉDIAS)
+// CÁLCULOS AVANÇADOS DE FROTA (GLOBAL)
 // =============================================================================
 
 window.calcularMediaGlobalVeiculo = function(placa, periodoInicio = null, periodoFim = null) {
@@ -407,10 +451,8 @@ window.calcularMediaGlobalVeiculo = function(placa, periodoInicio = null, period
         var matchPlaca = (op.veiculoPlaca === placa);
         var matchStatus = (op.status === 'CONFIRMADA' || op.status === 'FINALIZADA');
         var matchPeriodo = true;
-        
         if (periodoInicio && op.data < periodoInicio) matchPeriodo = false;
         if (periodoFim && op.data > periodoFim) matchPeriodo = false;
-
         return matchPlaca && matchStatus && matchPeriodo;
     });
 
@@ -423,7 +465,6 @@ window.calcularMediaGlobalVeiculo = function(placa, periodoInicio = null, period
         var km = Number(op.kmRodado) || 0;
         var valorAbastecido = Number(op.combustivel) || 0;
         var preco = Number(op.precoLitro) || 0;
-        
         if (km > 0 && valorAbastecido > 0 && preco > 0) {
             totalKm += km;
             totalLitros += (valorAbastecido / preco);
@@ -433,25 +474,16 @@ window.calcularMediaGlobalVeiculo = function(placa, periodoInicio = null, period
     return totalLitros > 0 ? (totalKm / totalLitros) : 0;
 };
 
-window.calcularKmTotalVeiculo = function(placa, periodoInicio, periodoFim) {
-    var ops = CACHE_OPERACOES.filter(op => 
-        op.veiculoPlaca === placa && 
-        op.status !== 'CANCELADA' &&
-        op.data >= periodoInicio && op.data <= periodoFim
-    );
-    return ops.reduce((acc, curr) => acc + (Number(curr.kmRodado) || 0), 0);
-};
-
 window.obterPrecoMedioCombustivel = function(placa) {
     var ops = CACHE_OPERACOES.filter(o => o.veiculoPlaca === placa && Number(o.precoLitro) > 0);
     if (ops.length === 0) return 0;
-    var ultimas = ops.slice(-10); // Pega as ultimas 10 para média recente
+    var ultimas = ops.slice(-10);
     var somaPrecos = ultimas.reduce((acc, curr) => acc + Number(curr.precoLitro), 0);
     return somaPrecos / ultimas.length;
 };
 
 // =============================================================================
-// MODAL DE DETALHES DO DIA (CALENDÁRIO)
+// MODAL DE DETALHES DO DIA
 // =============================================================================
 
 window.abrirModalDetalhesDia = function(dataString) {
@@ -526,7 +558,6 @@ window.abrirModalDetalhesDia = function(dataString) {
         var precoLitroRef = Number(op.precoLitro) > 0 ? Number(op.precoLitro) : obterPrecoMedioCombustivel(op.veiculoPlaca);
         
         var custoDieselCalculado = 0;
-        // Se houve abastecimento real, usa ele. Se não, estima pela média.
         if (Number(op.combustivel) > 0) {
             custoDieselCalculado = Number(op.combustivel);
         } else if (mediaGlobal > 0 && kmNaViagem > 0 && precoLitroRef > 0) {
@@ -650,7 +681,7 @@ document.addEventListener('submit', async function(e) {
                     company: window.USUARIO_ATUAL.company, 
                     createdAt: new Date().toISOString(), 
                     approved: true,
-                    senhaVisual: senha // Salva para consulta do admin (Solicitado)
+                    senhaVisual: senha // Salva para consulta do admin
                 });
             }
 
@@ -849,6 +880,9 @@ function preencherTodosSelects() {
     fill('selectContratanteRelatorio', CACHE_CONTRATANTES, 'cnpj', 'razaoSocial', 'TODOS OS CLIENTES');
     fill('selectAtividadeRelatorio', CACHE_ATIVIDADES, 'id', 'nome', 'TODAS AS ATIVIDADES');
     
+    // NOVO: Filtro de Gráfico (Análise Financeira)
+    fill('filtroVeiculoGrafico', CACHE_VEICULOS, 'placa', 'placa', 'TODOS OS VEÍCULOS');
+    
     // Recibos e Despesas
     fill('selectMotoristaRecibo', CACHE_FUNCIONARIOS, 'id', 'nome', 'SELECIONE O FUNCIONÁRIO...');
     fill('selectVeiculoRecibo', CACHE_VEICULOS, 'placa', 'placa', 'TODOS');
@@ -954,7 +988,7 @@ window.copiarTexto = function(texto) {
     }).catch(err => console.error('Erro ao copiar', err));
 };
 
-// NOVA FUNÇÃO: RESETAR SENHA MANUALMENTE (Solicitação Específica)
+// RESETAR SENHA MANUALMENTE
 window.resetarSenhaFuncionario = async function(id) {
     var f = buscarFuncionarioPorId(id);
     if (!f) return;
@@ -963,21 +997,17 @@ window.resetarSenhaFuncionario = async function(id) {
     if (!novaSenha) return;
     if (novaSenha.length < 6) return alert("A senha deve ter no mínimo 6 dígitos.");
 
-    // Atualiza localmente e no Firestore a "senha visual"
     f.senhaVisual = novaSenha;
     
-    // Atualiza no Cache e Salva a lista de funcionários
     await salvarListaFuncionarios(CACHE_FUNCIONARIOS);
 
-    // Tenta atualizar no documento 'users' do Firestore também
     if (window.dbRef) {
         try {
             const { db, doc, updateDoc } = window.dbRef;
-            // Atualiza o documento público do usuário
             await updateDoc(doc(db, "users", f.id), {
                 senhaVisual: novaSenha
             });
-            alert(`Senha atualizada no cadastro!\n\nNovo Login: ${f.email}\nNova Senha: ${novaSenha}\n\nATENÇÃO: Como o e-mail é fictício, informe esta nova senha ao funcionário.`);
+            alert(`Senha atualizada no cadastro!\n\nNovo Login: ${f.email}\nNova Senha: ${novaSenha}\n\nInforme esta nova senha ao funcionário.`);
         } catch (e) {
             console.error(e);
             alert("Senha salva localmente, mas houve erro ao sincronizar na nuvem.");
@@ -989,8 +1019,27 @@ function renderizarTabelaVeiculos() { var tbody = document.querySelector('#tabel
 function renderizarTabelaContratantes() { var tbody = document.querySelector('#tabelaContratantes tbody'); if (!tbody) return; tbody.innerHTML = ''; CACHE_CONTRATANTES.forEach(c => { var tr = document.createElement('tr'); var btnActions = window.MODO_APENAS_LEITURA ? '' : `<button class="btn-mini edit-btn" onclick="preencherFormularioContratante('${c.cnpj}')"><i class="fas fa-edit"></i></button><button class="btn-mini delete-btn" onclick="excluirContratante('${c.cnpj}')"><i class="fas fa-trash"></i></button>`; tr.innerHTML = `<td>${c.razaoSocial}</td><td>${c.cnpj}</td><td>${formatarTelefoneBrasil(c.telefone)}</td><td>${btnActions}</td>`; tbody.appendChild(tr); }); }
 function renderizarTabelaAtividades() { var tbody = document.querySelector('#tabelaAtividades tbody'); if (!tbody) return; tbody.innerHTML = ''; CACHE_ATIVIDADES.forEach(a => { var tr = document.createElement('tr'); var btnActions = window.MODO_APENAS_LEITURA ? '' : `<button class="btn-mini delete-btn" onclick="excluirAtividade('${a.id}')"><i class="fas fa-trash"></i></button>`; tr.innerHTML = `<td>${a.id.substr(-4)}</td><td>${a.nome}</td><td>${btnActions}</td>`; tbody.appendChild(tr); }); }
 
-// Exclusão
-window.excluirFuncionario = async function(id) { if(!confirm("Excluir funcionário?")) return; var lista = CACHE_FUNCIONARIOS.filter(f => String(f.id) !== String(id)); await salvarListaFuncionarios(lista); preencherTodosSelects(); };
+// EXCLUSÃO COM REVOGAÇÃO DE ACESSO
+window.excluirFuncionario = async function(id) { 
+    if(!confirm("ATENÇÃO: Excluir removerá o acesso deste usuário ao sistema imediatamente. Continuar?")) return; 
+    
+    // Tenta remover da Nuvem (Users Collection) para bloquear login
+    if (window.dbRef) {
+        try {
+            const { db, doc, deleteDoc } = window.dbRef;
+            await deleteDoc(doc(db, "users", id));
+        } catch(e) {
+            console.warn("Não foi possível remover da nuvem (offline ou erro):", e);
+        }
+    }
+
+    var lista = CACHE_FUNCIONARIOS.filter(f => String(f.id) !== String(id)); 
+    await salvarListaFuncionarios(lista); 
+    
+    alert("Funcionário removido e acesso revogado.");
+    preencherTodosSelects(); 
+};
+
 window.excluirVeiculo = function(placa) { if(!confirm("Excluir?")) return; salvarListaVeiculos(CACHE_VEICULOS.filter(v => v.placa !== placa)).then(() => preencherTodosSelects()); };
 window.excluirContratante = function(cnpj) { if(!confirm("Excluir?")) return; salvarListaContratantes(CACHE_CONTRATANTES.filter(c => c.cnpj !== cnpj)).then(() => preencherTodosSelects()); };
 window.excluirAtividade = function(id) { if(!confirm("Excluir?")) return; salvarListaAtividades(CACHE_ATIVIDADES.filter(a => String(a.id) !== String(id))).then(() => preencherTodosSelects()); };
@@ -1001,7 +1050,6 @@ window.preencherFormularioVeiculo = function(placa) { var v = buscarVeiculoPorPl
 window.preencherFormularioContratante = function(cnpj) { var c = buscarContratantePorCnpj(cnpj); if (!c) return; document.getElementById('contratanteCNPJ').value = c.cnpj; document.getElementById('contratanteRazaoSocial').value = c.razaoSocial; document.getElementById('contratanteTelefone').value = c.telefone; document.querySelector('[data-page="cadastros"]').click(); document.querySelector('[data-tab="contratantes"]').click(); };
 window.preencherFormularioOperacao = function(id) { var op = CACHE_OPERACOES.find(o => String(o.id) === String(id)); if (!op) return; document.getElementById('operacaoId').value = op.id; document.getElementById('operacaoData').value = op.data; document.getElementById('selectMotoristaOperacao').value = op.motoristaId; document.getElementById('selectVeiculoOperacao').value = op.veiculoPlaca; document.getElementById('selectContratanteOperacao').value = op.contratanteCNPJ; document.getElementById('selectAtividadeOperacao').value = op.atividadeId; document.getElementById('operacaoFaturamento').value = op.faturamento; document.getElementById('operacaoAdiantamento').value = op.adiantamento || ''; document.getElementById('operacaoComissao').value = op.comissao || ''; document.getElementById('operacaoDespesas').value = op.despesas || ''; document.getElementById('operacaoCombustivel').value = op.combustivel || ''; document.getElementById('operacaoPrecoLitro').value = op.precoLitro || ''; document.getElementById('operacaoKmRodado').value = op.kmRodado || ''; window._operacaoAjudantesTempList = op.ajudantes || []; renderizarListaAjudantesAdicionados(); document.getElementById('operacaoIsAgendamento').checked = (op.status === 'AGENDADA' || op.status === 'EM_ANDAMENTO'); document.querySelector('[data-page="operacoes"]').click(); };
 
-// Visualizar Operação (Mantido da versão anterior)
 window.visualizarOperacao = function(id) {
     var op = CACHE_OPERACOES.find(o => String(o.id) === String(id));
     if (!op) return;
@@ -1038,7 +1086,7 @@ window.renderizarTabelaOperacoes = function() {
     }); 
 };
 
-// Fechar Modais
+// Fechar Modais e Render Empresa
 window.closeViewModal = function() { document.getElementById('viewItemModal').style.display = 'none'; };
 window.closeModal = function() { document.getElementById('operationDetailsModal').style.display = 'none'; };
 window.closeCheckinConfirmModal = function() { document.getElementById('modalCheckinConfirm').style.display = 'none'; };
@@ -1275,15 +1323,22 @@ window.gerarRelatorioGeral = function() {
     if (opsFiltradas.length === 0) { divConteudo.innerHTML = html + "<p style='text-align:center'>Nenhum registro encontrado para os filtros selecionados.</p>"; return; }
 
     // --- CARD ESTATÍSTICO DE VEÍCULO (SE FILTRADO) ---
+    // Exibe: KM Total, Média Global e Custo Total vinculado ao veículo no período
     if (filtroVeiculo) {
         var kmTotalVeiculo = 0;
         var despesasVeiculo = 0;
         var faturamentoVeiculo = 0;
+        var litrosTotal = 0;
 
         opsFiltradas.forEach(op => {
             kmTotalVeiculo += (Number(op.kmRodado) || 0);
             faturamentoVeiculo += (Number(op.faturamento) || 0);
             despesasVeiculo += (Number(op.combustivel) || 0) + (Number(op.despesas) || 0);
+            
+            // Soma Litros para média
+            var preco = Number(op.precoLitro) || 0;
+            var valorAbast = Number(op.combustivel) || 0;
+            if (preco > 0 && valorAbast > 0) litrosTotal += (valorAbast / preco);
         });
 
         // Adiciona despesas gerais lançadas para este veículo
@@ -1293,7 +1348,7 @@ window.gerarRelatorioGeral = function() {
             }
         });
 
-        var mediaConsumo = calcularMediaGlobalVeiculo(filtroVeiculo, dataIni, dataFim);
+        var mediaConsumo = (litrosTotal > 0) ? (kmTotalVeiculo / litrosTotal) : 0;
 
         html += `
             <div style="background:#e3f2fd; border:1px solid #90caf9; padding:15px; border-radius:8px; margin-bottom:20px; display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:10px;">
@@ -1314,7 +1369,7 @@ window.gerarRelatorioGeral = function() {
     }
 
     if (filtroFuncionario) {
-        // ... (Lógica de Relatório Individual - Mantida da versão anterior) ...
+        // ... (Lógica de Relatório Individual - Mantida) ...
         var totalReceber = 0;
         var qtdFaltas = 0;
         html += `<table class="data-table"><thead><tr><th>DATA</th><th>FUNÇÃO</th><th>CLIENTE / ROTA</th><th>STATUS</th><th>VALOR A RECEBER</th></tr></thead><tbody>`;
@@ -1710,7 +1765,7 @@ function configurarNavegacao() {
             }
             if (pageId === 'access-management') { renderizarPainelEquipe(); renderizarTabelaProfileRequests(); }
             
-            // Lógica específica para Funcionários
+            // Lógica específica para Funcionários vs Admin
             if (window.USUARIO_ATUAL && window.USUARIO_ATUAL.role !== 'admin') {
                 if (pageId === 'employee-home') { 
                     verificarNovasMensagens();
@@ -1718,22 +1773,26 @@ function configurarNavegacao() {
                 }
                 if (pageId === 'recibos') {
                     // Se for funcionário, mostra o painel dele e esconde o de admin
-                    document.getElementById('adminRecibosPanel').style.display = 'none';
-                    document.getElementById('employeeRecibosPanel').style.display = 'block';
+                    var painelAdmin = document.getElementById('adminRecibosPanel');
+                    var painelEmp = document.getElementById('employeeRecibosPanel');
+                    if(painelAdmin) painelAdmin.style.display = 'none';
+                    if(painelEmp) painelEmp.style.display = 'block';
                     sincronizarDadosDaNuvem().then(() => renderizarTabelasRecibos());
                 }
             } else {
                 // Se for Admin
                 if (pageId === 'recibos') {
-                    document.getElementById('adminRecibosPanel').style.display = 'block';
-                    document.getElementById('employeeRecibosPanel').style.display = 'none';
+                    var painelAdmin = document.getElementById('adminRecibosPanel');
+                    var painelEmp = document.getElementById('employeeRecibosPanel');
+                    if(painelAdmin) painelAdmin.style.display = 'block';
+                    if(painelEmp) painelEmp.style.display = 'none';
                     renderizarTabelasRecibos();
                 }
             }
 
             if (pageId === 'meus-dados') { carregarDadosMeuPerfil(window.USUARIO_ATUAL.email); }
             
-            // Mobile UX
+            // Mobile UX: Fecha menu ao clicar
             document.getElementById('sidebar').classList.remove('active');
             document.getElementById('sidebarOverlay')?.classList.remove('active');
         };
@@ -1839,6 +1898,8 @@ window.renderizarPainelCheckinFuncionario = function() {
         var souMotorista = String(op.motoristaId) === String(funcionario.id);
         var souAjudante = op.ajudantes && op.ajudantes.some(a => String(a.id) === String(funcionario.id));
         if (!souMotorista && !souAjudante) return false;
+        
+        // Exibe se estiver Agendada (Futuro/Hoje) ou Em Andamento.
         return (op.status === 'AGENDADA' || op.status === 'EM_ANDAMENTO');
     });
 
@@ -1856,6 +1917,7 @@ window.renderizarPainelCheckinFuncionario = function() {
         var atividade = buscarAtividadePorId(op.atividadeId)?.nome || 'SERVIÇO';
         var statusColor = op.status==='AGENDADA' ? '#ff9800' : '#4caf50';
         
+        // --- MONTAGEM DA EQUIPE ---
         var motNome = buscarFuncionarioPorId(op.motoristaId)?.nome || 'Motorista';
         var listaAjudantesStr = 'Nenhum';
         if(op.ajudantes && op.ajudantes.length > 0) {
@@ -1871,6 +1933,7 @@ window.renderizarPainelCheckinFuncionario = function() {
             </div>
         `;
 
+        // --- BOTÕES DE AÇÃO ---
         var souMotorista = String(op.motoristaId) === String(funcionario.id);
         var btnAcao = '';
 
@@ -1882,6 +1945,7 @@ window.renderizarPainelCheckinFuncionario = function() {
                 btnAcao = infoAndamento + `<button class="btn-danger" onclick="prepararFinalizacaoDriver('${op.id}')" style="width:100%; padding:15px; font-size:1.1rem;">FINALIZAR VIAGEM <i class="fas fa-flag-checkered"></i></button>`;
             }
         } else {
+            // Se for ajudante
             var jaConfirmou = (op.checkins && op.checkins.ajudantes && op.checkins.ajudantes[funcionario.id] === true);
             if (jaConfirmou) {
                 btnAcao = `<div style="text-align:center; color:#2e7d32; padding:10px; font-weight:bold; border:1px solid #c8e6c9; background:#e8f5e9; border-radius:4px;">✅ PRESENÇA CONFIRMADA - AGUARDE O MOTORISTA</div>`;
@@ -1906,7 +1970,7 @@ window.renderizarPainelCheckinFuncionario = function() {
     container.innerHTML = html;
 };
 
-// Ações do Motorista
+// --- AÇÕES DO MOTORISTA ---
 window.iniciarViagemFuncionario = function(opId) {
     var kmPainel = prompt("Por favor, informe a QUILOMETRAGEM (KM) ATUAL do painel:");
     if(!kmPainel) return;
@@ -1962,7 +2026,7 @@ window.prepararFinalizacaoDriver = function(opId) {
     }
 };
 
-// Ação do Ajudante
+// --- AÇÕES DO AJUDANTE ---
 window.confirmarPresencaAjudante = function(opId) {
     var funcionario = CACHE_FUNCIONARIOS.find(f => f.email === window.USUARIO_ATUAL.email);
     if (!funcionario) return;
@@ -1984,7 +2048,7 @@ window.confirmarPresencaAjudante = function(opId) {
 // SINCRONIZAÇÃO E INICIALIZAÇÃO
 // -----------------------------------------------------------------------------
 
-// Filtro de Histórico Corrigido (Motorista e Ajudante)
+// Filtro de Histórico Corrigido (Motorista e Ajudante com verificação de Faltas)
 window.filtrarHistoricoFuncionario = function() {
     var tbody = document.querySelector('#tabelaHistoricoCompleto tbody');
     if (!tbody) return;
@@ -2004,8 +2068,11 @@ window.filtrarHistoricoFuncionario = function() {
         var souMotorista = String(op.motoristaId) === String(funcionario.id);
         var souAjudante = op.ajudantes && op.ajudantes.some(a => String(a.id) === String(funcionario.id));
         if (!souMotorista && !souAjudante) return false;
+        
         if (dataIni && op.data < dataIni) return false;
         if (dataFim && op.data > dataFim) return false;
+        
+        // Exibe se confirmada/finalizada OU se teve falta registrada (para transparência)
         return op.status === 'CONFIRMADA' || op.status === 'FINALIZADA' || (op.checkins && (op.checkins.faltaMotorista || op.checkins.faltas));
     });
 
@@ -2032,6 +2099,7 @@ window.filtrarHistoricoFuncionario = function() {
             funcaoNaViagem = 'Ajudante';
             var dadosAj = op.ajudantes.find(a => String(a.id) === String(funcionario.id));
             if (dadosAj) valorReceber = Number(dadosAj.diaria) || 0;
+            // Verifica falta individual do ajudante
             if (op.checkins && op.checkins.faltas && op.checkins.faltas[funcionario.id]) teveFalta = true;
         }
 
@@ -2040,7 +2108,7 @@ window.filtrarHistoricoFuncionario = function() {
 
         if (teveFalta) {
             statusHtml = '<span class="status-pill pill-blocked">FALTA</span>';
-            valorReceber = 0;
+            valorReceber = 0; // Zera valor
             linhaStyle = 'background-color:#ffebee; color:#c62828;';
         } else {
             total += valorReceber;
@@ -2063,7 +2131,7 @@ window.sincronizarDadosDaNuvem = async function(manual = false) {
     const { db, doc, getDoc } = window.dbRef; const company = window.USUARIO_ATUAL.company;
     const carregarColecao = async (chave, varCache, callback) => { try { const docRef = doc(db, 'companies', company, 'data', chave); const snap = await getDoc(docRef); if (snap.exists()) { const dados = snap.data().items || []; localStorage.setItem(chave, JSON.stringify(dados)); callback(dados); } } catch (e) { console.error(`Erro sync ${chave}:`, e); } };
     
-    // Lista de sincronização (Incluindo Recibos)
+    // Lista completa de sincronização incluindo Recibos
     await Promise.all([ 
         carregarColecao(CHAVE_DB_FUNCIONARIOS, CACHE_FUNCIONARIOS, (d) => CACHE_FUNCIONARIOS = d), 
         carregarColecao(CHAVE_DB_OPERACOES, CACHE_OPERACOES, (d) => CACHE_OPERACOES = d), 
@@ -2072,7 +2140,7 @@ window.sincronizarDadosDaNuvem = async function(manual = false) {
         carregarColecao(CHAVE_DB_ATIVIDADES, CACHE_ATIVIDADES, (d) => CACHE_ATIVIDADES = d), 
         carregarColecao(CHAVE_DB_MINHA_EMPRESA, CACHE_MINHA_EMPRESA, (d) => CACHE_MINHA_EMPRESA = d),
         carregarColecao(CHAVE_DB_PROFILE_REQUESTS, CACHE_PROFILE_REQUESTS, (d) => CACHE_PROFILE_REQUESTS = d),
-        carregarColecao(CHAVE_DB_RECIBOS, CACHE_RECIBOS, (d) => CACHE_RECIBOS = d) // NOVO
+        carregarColecao(CHAVE_DB_RECIBOS, CACHE_RECIBOS, (d) => CACHE_RECIBOS = d) // Nova tabela
     ]);
     
     if(document.getElementById('tabelaCheckinsPendentes')) renderizarTabelaMonitoramento();
