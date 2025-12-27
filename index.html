@@ -87,6 +87,9 @@
                 <li class="nav-item" data-page="employee-history">
                     <i class="fas fa-history"></i> MEUS SERVIÇOS
                 </li>
+                <li class="nav-item" data-page="recibos">
+                    <i class="fas fa-receipt"></i> MEUS RECIBOS
+                </li>
                 <li class="nav-item" data-page="meus-dados">
                     <i class="fas fa-id-card"></i> MEUS DADOS
                 </li>
@@ -152,7 +155,17 @@
             </div>
             
             <div class="card">
-                <h3>PERFORMANCE: RECEITAS x DESPESAS x COMBUSTÍVEL</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+                    <h3>PERFORMANCE FINANCEIRA</h3>
+                    
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <label for="filtroVeiculoGrafico" style="font-weight:bold; color:#555;">Filtrar Veículo:</label>
+                        <select id="filtroVeiculoGrafico" onchange="atualizarDashboard()" style="padding:8px; border-radius:4px; border:1px solid #ccc; min-width:200px;">
+                            <option value="">TODOS OS VEÍCULOS</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div class="chart-container" style="position: relative; height:450px; width:100%;">
                     <canvas id="mainChart"></canvas>
                 </div>
@@ -774,7 +787,7 @@
                     <div class="form-row">
                         <div class="form-col col-sm"><div class="form-group"><label>DATA INICIAL:</label><input type="date" id="dataInicioRelatorio" required></div></div>
                         <div class="form-col col-sm"><div class="form-group"><label>DATA FINAL:</label><input type="date" id="dataFimRelatorio" required></div></div>
-                        <div class="form-col"><div class="form-group"><label>MOTORISTA:</label><select id="selectMotoristaRelatorio"><option value="">TODOS</option></select></div></div>
+                        <div class="form-col"><div class="form-group"><label>MOTORISTA/AJUDANTE:</label><select id="selectMotoristaRelatorio"><option value="">TODOS</option></select></div></div>
                         <div class="form-col"><div class="form-group"><label>VEÍCULO:</label><select id="selectVeiculoRelatorio"><option value="">TODOS</option></select></div></div>
                         <div class="form-col"><div class="form-group"><label>CONTRATANTE:</label><select id="selectContratanteRelatorio"><option value="">TODOS</option></select></div></div>
                         
@@ -799,40 +812,53 @@
         </section>
 
         <section id="recibos" class="page">
-            <h2>EMISSÃO DE RECIBOS</h2>
-            <div class="card">
-                <form id="formRecibo">
-                    <div class="form-row">
-                        <div class="form-col col-lg">
-                            <div class="form-group">
-                                <label>SELECIONE O MOTORISTA OU AJUDANTE:</label>
-                                <select id="selectMotoristaRecibo"><option value="">CARREGANDO...</option></select>
+            <h2>EMISSÃO E CONSULTA DE RECIBOS</h2>
+            
+            <div id="adminRecibosPanel">
+                <div class="card">
+                    <h3>NOVO RECIBO DE PAGAMENTO</h3>
+                    <form id="formRecibo">
+                        <div class="form-row">
+                            <div class="form-col col-lg">
+                                <div class="form-group">
+                                    <label>SELECIONE O MOTORISTA OU AJUDANTE:</label>
+                                    <select id="selectMotoristaRecibo"><option value="">CARREGANDO...</option></select>
+                                </div>
                             </div>
                         </div>
-                        <div class="form-col col-md">
-                            <div class="form-group">
-                                <label>VEÍCULO (OPCIONAL):</label>
-                                <select id="selectVeiculoRecibo"><option value="">TODOS</option></select>
-                            </div>
+                        <div class="form-row">
+                            <div class="form-col col-sm"><div class="form-group"><label>DATA INICIAL (PERÍODO):</label><input type="date" id="dataInicioRecibo"></div></div>
+                            <div class="form-col col-sm"><div class="form-group"><label>DATA FINAL (PERÍODO):</label><input type="date" id="dataFimRecibo"></div></div>
                         </div>
-                        <div class="form-col col-lg">
-                            <div class="form-group">
-                                <label>CONTRATANTE (OPCIONAL):</label>
-                                <select id="selectContratanteRecibo"><option value="">TODOS</option></select>
-                            </div>
+                        <div class="form-actions">
+                            <button type="button" id="btnGerarRecibo" class="btn-primary" onclick="gerarReciboPagamento()">
+                                <i class="fas fa-file-invoice"></i> GERAR RECIBO (PRÉ-VISUALIZAR)
+                            </button>
                         </div>
+                    </form>
+                </div>
+                
+                <div class="card" style="margin-top:20px;">
+                    <h3>HISTÓRICO DE RECIBOS GERADOS</h3>
+                    <div class="table-responsive">
+                        <table id="tabelaHistoricoRecibos" class="data-table">
+                            <thead><tr><th>DATA EMISSÃO</th><th>FUNCIONÁRIO</th><th>PERÍODO</th><th>VALOR TOTAL</th><th>ENVIADO?</th><th>AÇÕES</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
                     </div>
-                    <div class="form-row">
-                        <div class="form-col col-sm"><div class="form-group"><label>DATA INICIAL:</label><input type="date" id="dataInicioRecibo"></div></div>
-                        <div class="form-col col-sm"><div class="form-group"><label>DATA FINAL:</label><input type="date" id="dataFimRecibo"></div></div>
+                </div>
+            </div>
+
+            <div id="employeeRecibosPanel" style="display:none;">
+                <div class="card">
+                    <h3>MEUS RECIBOS DE PAGAMENTO</h3>
+                    <div class="table-responsive">
+                        <table id="tabelaMeusRecibos" class="data-table">
+                            <thead><tr><th>DATA EMISSÃO</th><th>PERÍODO REFERÊNCIA</th><th>VALOR TOTAL</th><th>VISUALIZAR</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
                     </div>
-                    <div class="form-actions">
-                        <button type="button" id="btnGerarRecibo" class="btn-primary" onclick="gerarReciboPagamento()">
-                            <i class="fas fa-file-invoice"></i> GERAR RECIBO
-                        </button>
-                    </div>
-                </form>
-                <div id="reciboContent" class="receipt-preview"></div>
+                </div>
             </div>
         </section>
 
@@ -1034,6 +1060,21 @@
             <p id="notificationMessageText" class="notification-text" style="font-size:1.2rem; margin:20px 0; font-weight:bold;"></p>
             <small id="notificationSender" style="color:#666; display:block; margin-bottom:20px; font-weight:bold;"></small>
             <button onclick="document.getElementById('modalNotification').style.display='none'" class="btn-primary" style="width:100%; justify-content:center; padding: 15px;">ENTENDIDO</button>
+        </div>
+    </div>
+
+    <div id="modalRecibo" class="modal">
+        <div class="modal-content" style="max-width: 800px; padding:0;">
+            <div style="background:#263238; color:white; padding:15px; display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="margin:0; border:none; color:white;">RECIBO DE PAGAMENTO</h3>
+                <span onclick="document.getElementById('modalRecibo').style.display='none'" style="cursor:pointer; font-size:1.5rem;">&times;</span>
+            </div>
+            
+            <div id="modalReciboContent" style="padding:20px;">
+                </div>
+            
+            <div id="modalReciboActions" class="form-actions" style="padding:15px; border-top:1px solid #eee; background:#f9f9f9; display:flex; justify-content:flex-end; gap:10px;">
+                </div>
         </div>
     </div>
 
