@@ -21,7 +21,7 @@
         }
 
         .login-container {
-            background-color: #ffff;
+            background-color: #ffffff;
             padding: 40px;
             border-radius: 10px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
@@ -111,26 +111,29 @@
 
             <div class="form-group">
                 <label>Senha</label>
-                <input type="password" id="password" required placeholder="****">
+                <input type="password" id="password" required placeholder="******">
             </div>
 
             <button type="submit" id="btnLogin" class="btn-full">
                 ENTRAR <i class="fas fa-sign-in-alt"></i>
             </button>
             
+            <div style="margin-top: 20px; font-size: 0.8rem; color: #666;">
+                Não possui conta? Contate seu administrador.
+            </div>
         </form>
 
         <div style="margin-top: 30px; font-size: 0.7rem; color: #b0bec5;">
-            &copy; 2025 LOGIMASTER V19.0
+            &copy; 2025 LOGIMASTER V20.0 (SECURE)
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // Config igual ao index.html
+        // Configuração Firebase
         const firebaseConfig = { apiKey: "AIzaSyBZjVdcyjbEoR_-X6_lZuTRDMeN2wIntZI", authDomain: "logi-master-dd4cd.firebaseapp.com", projectId: "logi-master-dd4cd", storageBucket: "logi-master-dd4cd.firebasestorage.app", messagingSenderId: "673000154258", appId: "1:673000154258:web:fc9d6fced43e557076324b" };
         
         const app = initializeApp(firebaseConfig);
@@ -145,11 +148,11 @@
                 try {
                     const snap = await getDoc(docRef);
                     if (snap.exists()) {
-                    window.location.href = "index.html";
+                        window.location.href = "index.html";
                     } else {
-                    // Auth existe mas User DB nao (Erro de integridade)
-                    console.error("Usuário sem perfil.");
-                    await signOut(auth);
+                        // Auth existe mas User DB nao (Erro de integridade)
+                        console.error("Usuário sem perfil.");
+                        await signOut(auth);
                     }
                 } catch (e) {
                     console.error("Erro conexão:", e);
@@ -184,8 +187,9 @@
         function getErrorMessage(code) {
             switch(code) {
                 case 'auth/invalid-credential': return "E-mail ou senha incorretos.";
-                case 'auth/email-already-in-use': return "E-mail já cadastrado.";
-                case 'auth/weak-password': return "Senha fraca.";
+                case 'auth/user-not-found': return "Usuário não encontrado.";
+                case 'auth/wrong-password': return "Senha incorreta.";
+                case 'auth/too-many-requests': return "Muitas tentativas. Tente mais tarde.";
                 default: return code;
             }
         }
