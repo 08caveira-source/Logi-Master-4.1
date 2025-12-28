@@ -1888,7 +1888,7 @@ window.exportarRelatorioPDF = function() {
 };
 // =============================================================================
 // ARQUIVO: script.js
-// PARTE 5: INICIALIZAÇÃO, PAINEL SUPER ADMIN E GESTÃO DE CRÉDITOS (SAAS)
+// PARTE 5: INICIALIZAÇÃO, PAINEL SUPER ADMIN (CORRIGIDO) E GESTÃO DE CRÉDITOS
 // =============================================================================
 
 // -----------------------------------------------------------------------------
@@ -1899,7 +1899,8 @@ window.initSystemByRole = async function(user) {
     window.USUARIO_ATUAL = user;
     console.log("Inicializando sistema para: " + user.role);
 
-    // Oculta todos os menus inicialmente
+    // Garante que todas as sections e menus comecem ocultos
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById('menu-admin').style.display = 'none';
     document.getElementById('menu-employee').style.display = 'none';
     document.getElementById('menu-super-admin').style.display = 'none';
@@ -1907,12 +1908,13 @@ window.initSystemByRole = async function(user) {
     // 1. SUPER ADMIN (Global)
     if (user.email === 'admin@logimaster.com') {
         document.getElementById('menu-super-admin').style.display = 'block';
-        simularCliqueMenu('super-admin');
+        // Força renderização imediata do painel
+        document.getElementById('super-admin').classList.add('active');
+        carregarPainelSuperAdmin(true); 
         return;
     }
 
     // 2. BUSCAR DADOS DA EMPRESA (LICENÇA)
-    // Armazena em variável global para uso no Dashboard (Parte 2)
     if (user.company) {
         try {
             const { db, doc, getDoc } = window.dbRef;
@@ -1926,31 +1928,38 @@ window.initSystemByRole = async function(user) {
     }
 
     // 3. CARREGAR DADOS DO FIREBASE (Sincronização)
-    // Carrega dados da sub-coleção 'data' da empresa específica
     await carregarDadosDoFirebase(user.company);
 
     // 4. PERFIL ADMINISTRADOR
     if (user.role === 'admin') {
         document.getElementById('menu-admin').style.display = 'block';
-        simularCliqueMenu('home'); // Abre Dashboard
         
-        // Verifica notificações de equipe
+        // Abre Dashboard por padrão
+        const homeSection = document.getElementById('home');
+        if(homeSection) homeSection.classList.add('active');
+        
+        // Ativa visualmente o menu
+        const menuHome = document.querySelector('.nav-item[data-page="home"]');
+        if(menuHome) menuHome.classList.add('active');
+        
+        atualizarDashboard();
         verificarNotificacoesEquipe();
     } 
     // 5. PERFIL MOTORISTA / AJUDANTE
     else {
         document.getElementById('menu-employee').style.display = 'block';
-        window.MODO_APENAS_LEITURA = true; // Bloqueia edições
-        simularCliqueMenu('employee-home');
+        window.MODO_APENAS_LEITURA = true;
+        
+        // Abre Home do Motorista
+        const empHome = document.getElementById('employee-home');
+        if(empHome) empHome.classList.add('active');
+
+        const menuEmp = document.querySelector('.nav-item[data-page="employee-home"]');
+        if(menuEmp) menuEmp.classList.add('active');
+
         carregarDadosFuncionarioLogado();
     }
 };
-
-// Função auxiliar para simular clique inicial
-function simularCliqueMenu(dataPage) {
-    const el = document.querySelector(`.nav-item[data-page="${dataPage}"]`);
-    if(el) el.click();
-}
 
 // Carregamento de Dados Específicos da Empresa (Firestore)
 async function carregarDadosDoFirebase(companyId) {
@@ -1988,25 +1997,20 @@ async function carregarDadosDoFirebase(companyId) {
                 else if (item.v === 'CACHE_PROFILE_REQUESTS') window.CACHE_PROFILE_REQUESTS = data.items || item.def;
                 else if (item.v === 'CACHE_RECIBOS') window.CACHE_RECIBOS = data.items || item.def;
                 
-                // Atualiza LocalStorage
+                // Atualiza LocalStorage para redundância
                 localStorage.setItem(item.k, JSON.stringify(data.items));
             }
         } catch(err) {
-            console.warn(`Erro ao baixar ${item.k}:`, err);
+            console.warn(`Erro ao baixar ${item.k} (pode estar vazio):`, err);
         }
     }
     
     console.log("Dados sincronizados.");
-    // Re-renderiza tudo após baixar
-    window.renderizarTabelaFuncionarios();
-    window.renderizarTabelaVeiculos();
-    window.renderizarTabelaContratantes();
-    window.renderizarTabelaAtividades();
-    window.renderizarTabelaDespesasGerais();
-    window.renderizarTabelaOperacoes();
-    window.renderizarTabelaCheckinsPendentes();
-    window.renderizarCalendario();
-    window.atualizarDashboard();
+    // Re-renderiza tabelas
+    if(window.renderizarTabelaFuncionarios) window.renderizarTabelaFuncionarios();
+    if(window.renderizarTabelaVeiculos) window.renderizarTabelaVeiculos();
+    if(window.renderizarTabelaCheckinsPendentes) window.renderizarTabelaCheckinsPendentes();
+    if(window.atualizarDashboard) window.atualizarDashboard();
 }
 
 // -----------------------------------------------------------------------------
@@ -2017,23 +2021,22 @@ window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
     const container = document.getElementById('superAdminContainer');
     if (!container) return;
     
-    if (forceRefresh) container.innerHTML = '<p style="text-align:center; padding:50px; color:#666;">Atualizando dados globais...</p>';
+    if (forceRefresh) container.innerHTML = '<p style="text-align:center; padding:50px; color:#666;"><i class="fas fa-spinner fa-spin"></i> Atualizando base de dados global...</p>';
 
-    const { db, collection, getDocs, query, orderBy } = window.dbRef;
+    const { db, collection, getDocs } = window.dbRef;
 
     try {
-        // 1. Busca todas as empresas
+        // Busca coleções completas (método mais robusto que queries complexas)
         const companiesSnap = await getDocs(collection(db, "companies"));
-        
-        // 2. Busca todos os usuários (para saber quem é o admin de cada empresa)
         const usersSnap = await getDocs(collection(db, "users"));
+        
         const allUsers = [];
         usersSnap.forEach(doc => allUsers.push(doc.data()));
 
         container.innerHTML = '';
 
         if (companiesSnap.empty) {
-            container.innerHTML = '<p>Nenhuma empresa cadastrada.</p>';
+            container.innerHTML = '<div style="text-align:center; padding:40px; color:#666;">Nenhuma empresa encontrada no sistema. Clique no botão "+" para criar a primeira.</div>';
             return;
         }
 
@@ -2041,17 +2044,20 @@ window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
             const compData = docComp.data();
             const compId = docComp.id;
             
-            // Filtro de pesquisa visual
+            // Filtro de pesquisa visual (Frontend)
             const termo = document.getElementById('superAdminSearch').value.toLowerCase();
             const emailOwner = compData.ownerEmail ? compData.ownerEmail.toLowerCase() : '';
+            
+            // Se houver termo e não der match no ID nem no Email, pula
             if (termo && !compId.toLowerCase().includes(termo) && !emailOwner.includes(termo)) {
                 return;
             }
 
             // Análise da Licença
             const isVitalicio = compData.vitalicio === true;
-            const validade = compData.validade ? new Date(compData.validade) : new Date(0); // Data zero se nulo
+            const validade = compData.validade ? new Date(compData.validade) : new Date(0);
             const agora = new Date();
+            // Diferença em dias
             const diasRestantes = Math.ceil((validade - agora) / (1000 * 60 * 60 * 24));
             
             let statusBadge = '';
@@ -2073,7 +2079,6 @@ window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
             const admins = usersDaEmpresa.filter(u => u.role === 'admin');
             const totalUsers = usersDaEmpresa.length;
 
-            // HTML do Cartão da Empresa
             const div = document.createElement('div');
             div.className = 'company-block';
             div.innerHTML = `
@@ -2081,39 +2086,39 @@ window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
                     <div style="display:flex; align-items:center;">
                         <i class="fas fa-building" style="margin-right:10px; color:var(--secondary-color);"></i>
                         <div>
-                            <div>${compId} <span class="credit-badge ${statusClass}">${statusBadge}</span></div>
-                            <small style="font-weight:normal; color:#666;">Dono: ${compData.ownerEmail || '---'}</small>
+                            <div style="font-weight:bold; font-size:1rem;">${compId} <span class="credit-badge ${statusClass}">${statusBadge}</span></div>
+                            <small style="font-weight:normal; color:#666;">Responsável: ${compData.ownerEmail || '---'}</small>
                         </div>
                     </div>
                     <div>
-                        <i class="fas fa-users"></i> ${totalUsers} 
-                        <i class="fas fa-chevron-down" style="margin-left:10px;"></i>
+                        <span style="font-size:0.8rem; margin-right:10px;">${totalUsers} Usuários</span>
+                        <i class="fas fa-chevron-down"></i>
                     </div>
                 </div>
                 <div class="company-content">
-                    <div style="display:flex; gap:20px; font-size:0.9rem; color:#555; margin-bottom:10px;">
-                        <div>Criado em: ${formatarDataParaBrasileiro(compData.createdAt)}</div>
-                        <div>Admins: ${admins.map(a => a.name).join(', ') || 'Nenhum'}</div>
+                    <div style="display:flex; gap:20px; font-size:0.9rem; color:#555; margin-bottom:10px; flex-wrap:wrap;">
+                        <div><strong>Criado em:</strong> ${formatarDataParaBrasileiro(compData.createdAt)}</div>
+                        <div><strong>Admins:</strong> ${admins.map(a => a.name).join(', ') || 'Nenhum'}</div>
                     </div>
                     
                     <div class="company-actions-bar">
                         <div class="validade-info">
-                            Validade Atual: ${isVitalicio ? 'ETERNA' : formatarDataParaBrasileiro(compData.validade ? compData.validade.split('T')[0] : '')}
+                            Validade: ${isVitalicio ? 'ETERNA' : formatarDataParaBrasileiro(compData.validade ? compData.validade.split('T')[0] : '')}
                         </div>
                         
                         <button class="btn-mini btn-success" onclick="abrirModalCreditos('${compId}', '${compData.ownerEmail}')">
-                            <i class="fas fa-plus-circle"></i> GERENCIAR CRÉDITOS
+                            <i class="fas fa-calendar-plus"></i> GERENCIAR ACESSO
                         </button>
                         
                         <button class="btn-mini btn-danger" onclick="excluirEmpresaGlobal('${compId}')">
-                            <i class="fas fa-trash-alt"></i> EXCLUIR EMPRESA
+                            <i class="fas fa-trash"></i> EXCLUIR EMPRESA
                         </button>
                     </div>
 
-                    <div style="margin-top:10px; background:#fafafa; padding:10px;">
-                        <strong>Usuários da Empresa:</strong>
-                        <ul style="margin:5px 0 0 20px; font-size:0.85rem;">
-                            ${usersDaEmpresa.map(u => `<li>${u.name} (${u.role}) - ${u.email}</li>`).join('')}
+                    <div style="margin-top:10px; background:#f5f5f5; padding:10px; border-radius:4px;">
+                        <strong style="font-size:0.85rem;">Lista de Usuários:</strong>
+                        <ul style="margin:5px 0 0 20px; font-size:0.8rem; color:#444;">
+                            ${usersDaEmpresa.length > 0 ? usersDaEmpresa.map(u => `<li>${u.name} <span style="color:#888;">(${u.email})</span> - <strong>${u.role}</strong></li>`).join('') : '<li>Sem usuários cadastrados</li>'}
                         </ul>
                     </div>
                 </div>
@@ -2123,18 +2128,83 @@ window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
 
     } catch (e) {
         console.error("Erro Super Admin:", e);
-        container.innerHTML = '<p style="color:red">Erro ao carregar dados. Verifique o console.</p>';
+        container.innerHTML = '<p style="color:red; text-align:center;">Erro ao carregar dados. Verifique a conexão com o banco de dados.</p>';
     }
 };
 
 window.filterGlobalUsers = function() {
-    // Debounce simples ou reload
-    window.carregarPainelSuperAdmin(false);
+    // Apenas recarrega a visualização com o filtro aplicado na memória
+    carregarPainelSuperAdmin(false);
 }
 
 // -----------------------------------------------------------------------------
-// 19. LÓGICA DE CRÉDITOS (MODAL E AÇÕES)
+// 19. LÓGICA DE CRÉDITOS E CRIAÇÃO DE EMPRESAS (MODAIS)
 // -----------------------------------------------------------------------------
+
+window.abrirModalCriarEmpresa = function() {
+    document.getElementById('formCreateCompany').reset();
+    document.getElementById('modalCreateCompany').style.display = 'flex';
+};
+
+// Listener para criação de nova empresa (Super Admin)
+document.getElementById('formCreateCompany').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const email = document.getElementById('newCompEmail').value.trim().toLowerCase();
+    const senha = document.getElementById('newCompPassword').value;
+    const nome = document.getElementById('newCompName').value.trim().toUpperCase();
+    const isVitalicio = document.getElementById('newCompVitalicio').checked;
+
+    const btn = this.querySelector('button[type="submit"]');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> CRIANDO...';
+    btn.disabled = true;
+
+    try {
+        // 1. Cria usuário no Auth (usando app secundário para não deslogar o admin)
+        const uid = await window.dbRef.criarAuthUsuario(email, senha);
+        
+        // 2. Define ID da Empresa (Ex: emp_TIMESTAMP)
+        const companyId = 'emp_' + Date.now();
+        
+        const { db, setDoc, doc } = window.dbRef;
+
+        // 3. Cria documento da Empresa
+        const validadeInicial = new Date();
+        validadeInicial.setDate(validadeInicial.getDate() + 30); // 30 dias grátis inicial
+
+        await setDoc(doc(db, "companies", companyId), {
+            createdAt: new Date().toISOString(),
+            ownerEmail: email,
+            vitalicio: isVitalicio,
+            validade: validadeInicial.toISOString()
+        });
+
+        // 4. Cria documento do Usuário Admin
+        await setDoc(doc(db, "users", uid), {
+            uid: uid,
+            name: nome,
+            email: email,
+            role: 'admin',
+            company: companyId,
+            approved: true,
+            createdAt: new Date().toISOString(),
+            senhaVisual: senha // Opcional, para facilitar suporte
+        });
+
+        alert(`EMPRESA CRIADA COM SUCESSO!\n\nID: ${companyId}\nAdmin: ${email}\nSenha: ${senha}`);
+        
+        document.getElementById('modalCreateCompany').style.display = 'none';
+        carregarPainelSuperAdmin(true);
+
+    } catch (erro) {
+        console.error(erro);
+        alert("Erro ao criar empresa: " + erro.message);
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+});
 
 window.abrirModalCreditos = async function(companyId, ownerEmail) {
     const modal = document.getElementById('modalManageCredits');
@@ -2150,7 +2220,7 @@ window.abrirModalCreditos = async function(companyId, ownerEmail) {
         const snap = await getDoc(ref);
         
         if (!snap.exists()) {
-            body.innerHTML = 'Erro: Empresa não encontrada.';
+            body.innerHTML = 'Erro: Documento da empresa não encontrado.';
             return;
         }
 
@@ -2161,27 +2231,27 @@ window.abrirModalCreditos = async function(companyId, ownerEmail) {
         body.innerHTML = `
             <div style="background:#f5f5f5; padding:15px; border-radius:4px; margin-bottom:15px;">
                 <p><strong>Empresa:</strong> ${companyId}</p>
-                <p><strong>Dono:</strong> ${ownerEmail}</p>
-                <p><strong>Status Atual:</strong> ${isVitalicio ? 'VITALÍCIO' : 'VALIDADE ATÉ ' + formatarDataParaBrasileiro(validade)}</p>
+                <p><strong>Admin:</strong> ${ownerEmail}</p>
+                <p><strong>Status:</strong> ${isVitalicio ? '<span style="color:purple; font-weight:bold;">VITALÍCIO</span>' : 'Validade até ' + formatarDataParaBrasileiro(validade)}</p>
             </div>
 
-            <h4 style="border-bottom:1px solid #ddd; padding-bottom:5px;">Adicionar Tempo de Acesso</h4>
-            <div style="display:flex; gap:10px; margin-bottom:20px;">
+            <h4 style="border-bottom:1px solid #ddd; padding-bottom:5px;">Adicionar Tempo</h4>
+            <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
                 <button class="btn-primary" onclick="adicionarCreditos('${companyId}', 1)">+ 1 Mês</button>
                 <button class="btn-primary" onclick="adicionarCreditos('${companyId}', 3)">+ 3 Meses</button>
                 <button class="btn-primary" onclick="adicionarCreditos('${companyId}', 6)">+ 6 Meses</button>
                 <button class="btn-primary" onclick="adicionarCreditos('${companyId}', 12)">+ 1 Ano</button>
             </div>
 
-            <h4 style="border-bottom:1px solid #ddd; padding-bottom:5px;">Ações de Controle</h4>
+            <h4 style="border-bottom:1px solid #ddd; padding-bottom:5px;">Controle</h4>
             <div style="display:flex; flex-direction:column; gap:10px;">
                 <label style="display:flex; align-items:center; gap:10px; cursor:pointer; background:#fff3e0; padding:10px; border:1px solid #ffe0b2;">
                     <input type="checkbox" id="chkVitalicio" ${isVitalicio ? 'checked' : ''} onchange="toggleVitalicio('${companyId}', this.checked)">
-                    <strong>ACESSO VITALÍCIO (Sem necessidade de créditos)</strong>
+                    <strong>ACESSO VITALÍCIO (Nunca expira)</strong>
                 </label>
 
                 <button class="btn-danger" onclick="bloquearEmpresa('${companyId}')">
-                    <i class="fas fa-ban"></i> BLOQUEAR ACESSO IMEDIATAMENTE
+                    <i class="fas fa-ban"></i> BLOQUEAR (Expirar agora)
                 </button>
             </div>
         `;
@@ -2192,7 +2262,7 @@ window.abrirModalCreditos = async function(companyId, ownerEmail) {
 };
 
 window.adicionarCreditos = async function(companyId, meses) {
-    if(!confirm(`Adicionar ${meses} mês(es) de crédito para esta empresa?`)) return;
+    if(!confirm(`Adicionar ${meses} mês(es) de acesso?`)) return;
 
     try {
         const { db, doc, getDoc, updateDoc } = window.dbRef;
@@ -2203,22 +2273,21 @@ window.adicionarCreditos = async function(companyId, meses) {
         let novaValidade = new Date();
         const validadeAtual = data.validade ? new Date(data.validade) : new Date(0);
         
-        // Se a validade atual for maior que hoje, soma a partir dela. Se não, soma a partir de hoje.
+        // Se ainda for válida, soma a partir da data atual de validade. Se já venceu, soma a partir de hoje.
         if (validadeAtual > novaValidade) {
             novaValidade = validadeAtual;
         }
 
-        // Adiciona os meses (aproximação de 30 dias por mês para simplificar JS)
         novaValidade.setDate(novaValidade.getDate() + (meses * 30));
 
         await updateDoc(ref, {
             validade: novaValidade.toISOString(),
-            vitalicio: false // Remove vitalício se adicionar crédito manual
+            vitalicio: false // Remove vitalício se adicionar manual
         });
 
-        alert("Créditos adicionados com sucesso!");
-        abrirModalCreditos(companyId, data.ownerEmail); // Recarrega modal
-        carregarPainelSuperAdmin(false); // Atualiza fundo
+        alert("Créditos adicionados.");
+        abrirModalCreditos(companyId, data.ownerEmail);
+        carregarPainelSuperAdmin(false);
 
     } catch (e) {
         alert("Erro: " + e.message);
@@ -2226,8 +2295,7 @@ window.adicionarCreditos = async function(companyId, meses) {
 };
 
 window.toggleVitalicio = async function(companyId, checked) {
-    if(!confirm(checked ? "Tornar esta empresa VITALÍCIA? Ela nunca será bloqueada." : "Remover status VITALÍCIO?")) {
-        // Reverte checkbox visualmente se cancelar
+    if(!confirm(checked ? "Tornar VITALÍCIO?" : "Remover VITALÍCIO?")) {
         document.getElementById('chkVitalicio').checked = !checked;
         return;
     }
@@ -2237,7 +2305,7 @@ window.toggleVitalicio = async function(companyId, checked) {
         await updateDoc(doc(db, "companies", companyId), {
             vitalicio: checked
         });
-        alert("Status atualizado.");
+        alert("Alterado com sucesso.");
         carregarPainelSuperAdmin(false);
     } catch (e) {
         alert("Erro: " + e.message);
@@ -2245,11 +2313,10 @@ window.toggleVitalicio = async function(companyId, checked) {
 };
 
 window.bloquearEmpresa = async function(companyId) {
-    if(!confirm("Tem certeza? Isso impedirá o login de TODOS os usuários desta empresa imediatamente.")) return;
+    if(!confirm("Bloquear empresa? A validade será definida para ontem.")) return;
 
     try {
         const { db, doc, updateDoc } = window.dbRef;
-        // Define validade para ontem
         const ontem = new Date();
         ontem.setDate(ontem.getDate() - 1);
 
@@ -2267,28 +2334,23 @@ window.bloquearEmpresa = async function(companyId) {
 };
 
 window.excluirEmpresaGlobal = async function(companyId) {
-    const confirmacao = prompt(`ATENÇÃO PERIGO!\n\nVocê está prestes a excluir a empresa ${companyId} e TODOS os dados associados.\nIsso não pode ser desfeito.\n\nPara confirmar, digite "DELETAR" abaixo:`);
-    
+    const confirmacao = prompt(`DIGITE "DELETAR" PARA EXCLUIR A EMPRESA ${companyId} E TODOS OS DADOS.`);
     if (confirmacao !== "DELETAR") return;
 
     try {
         const { db, doc, deleteDoc, collection, getDocs, query, where } = window.dbRef;
 
-        // 1. Exclui documento da empresa
+        // 1. Deleta doc da empresa
         await deleteDoc(doc(db, "companies", companyId));
 
-        // 2. Busca e exclui usuários associados (opcional, mas recomendável para limpeza)
+        // 2. Deleta usuários da empresa
         const q = query(collection(db, "users"), where("company", "==", companyId));
-        const querySnapshot = await getDocs(q);
-        
-        const deletePromises = [];
-        querySnapshot.forEach((documento) => {
-            deletePromises.push(deleteDoc(doc(db, "users", documento.id)));
-        });
-        
-        await Promise.all(deletePromises);
+        const qs = await getDocs(q);
+        const promises = [];
+        qs.forEach((d) => promises.push(deleteDoc(doc(db, "users", d.id))));
+        await Promise.all(promises);
 
-        alert("Empresa e usuários excluídos com sucesso.");
+        alert("Empresa excluída.");
         carregarPainelSuperAdmin(true);
 
     } catch (e) {
@@ -2303,25 +2365,23 @@ window.excluirEmpresaGlobal = async function(companyId) {
 // Navegação Sidebar
 document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', function() {
-        // Visual Active
-        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-        this.classList.add('active');
-
-        // Page Switching
         const pageId = this.getAttribute('data-page');
-        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         
-        const targetPage = document.getElementById(pageId);
-        if (targetPage) {
-            targetPage.classList.add('active');
-            
-            // Callbacks específicos de carregamento
-            if (pageId === 'home') atualizarDashboard();
-            if (pageId === 'checkins-pendentes') renderizarTabelaCheckinsPendentes();
-            if (pageId === 'super-admin') carregarPainelSuperAdmin();
-        }
+        // Remove active de todos
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
 
-        // Mobile close
+        // Ativa atual
+        this.classList.add('active');
+        const target = document.getElementById(pageId);
+        if (target) target.classList.add('active');
+
+        // Callbacks de carregamento
+        if (pageId === 'home') atualizarDashboard();
+        if (pageId === 'checkins-pendentes') renderizarTabelaCheckinsPendentes();
+        if (pageId === 'super-admin') carregarPainelSuperAdmin();
+
+        // Mobile
         if (window.innerWidth <= 768) {
             document.getElementById('sidebar').classList.remove('active');
             document.getElementById('sidebarOverlay').classList.remove('active');
@@ -2329,27 +2389,26 @@ document.querySelectorAll('.nav-item').forEach(item => {
     });
 });
 
-// Mobile Menu Toggle
+// Mobile Toggle
 document.getElementById('mobileMenuBtn').addEventListener('click', () => {
     document.getElementById('sidebar').classList.add('active');
     document.getElementById('sidebarOverlay').classList.add('active');
 });
-
 document.getElementById('sidebarOverlay').addEventListener('click', () => {
     document.getElementById('sidebar').classList.remove('active');
     document.getElementById('sidebarOverlay').classList.remove('active');
 });
 
-// Cadastro Tabs Switch
+// Tabs Internas
 document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
     btn.addEventListener('click', function() {
         document.querySelectorAll('.cadastro-tab-btn').forEach(b => b.classList.remove('active'));
-        this.classList.add('active');
-        
-        const tabId = this.getAttribute('data-tab');
         document.querySelectorAll('.cadastro-form').forEach(f => f.classList.remove('active'));
+        
+        this.classList.add('active');
+        const tabId = this.getAttribute('data-tab');
         document.getElementById(tabId).classList.add('active');
     });
 });
 
-console.log("Sistema LogiMaster v7.1 carregado com sucesso.");
+console.log("Sistema LogiMaster v7.1 (Super Admin Fixed) carregado.");
