@@ -1,5 +1,5 @@
 /* =============================================================================
-   LOGIMASTER - ESTILOS VISUAIS (VERSÃO COMPLETA)
+   LOGIMASTER - ESTILOS VISUAIS (VERSÃO CORRIGIDA E ROBUSTA)
    ============================================================================= */
 
 @import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@300;400;600;700;800&display=swap');
@@ -40,10 +40,9 @@
     margin: 0;
     padding: 0;
     font-family: 'Segoe UI', sans-serif;
-    text-transform: uppercase; /* Padrão Logístico */
+    text-transform: uppercase;
 }
 
-/* Exceções de texto normal */
 input[type="email"], 
 input[type="password"], 
 .normal-case, 
@@ -300,23 +299,10 @@ button:hover { filter: brightness(90%); }
 .day-cell:not(.empty):hover { border-color: var(--primary-color); background: #f0fdfc; }
 
 .day-cell span { font-weight: bold; font-size: 0.9rem; color: #555; }
+.day-cell.has-operation { background: #e8f5e9; border-color: #c8e6c9; }
+.event-dot { width: 8px; height: 8px; background: var(--warning-color); border-radius: 50%; position: absolute; top: 5px; right: 5px; }
 
-.day-cell.has-operation {
-    background: #e8f5e9;
-    border-color: #c8e6c9;
-}
-
-.event-dot {
-    width: 8px;
-    height: 8px;
-    background: var(--warning-color);
-    border-radius: 50%;
-    position: absolute;
-    top: 5px;
-    right: 5px;
-}
-
-/* LISTA SIMPLES (Ajudantes) */
+/* LISTA SIMPLES */
 .simple-list { list-style: none; padding: 0; }
 .simple-list li {
     background: #f9f9f9;
@@ -382,8 +368,6 @@ button:hover { filter: brightness(90%); }
 .cadastro-form { display: none; }
 .cadastro-form.active { display: block; }
 
-/* IMPRESSÃO (RECIBOS/RELATÓRIOS) */
-
 @media print {
     .sidebar, .mobile-nav, .no-print, .form-actions, .tab-controls, .calendar-controls { display: none !important; }
     .content { margin: 0; padding: 0; }
@@ -391,27 +375,21 @@ button:hover { filter: brightness(90%); }
     body { background: white; }
 }
 
-/* MEDIA QUERIES (CELULAR) */
 @media (max-width: 768px) {
     .mobile-nav { display: flex; }
     .sidebar { transform: translateX(-100%); width: 280px; top: var(--header-height); height: calc(100% - var(--header-height)); }
     .sidebar.active { transform: translateX(0); }
-    
     .content { margin-left: 0; margin-top: var(--header-height); padding: 15px; }
-    
     .overlay {
         display: none; position: fixed; top:0; left:0; width:100%; height:100%;
         background: rgba(0,0,0,0.5); z-index: 900;
     }
     .sidebar.active + .overlay { display: block; }
-    
-    .calendar-grid { gap: 2px; }
-    .day-cell { min-height: 60px; font-size: 0.8rem; }
-    
     .form-col { flex: 100%; }
 }
+
 /* =============================================================================
-   ESTILOS DO SUPER ADMIN (HIERARQUIA GLOBAL)
+   ESTILOS DO SUPER ADMIN E CRÉDITOS
    ============================================================================= */
 .super-search-box {
     background: #fff;
@@ -423,94 +401,29 @@ button:hover { filter: brightness(90%); }
     align-items: center;
     box-shadow: var(--shadow-sm);
 }
-
-.hierarchy-container {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-.company-block {
-    background: #fff;
-    border: 1px solid #cfd8dc;
-    border-radius: 6px;
-    overflow: hidden;
-}
-
+.hierarchy-container { display: flex; flex-direction: column; gap: 15px; }
+.company-block { background: #fff; border: 1px solid #cfd8dc; border-radius: 6px; overflow: hidden; }
 .company-header {
-    background: #eceff1;
-    padding: 15px 20px;
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: background 0.2s;
+    background: #eceff1; padding: 15px 20px; cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center; transition: background 0.2s;
 }
+.company-header:hover { background: #cfd8dc; }
+.company-content { display: none; padding: 20px; border-top: 1px solid #ddd; animation: fadeUp 0.3s; }
+.company-content.expanded { display: block; }
 
-.company-header:hover {
-    background: #cfd8dc;
-}
+/* === SOLUÇÃO DEFINITIVA PARA LAYOUT SUPER ADMIN === 
+   Quando esta classe está no <body>, ela sobrescreve o layout padrão
+   para garantir que o painel ocupe 100% da tela e esconda a sidebar */
 
-.company-header h4 {
-    margin: 0;
-    color: var(--secondary-dark);
-    font-size: 1rem;
-}
-
-.company-meta {
-    font-size: 0.8rem;
-    color: #666;
-    margin-right: auto;
-    margin-left: 15px;
-}
-
-.company-content {
-    display: none;
-    padding: 20px;
-    border-top: 1px solid #ddd;
-    animation: fadeUp 0.3s;
-}
-
-.company-content.expanded {
-    display: block;
-}
-
-.btn-super-action {
-    padding: 4px 8px;
-    font-size: 0.75rem;
-    margin-left: 5px;
-}
-
-/* NOVOS ESTILOS: GESTÃO DE LICENÇA E CRÉDITOS */
-.license-active {
-    color: #4caf50;
-    font-weight: bold;
-}
-.license-warning {
-    color: #ff9800;
-    font-weight: bold;
-}
-.license-expired {
-    color: #f44336;
-    font-weight: bold;
-    animation: pulseRed 2s infinite;
-}
-
-@keyframes pulseRed {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
-}
-
-/* Ajustes visuais para o modal de créditos */
-#divCreditAmount button {
-    flex: 1;
-    padding: 10px 5px;
-    font-size: 0.8rem;
-    background-color: #e0e0e0;
-    color: #333;
-    border: 1px solid #ccc;
-}
-#divCreditAmount button:hover {
-    background-color: #d5d5d5;
+body.super-admin-mode .sidebar { display: none !important; }
+body.super-admin-mode .mobile-nav { display: none !important; }
+body.super-admin-mode .overlay { display: none !important; }
+body.super-admin-mode .content {
+    margin: 0 !important;
+    width: 100% !important;
+    padding: 30px !important;
+    margin-top: 0 !important;
+    max-width: 1400px;
+    margin-left: auto !important;
+    margin-right: auto !important;
 }

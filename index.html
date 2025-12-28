@@ -104,7 +104,7 @@
             <button onclick="logoutSystem()" class="btn-danger" style="width: 100%;">
                 <i class="fas fa-sign-out-alt"></i> SAIR DO SISTEMA
             </button>
-            <p style="text-align:center; font-size:0.7rem; color:#888; margin-top:10px;">&copy; LOGIMASTER 22.0</p>
+            <p style="text-align:center; font-size:0.7rem; color:#888; margin-top:10px;">&copy; LOGIMASTER 23.0</p>
         </div>
     </header>
 
@@ -1128,13 +1128,12 @@
       const db = getFirestore(app);
       const auth = getAuth(app);
       
-      // Função para criar usuário usando App Secundário (Sem deslogar Admin)
       async function criarUsuarioSecundario(email, senha) {
           const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
           const secondaryAuth = getAuth(secondaryApp);
           try {
               const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, senha);
-              await deleteApp(secondaryApp); // Limpa a app secundária
+              await deleteApp(secondaryApp);
               return userCredential.user.uid;
           } catch (error) {
               await deleteApp(secondaryApp);
@@ -1142,12 +1141,11 @@
           }
       }
 
-      // Expondo para o Script Global
       window.dbRef = { 
           db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, 
           updateDoc, query, where, deleteDoc, getDocs, addDoc, arrayUnion, writeBatch,
           sendReset: (email) => sendPasswordResetEmail(auth, email),
-          criarAuthUsuario: criarUsuarioSecundario // Nova função exposta
+          criarAuthUsuario: criarUsuarioSecundario 
       };
 
       onAuthStateChanged(auth, async (user) => {
@@ -1168,7 +1166,6 @@
                   }, 500);
               }
           } else { 
-              // Permite acesso à pagina de login se não estiver logado
               if(!window.location.href.includes('login.html')) window.location.replace("login.html"); 
           }
       });
