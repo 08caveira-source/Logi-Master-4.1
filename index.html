@@ -33,7 +33,7 @@
         <nav class="sidebar-menu">
             
             <div id="menu-admin" style="display:none;">
-                <div class="nav-item active" data-page="home">
+                <div class="nav-item" data-page="home">
                     <i class="fas fa-th-large"></i> 
                     <span>DASHBOARD</span>
                 </div>
@@ -131,7 +131,7 @@
 
     <main class="main-content">
         
-        <section id="home" class="page active">
+        <section id="home" class="page">
             <h2>DASHBOARD OPERACIONAL</h2>
             
             <div class="dashboard-grid">
@@ -1055,6 +1055,10 @@
             <div id="superAdminContainer" class="hierarchy-container">
                 <p style="text-align:center; padding:50px; color:#666;">Carregando dados globais...</p>
             </div>
+            
+            <div class="fab-create" onclick="abrirModalCriarEmpresa()" title="Criar Nova Empresa">
+                <i class="fas fa-plus"></i>
+            </div>
         </section>
 
     </main>
@@ -1066,6 +1070,38 @@
             <div style="margin-top:15px; text-align:right;">
                 <button class="btn-secondary" onclick="document.getElementById('modalManageCredits').style.display='none'">FECHAR</button>
             </div>
+        </div>
+    </div>
+    
+    <div id="modalCreateCompany" class="modal-overlay">
+        <div class="modal-content">
+            <h3 style="color:var(--primary-color);">CRIAR NOVA EMPRESA (SUPER ADMIN)</h3>
+            <form id="formCreateCompany">
+                <div class="input-group" style="margin-bottom:15px;">
+                    <label>E-mail do Administrador da Empresa</label>
+                    <input type="email" id="newCompEmail" required placeholder="admin@empresa.com" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                </div>
+                <div class="input-group" style="margin-bottom:15px;">
+                    <label>Senha Inicial</label>
+                    <input type="text" id="newCompPassword" required placeholder="******" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                </div>
+                <div class="input-group" style="margin-bottom:15px;">
+                    <label>Nome do Administrador</label>
+                    <input type="text" id="newCompName" required placeholder="Nome Completo" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                </div>
+                
+                <div style="background:#e8f5e9; padding:10px; border-radius:4px; margin-bottom:15px;">
+                    <label style="display:flex; align-items:center; gap:10px;">
+                        <input type="checkbox" id="newCompVitalicio">
+                        <strong>Conceder Acesso Vitalício?</strong>
+                    </label>
+                </div>
+                
+                <div style="display:flex; gap:10px; justify-content:flex-end;">
+                    <button type="button" class="btn-secondary" onclick="document.getElementById('modalCreateCompany').style.display='none'">CANCELAR</button>
+                    <button type="submit" class="btn-success">CRIAR EMPRESA</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -1132,7 +1168,7 @@
       import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
       import { getFirestore, doc, setDoc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-      // Configuração Firebase (Suas Chaves)
+      // Configuração Firebase
       const firebaseConfig = {
         apiKey: "AIzaSyBZjVdcyjbEoR_-X6_lZuTRDMeN2wIntZI",
         authDomain: "logi-master-dd4cd.firebaseapp.com",
@@ -1146,16 +1182,15 @@
       const auth = getAuth(app);
       const db = getFirestore(app);
 
-      // Função Auxiliar para Criar Usuário (Secundário)
+      // Função para Criar Usuário Secundário (Para Admin e Super Admin criarem contas)
       async function criarUsuarioSecundario(email, senha) {
           const appSec = initializeApp(firebaseConfig, "Secondary");
           const authSec = getAuth(appSec);
           const res = await createUserWithEmailAndPassword(authSec, email, senha);
-          await signOut(authSec);
+          await signOut(authSec); // Desloga do secundário para não interferir
           return res.user.uid;
       }
 
-      // Expõe referências para o script.js
       window.dbRef = { 
           db, doc, setDoc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, addDoc, auth,
           criarAuthUsuario: criarUsuarioSecundario 
@@ -1170,43 +1205,45 @@
               if (userSnap.exists()) {
                   const userData = userSnap.data();
                   
-                  // 1. Verificação de Aprovação
-                  if (userData.email !== 'admin@logimaster.com' && userData.approved === false) {
-                      alert("CONTA AGUARDANDO APROVAÇÃO.\n\nAguarde liberação do administrador.");
-                      await signOut(auth);
-                      window.location.replace("login.html");
-                      return;
-                  }
-
-                  // 2. Verificação de Licença (SaaS)
+                  // Verificações de Acesso
                   if (userData.email !== 'admin@logimaster.com') {
-                        const companyRef = doc(db, "companies", userData.company);
-                        const companySnap = await getDoc(companyRef);
-                        if (companySnap.exists()) {
-                            const cData = companySnap.data();
-                            const agora = new Date();
-                            const validade = cData.validade ? new Date(cData.validade) : new Date(0);
-                            
-                            if (cData.vitalicio !== true && agora > validade) {
-                                alert("ACESSO BLOQUEADO: LICENÇA EXPIRADA.\nContate o administrador para renovação.");
-                                await signOut(auth);
-                                window.location.replace("login.html");
-                                return;
-                            }
-                        }
+                      // 1. Aprovação
+                      if (userData.approved === false) {
+                          alert("CONTA AGUARDANDO APROVAÇÃO.");
+                          await signOut(auth);
+                          window.location.replace("login.html");
+                          return;
+                      }
+                      
+                      // 2. Licença
+                      const companyRef = doc(db, "companies", userData.company);
+                      const companySnap = await getDoc(companyRef);
+                      if (companySnap.exists()) {
+                          const cData = companySnap.data();
+                          const agora = new Date();
+                          const validade = cData.validade ? new Date(cData.validade) : new Date(0);
+                          if (cData.vitalicio !== true && agora > validade) {
+                              alert("ACESSO BLOQUEADO: LICENÇA EXPIRADA.");
+                              await signOut(auth);
+                              window.location.replace("login.html");
+                              return;
+                          }
+                      }
                   }
 
+                  // Configura usuário e exibe sistema
                   window.currentUser = userData; 
-                  document.body.style.display = 'flex'; 
+                  document.body.style.display = 'flex'; // Exibe o corpo apenas agora
                   
                   const emailElem = document.getElementById('userEmailDisplay');
                   const roleElem = document.getElementById('userRoleDisplay');
                   if(emailElem) emailElem.textContent = userData.email.toUpperCase();
                   if(roleElem) roleElem.textContent = userData.role.toUpperCase();
                   
+                  // Inicia o Script Principal (com delay mínimo para garantir DOM)
                   setTimeout(() => { 
                       if (window.initSystemByRole) window.initSystemByRole(userData); 
-                  }, 500);
+                  }, 100);
 
               } else {
                   await signOut(auth);
@@ -1220,7 +1257,7 @@
       });
       
       window.logoutSystem = async function() {
-          if(confirm("Deseja realmente sair do sistema?")) {
+          if(confirm("Sair do sistema?")) {
               await signOut(auth);
               window.location.href = "login.html";
           }
