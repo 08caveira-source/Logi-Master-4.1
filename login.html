@@ -118,22 +118,63 @@
                 ENTRAR <i class="fas fa-sign-in-alt"></i>
             </button>
             
-            <div style="margin-top: 20px; font-size: 0.8rem; color: #666;">
-                Não possui conta? Contate seu administrador.
+            <span class="toggle-link" onclick="toggleForms()">
+                Não tem conta? CADASTRAR-SE
+            </span>
+        </form>
+
+        <form id="formRegister" class="hidden">
+            <div class="info-box">
+                <strong>ATENÇÃO:</strong> Se você é funcionário, use o MESMO e-mail que seu patrão cadastrou para vincular automaticamente.
             </div>
+
+            <div id="regError" class="error-message"></div>
+
+            <div class="form-group">
+                <label>Nome Completo</label>
+                <input type="text" id="regName" required style="text-transform: uppercase;">
+            </div>
+
+            <div class="form-group">
+                <label>E-mail Corporativo</label>
+                <input type="email" id="regEmail" required placeholder="nome@empresa.com">
+            </div>
+
+            <div class="form-group">
+                <label>Função</label>
+                <select id="regRole" required>
+                    <option value="">SELECIONE...</option>
+                    <option value="admin">SOU DONO (CRIAR EMPRESA)</option>
+                    <option value="motorista">MOTORISTA</option>
+                    <option value="ajudante">AJUDANTE</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Senha (Mín. 6 Dígitos)</label>
+                <input type="password" id="regPassword" required>
+            </div>
+
+            <button type="submit" id="btnRegister" class="btn-full" style="background-color: #455a64;">
+                CRIAR CONTA
+            </button>
+            
+            <span class="toggle-link" onclick="toggleForms()">
+                Já tem conta? FAZER LOGIN
+            </span>
         </form>
 
         <div style="margin-top: 30px; font-size: 0.7rem; color: #b0bec5;">
-            &copy; 2025 LOGIMASTER V20.0 (SECURE)
+            &copy; 2025 LOGIMASTER V19.0
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // Configuração Firebase
+        // Config igual ao index.html
         const firebaseConfig = { apiKey: "AIzaSyBZjVdcyjbEoR_-X6_lZuTRDMeN2wIntZI", authDomain: "logi-master-dd4cd.firebaseapp.com", projectId: "logi-master-dd4cd", storageBucket: "logi-master-dd4cd.firebasestorage.app", messagingSenderId: "673000154258", appId: "1:673000154258:web:fc9d6fced43e557076324b" };
         
         const app = initializeApp(firebaseConfig);
@@ -184,12 +225,107 @@
             }
         });
 
+        // --- REGISTRO ---
+        document.getElementById('formRegister').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('regName').value.trim().toUpperCase();
+            const email = document.getElementById('regEmail').value.trim().toLowerCase();
+            const pass = document.getElementById('regPassword').value;
+            let role = document.getElementById('regRole').value;
+            const btn = document.getElementById('btnRegister');
+            const errDiv = document.getElementById('regError');
+
+            if (pass.length < 6) {
+                errDiv.textContent = "Senha muito curta (mínimo 6).";
+                errDiv.style.display = 'block';
+                return;
+            }
+
+            // Pega domínio do email (ex: joao@empresa.com -> empresa.com)
+            const domain = email.split('@')[1];
+            if (!domain) {
+                errDiv.textContent = "Email inválido.";
+                errDiv.style.display = 'block';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'CRIANDO CONTA...';
+            errDiv.style.display = 'none';
+
+            try {
+                // 1. Tenta criar Auth
+                const cred = await createUserWithEmailAndPassword(auth, email, pass);
+                const uid = cred.user.uid;
+
+                // 2. Lógica de Vínculo (Verifica se já existe na empresa)
+                let approved = (role === 'admin'); // Dono já nasce aprovado
+                
+                if (!approved) {
+                    // Tenta ler lista de funcionários da empresa desse domínio
+                    // Caminho: companies/dominio/data/db_funcionarios
+                    try {
+                        const compRef = doc(db, 'companies', domain, 'data', 'db_funcionarios');
+                        const snap = await getDoc(compRef);
+                        
+                        if (snap.exists()) {
+                            const lista = snap.data().items || [];
+                            // Procura match de email
+                            const funcionarioPreCadastrado = lista.find(f => f.email && f.email.toLowerCase() === email);
+                            
+                            if (funcionarioPreCadastrado) {
+                                approved = true;
+                                role = funcionarioPreCadastrado.funcao; // Força a função real
+                                console.log("Vínculo encontrado! Auto-aprovando como " + role);
+                            }
+                        }
+                    } catch(err) {
+                        console.warn("Erro ao verificar vínculo (pode ser permissão):", err);
+                    }
+                }
+
+                // 3. Salva Perfil do Usuário
+                await setDoc(doc(db, "users", uid), {
+                    uid: uid,
+                    name: name,
+                    email: email,
+                    role: role,
+                    company: domain,
+                    createdAt: new Date().toISOString(),
+                    approved: approved
+                });
+
+                alert("Conta criada com sucesso! Redirecionando...");
+                // Redirecionamento automático
+
+            } catch (error) {
+                console.error(error);
+                btn.disabled = false;
+                btn.textContent = 'CRIAR CONTA';
+                errDiv.textContent = 'Erro: ' + getErrorMessage(error.code);
+                errDiv.style.display = 'block';
+            }
+        });
+
+        // Helpers
+        window.toggleForms = function() {
+            const log = document.getElementById('formLogin');
+            const reg = document.getElementById('formRegister');
+            if (log.classList.contains('hidden')) {
+                log.classList.remove('hidden'); reg.classList.add('hidden');
+            } else {
+                log.classList.add('hidden'); reg.classList.remove('hidden');
+            }
+            // Limpa erros
+            document.querySelectorAll('.error-message').forEach(e => e.style.display = 'none');
+        }
+
         function getErrorMessage(code) {
             switch(code) {
                 case 'auth/invalid-credential': return "E-mail ou senha incorretos.";
-                case 'auth/user-not-found': return "Usuário não encontrado.";
-                case 'auth/wrong-password': return "Senha incorreta.";
-                case 'auth/too-many-requests': return "Muitas tentativas. Tente mais tarde.";
+                case 'auth/email-already-in-use': return "E-mail já cadastrado.";
+                case 'auth/weak-password': return "Senha fraca.";
                 default: return code;
             }
         }

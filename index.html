@@ -36,10 +36,6 @@
                 <span id="userEmailDisplay">CARREGANDO...</span>
             </p>
             <p id="userRoleDisplay">CARREGANDO FUNÇÃO...</p>
-            
-            <p id="systemCreditsDisplay" style="display:none; font-size:0.75rem; color:#ffca28; margin-top:8px; border:1px solid rgba(255,255,255,0.2); padding:4px; border-radius:4px; background:rgba(0,0,0,0.2);">
-                <i class="fas fa-clock"></i> LICENÇA: <span id="daysRemaining">VERIFICANDO...</span>
-            </p>
         </div>
 
         <nav>
@@ -104,7 +100,7 @@
             <button onclick="logoutSystem()" class="btn-danger" style="width: 100%;">
                 <i class="fas fa-sign-out-alt"></i> SAIR DO SISTEMA
             </button>
-            <p style="text-align:center; font-size:0.7rem; color:#888; margin-top:10px;">&copy; LOGIMASTER 23.0</p>
+            <p style="text-align:center; font-size:0.7rem; color:#888; margin-top:10px;">&copy; LOGIMASTER 22.0</p>
         </div>
     </header>
 
@@ -1082,41 +1078,6 @@
         </div>
     </div>
 
-    <div id="modalManageCredits" class="modal">
-        <div class="modal-content" style="max-width: 400px;">
-            <span class="close-btn" onclick="document.getElementById('modalManageCredits').style.display='none'">&times;</span>
-            <h3>GESTÃO DE LICENÇA</h3>
-            <p id="modalCreditCompanyName" style="font-weight:bold; color:var(--primary-color);">EMPRESA</p>
-            
-            <form id="formAddCredits">
-                <input type="hidden" id="creditCompanyId">
-                
-                <div style="margin: 20px 0; background:#f5f5f5; padding:15px; border-radius:6px;">
-                    <label style="display:flex; align-items:center; cursor:pointer; gap:10px;">
-                        <input type="checkbox" id="checkLifetime" style="width:20px; height:20px;">
-                        <span style="font-weight:bold;">ACESSO VITALÍCIO</span>
-                    </label>
-                    <p style="font-size:0.8rem; color:#666; margin-top:5px;">Se marcado, a empresa nunca expira.</p>
-                </div>
-
-                <div id="divCreditAmount">
-                    <label>ADICIONAR CRÉDITOS (MESES):</label>
-                    <div style="display:flex; gap:10px; margin-bottom:10px;">
-                        <button type="button" class="btn-secondary" onclick="adjustCredits(1)">+1 Mês</button>
-                        <button type="button" class="btn-secondary" onclick="adjustCredits(3)">+3 Meses</button>
-                        <button type="button" class="btn-secondary" onclick="adjustCredits(6)">+6 Meses</button>
-                        <button type="button" class="btn-secondary" onclick="adjustCredits(12)">+1 Ano</button>
-                    </div>
-                    <input type="number" id="manualCredits" placeholder="Ou digite qtd de meses" style="margin-top:10px;">
-                </div>
-
-                <div class="form-actions">
-                    <button type="submit" class="btn-primary" style="width:100%;">SALVAR ALTERAÇÕES</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <script type="module">
       import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
       import { getFirestore, collection, setDoc, doc, onSnapshot, getDoc, updateDoc, query, where, deleteDoc, getDocs, addDoc, arrayUnion, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
@@ -1128,12 +1089,13 @@
       const db = getFirestore(app);
       const auth = getAuth(app);
       
+      // Função para criar usuário usando App Secundário (Sem deslogar Admin)
       async function criarUsuarioSecundario(email, senha) {
           const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
           const secondaryAuth = getAuth(secondaryApp);
           try {
               const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, senha);
-              await deleteApp(secondaryApp);
+              await deleteApp(secondaryApp); // Limpa a app secundária
               return userCredential.user.uid;
           } catch (error) {
               await deleteApp(secondaryApp);
@@ -1141,11 +1103,12 @@
           }
       }
 
+      // Expondo para o Script Global
       window.dbRef = { 
           db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, 
           updateDoc, query, where, deleteDoc, getDocs, addDoc, arrayUnion, writeBatch,
           sendReset: (email) => sendPasswordResetEmail(auth, email),
-          criarAuthUsuario: criarUsuarioSecundario 
+          criarAuthUsuario: criarUsuarioSecundario // Nova função exposta
       };
 
       onAuthStateChanged(auth, async (user) => {
@@ -1166,6 +1129,7 @@
                   }, 500);
               }
           } else { 
+              // Permite acesso à pagina de login se não estiver logado
               if(!window.location.href.includes('login.html')) window.location.replace("login.html"); 
           }
       });
