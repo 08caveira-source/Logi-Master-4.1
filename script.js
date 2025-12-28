@@ -25,108 +25,62 @@ let globalUsersCache = [];
 
 // domain: string (id do doc em 'companies')
 // role: papel do usuário logado ("super_admin", "admin", etc.)
-async function verificarCreditosEmpresa(domain, role = null) {
-    const db = window.dbRef.db;
-    const { doc, getDoc } = window.dbRef;
-
-    // SUPER ADMIN: nunca é bloqueado por crédito
-    if (role && role.toLowerCase().includes('super')) {
-        return {
-            isActive: true,
-            lifetime: true,
-            validUntil: null,
-            raw: null
-        };
+async function verificarCreditosEmpresa(domain) {
+    if (!domain) {
+        console.warn('Domínio não informado para verificação de créditos.');
+        return { isActive: false, lifetime: false };
     }
 
     try {
-        const companyRef = doc(db, 'companies', domain);
-        const snap = await getDoc(companyRef);
+        const db = window.dbRef.db;
+        const { doc, getDoc } = window.dbRef;
 
-        if (!snap.exists()) {
-            alert("Empresa não encontrada. Contate o suporte.");
-            return {
-                isActive: false,
-                lifetime: false,
-                validUntil: null,
-                raw: null
-            };
+        const empresaRef = doc(db, 'empresas', domain);
+        const empresaSnap = await getDoc(empresaRef);
+
+        if (!empresaSnap.exists()) {
+            console.error('Empresa não encontrada:', domain);
+            return { isActive: false, lifetime: false };
         }
 
-        const data = snap.data();
-        const lifetime = !!data.creditLifetime;
-        const validUntil = data.creditValidUntil ? new Date(data.creditValidUntil) : null;
-
-        let isActive = false;
+        const empresa = empresaSnap.data();
+        const lifetime = empresa.lifetime === true;
 
         if (lifetime) {
-            isActive = true;
-        } else {
-            const today = new Date();
-            const hojeSemHora = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-            if (validUntil && validUntil >= hojeSemHora) {
-                isActive = true;
-            }
+            return { isActive: true, lifetime: true, validUntil: null };
         }
 
-        if (!isActive) {
-            // Bloqueia acesso de qualquer usuário NÃO-superadmin
-            alert("Os créditos da sua empresa expiraram. Contate o administrador para renovar.");
-            try {
-                const auth = window.dbRef.auth;
-                const { signOut } = window.dbRef;
-                await signOut(auth);
-            } catch (e) {
-                console.error("Erro ao realizar signOut após expiração de créditos:", e);
-            }
-        }
+        const creditValidUntil = empresa.creditValidUntil 
+            ? (empresa.creditValidUntil.toDate ? empresa.creditValidUntil.toDate() : new Date(empresa.creditValidUntil))
+            : null;
+
+        const hoje = new Date();
+        const isActive = creditValidUntil && creditValidUntil >= hoje;
 
         return {
             isActive,
-            lifetime,
-            validUntil,
-            raw: data
+            lifetime: false,
+            validUntil: creditValidUntil
         };
 
     } catch (error) {
-        console.error("Erro ao verificar créditos da empresa:", error);
-        alert("Erro ao verificar créditos da empresa. Contate o suporte.");
-        return {
-            isActive: false,
-            lifetime: false,
-            validUntil: null,
-            raw: null
-        };
+        console.error('Erro ao verificar créditos:', error);
+        return { isActive: false, lifetime: false };
     }
 }
 
 // Exibir validade de créditos discretamente no painel do ADMIN
 function exibirValidadeCreditosAdmin(creditStatus) {
-    const div = document.getElementById('creditValidityDisplay');
-    if (!div) return;
+    const creditDisplay = document.getElementById('creditValidityDisplay');
+    if (!creditDisplay) return;
 
     if (creditStatus.lifetime) {
-        div.textContent = "Plano: VITALÍCIO";
-        div.className = 'credit-info-display tag-lifetime';
-        return;
-    }
-
-    if (!creditStatus.validUntil) {
-        div.textContent = "Sem créditos ativos";
-        div.className = 'credit-info-display tag-expired';
-        return;
-    }
-
-    const d = creditStatus.validUntil;
-    const dataStr = d.toLocaleDateString('pt-BR');
-    div.textContent = `Créditos válidos até: ${dataStr}`;
-
-    const today = new Date();
-    const hojeSemHora = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    if (d < hojeSemHora) {
-        div.className = 'credit-info-display tag-expired';
+        creditDisplay.innerHTML = '<span style="color: #4CAF50;">✓ Créditos Vitalícios</span>';
+    } else if (creditStatus.isActive && creditStatus.validUntil) {
+        const dataFormatada = creditStatus.validUntil.toLocaleDateString('pt-BR');
+        creditDisplay.innerHTML = `<span style="color: #2196F3;">Créditos válidos até: ${dataFormatada}</span>`;
     } else {
-        div.className = 'credit-info-display tag-active';
+        creditDisplay.innerHTML = '<span style="color: #f44336;">⚠ Créditos expirados</span>';
     }
 }
 
@@ -2914,21 +2868,42 @@ function inicializarAuthObserver() {
             currentUser = userData;
             currentDomain = userData.domain || null;
 
+            const role = (userData.role || '').toLowerCase();
+
+            // ✅ SUPER ADMIN: nunca verifica créditos, vai direto
+            if (role.includes('super')) {
+                const path = window.location.pathname.toLowerCase();
+                if (path.includes('login.html')) {
+                    window.location.href = 'index.html';
+                } else {
+                    await roteamentoPosLogin(userData);
+                }
+                return;
+            }
+
+            // ✅ Para outros perfis: verificar domínio
             if (!currentDomain) {
                 alert("Usuário sem domínio configurado. Contate o suporte.");
                 await handleLogout();
                 return;
             }
 
-            const creditStatus = await verificarCreditosEmpresa(currentDomain, userData.role);
-            if (!creditStatus.isActive && !creditStatus.lifetime && !userData.role.toLowerCase().includes('super')) {
+            // ✅ Verificar créditos apenas para perfis de empresa
+            const creditStatus = await verificarCreditosEmpresa(currentDomain);
+            
+            // Se créditos inválidos, bloquear acesso
+            if (!creditStatus.isActive && !creditStatus.lifetime) {
+                alert('ACESSO BLOQUEADO\n\nSua empresa não possui créditos válidos.\nEntre em contato com o administrador do sistema.');
+                await handleLogout();
                 return;
             }
 
-            if (userData.role.toLowerCase() === 'admin') {
+            // ✅ Exibir validade de créditos para Admin da empresa
+            if (role === 'admin') {
                 exibirValidadeCreditosAdmin(creditStatus);
             }
 
+            // ✅ Prosseguir com roteamento normal
             const path = window.location.pathname.toLowerCase();
             if (path.includes('login.html')) {
                 window.location.href = 'index.html';
