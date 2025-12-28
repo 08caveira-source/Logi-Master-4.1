@@ -153,7 +153,7 @@
     <div class="login-container fade-in">
         <div class="login-header">
             <h1>LOGI<span>MASTER</span></h1>
-            <p>Gestão Inteligente de Frotas v7.0</p>
+            <p>Gestão Inteligente de Frotas v7.1</p>
         </div>
 
         <div id="errorDisplay" class="error-message"></div>
@@ -234,7 +234,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         // Configuração conforme solicitado
@@ -371,7 +371,16 @@
                 });
 
                 if (isCreate) {
-                    alert(`EMPRESA CRIADA COM SUCESSO!\n\nSeu ID de Empresa é: ${companyId}\nGuarde este código para passar aos seus funcionários.`);
+                    // CRIA O DOCUMENTO DA EMPRESA (METADADOS DE LICENÇA)
+                    // Nasce SEM validade (Bloqueada) até que o Super Admin adicione crédito
+                    await setDoc(doc(db, "companies", companyId), {
+                        createdAt: new Date().toISOString(),
+                        ownerEmail: email.toLowerCase(),
+                        vitalicio: false,
+                        validade: new Date(Date.now() - 86400000).toISOString() // Data no passado (vencido)
+                    });
+
+                    alert(`EMPRESA CRIADA COM SUCESSO!\n\nSeu ID de Empresa é: ${companyId}\n\nATENÇÃO: Sua conta foi criada, mas a empresa está SEM CRÉDITOS.\nEntre em contato com o Super Admin para liberar o acesso.`);
                 } else {
                     alert("CADASTRO REALIZADO!\n\nSua conta foi criada, mas precisa ser aprovada pelo administrador da empresa (" + companyId + ") antes de acessar todas as funções.\n\nVocê será redirecionado para preencher seus dados básicos.");
                 }
@@ -392,14 +401,45 @@
             if (user) {
                 console.log("Usuário detectado:", user.uid);
                 
-                // Verifica status de aprovação antes de redirecionar totalmente
-                // Porém, o index.html também faz essa verificação. 
-                // Aqui apenas enviamos para o index.
-                
-                // Pequeno delay para garantir gravação do firestore no cadastro
-                setTimeout(() => {
-                     window.location.replace("index.html");
-                }, 1000);
+                // Busca dados do usuário para saber a empresa
+                const userRef = doc(db, "users", user.uid);
+                const userSnap = await getDoc(userRef);
+
+                if (userSnap.exists()) {
+                    const userData = userSnap.data();
+
+                    // --- NOVA VERIFICAÇÃO DE LICENÇA (CRÉDITOS) ---
+                    // Se NÃO for o Super Admin, verifica a licença da empresa
+                    if (userData.email !== 'admin@logimaster.com') {
+                        const companyRef = doc(db, "companies", userData.company);
+                        const companySnap = await getDoc(companyRef);
+                        
+                        if (companySnap.exists()) {
+                            const companyData = companySnap.data();
+                            const agora = new Date();
+                            const validade = companyData.validade ? new Date(companyData.validade) : new Date(0);
+                            const isVitalicio = companyData.vitalicio === true;
+
+                            if (!isVitalicio && agora > validade) {
+                                alert("ACESSO BLOQUEADO: LICENÇA EXPIRADA.\n\nA empresa '" + userData.company + "' não possui créditos ativos.\nSolicite ao administrador a renovação da licença.");
+                                await signOut(auth);
+                                window.location.replace("login.html");
+                                return;
+                            }
+                        } else {
+                            // Se o documento da empresa não existe (erro de consistência ou cadastro antigo)
+                            // Bloqueia por segurança
+                            alert("ACESSO BLOQUEADO: EMPRESA NÃO REGISTRADA CORRETAMENTE.\nContate o suporte.");
+                            await signOut(auth);
+                            return;
+                        }
+                    }
+                    
+                    // Pequeno delay para garantir gravação do firestore no cadastro e redirecionar
+                    setTimeout(() => {
+                         window.location.replace("index.html");
+                    }, 1000);
+                }
             }
         });
 

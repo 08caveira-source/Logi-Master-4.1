@@ -1059,6 +1059,16 @@
 
     </main>
 
+    <div id="modalManageCredits" class="modal-overlay">
+        <div class="modal-content">
+            <h3>GERENCIAR ASSINATURA & CRÉDITOS</h3>
+            <div id="manageCreditBody"></div>
+            <div style="margin-top:15px; text-align:right;">
+                <button class="btn-secondary" onclick="document.getElementById('modalManageCredits').style.display='none'">FECHAR</button>
+            </div>
+        </div>
+    </div>
+
     <div id="modalDayOperations" class="modal-overlay">
         <div class="modal-content" style="max-width:950px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
@@ -1154,42 +1164,55 @@
       // Observador de Autenticação
       onAuthStateChanged(auth, async (user) => {
           if (user) {
-              // Busca dados do Firestore
-              const userSnap = await getDoc(doc(db, "users", user.uid));
+              const userRef = doc(db, "users", user.uid);
+              const userSnap = await getDoc(userRef);
               
               if (userSnap.exists()) {
                   const userData = userSnap.data();
                   
-                  // VERIFICAÇÃO DE SEGURANÇA: APROVAÇÃO
+                  // 1. Verificação de Aprovação
                   if (userData.email !== 'admin@logimaster.com' && userData.approved === false) {
-                      alert("CONTA AGUARDANDO APROVAÇÃO.\n\nSeu cadastro foi realizado, mas ainda não foi aprovado pelo administrador da empresa (" + userData.company + ").\n\nPor favor, aguarde a liberação.");
+                      alert("CONTA AGUARDANDO APROVAÇÃO.\n\nAguarde liberação do administrador.");
                       await signOut(auth);
                       window.location.replace("login.html");
                       return;
                   }
 
+                  // 2. Verificação de Licença (SaaS)
+                  if (userData.email !== 'admin@logimaster.com') {
+                        const companyRef = doc(db, "companies", userData.company);
+                        const companySnap = await getDoc(companyRef);
+                        if (companySnap.exists()) {
+                            const cData = companySnap.data();
+                            const agora = new Date();
+                            const validade = cData.validade ? new Date(cData.validade) : new Date(0);
+                            
+                            if (cData.vitalicio !== true && agora > validade) {
+                                alert("ACESSO BLOQUEADO: LICENÇA EXPIRADA.\nContate o administrador para renovação.");
+                                await signOut(auth);
+                                window.location.replace("login.html");
+                                return;
+                            }
+                        }
+                  }
+
                   window.currentUser = userData; 
-                  document.body.style.display = 'flex'; // Exibe o corpo somente após logado
+                  document.body.style.display = 'flex'; 
                   
-                  // Atualiza Widget
                   const emailElem = document.getElementById('userEmailDisplay');
                   const roleElem = document.getElementById('userRoleDisplay');
                   if(emailElem) emailElem.textContent = userData.email.toUpperCase();
                   if(roleElem) roleElem.textContent = userData.role.toUpperCase();
                   
-                  // Inicializa Script Principal
                   setTimeout(() => { 
                       if (window.initSystemByRole) window.initSystemByRole(userData); 
                   }, 500);
 
               } else {
-                  // Erro crítico: Usuário no Auth mas sem Doc
-                  alert("Erro de consistência: Usuário não encontrado na base de dados.");
                   await signOut(auth);
                   window.location.replace("login.html");
               }
           } else { 
-              // Se não logado e não está na página de login, redireciona
               if(!window.location.href.includes('login.html')) {
                   window.location.replace("login.html"); 
               }
