@@ -1841,278 +1841,334 @@ window.exportarRelatorioPDF = function() {
 };
 // =============================================================================
 // ARQUIVO: script.js
-// PARTE 5: INICIALIZAÇÃO, PAINEL SUPER ADMIN (CORRIGIDO) E GESTÃO DE CRÉDITOS
+// PARTE 5: NAVEGAÇÃO, SUPER ADMIN (LEGACY FIX), SINC E INICIALIZAÇÃO ASSÍNCRONA
 // =============================================================================
 
-// -----------------------------------------------------------------------------
-// 17. INICIALIZAÇÃO DO SISTEMA POR PERFIL (RBAC)
-// -----------------------------------------------------------------------------
-
-window.initSystemByRole = async function(user) {
-    window.USUARIO_ATUAL = user;
-    console.log("Inicializando sistema para: " + user.role);
-
-    // Reseta visualização
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById('menu-admin').style.display = 'none';
-    document.getElementById('menu-employee').style.display = 'none';
-    document.getElementById('menu-super-admin').style.display = 'none';
-
-    // 1. SUPER ADMIN (Global)
-    if (user.email === 'admin@logimaster.com') {
-        document.getElementById('menu-super-admin').style.display = 'block';
-        
-        // Ativa visualmente
-        const saPage = document.getElementById('super-admin');
-        if(saPage) saPage.classList.add('active');
-        const saMenu = document.querySelector('.nav-item[data-page="super-admin"]');
-        if(saMenu) saMenu.classList.add('active');
-        
-        // Carrega painel imediatamente
-        carregarPainelSuperAdmin(true);
-        return;
-    }
-
-    // 2. TENTA BUSCAR LICENÇA (Mas não bloqueia se falhar, para carregar dados legados)
-    if (user.company) {
-        try {
-            const { db, doc, getDoc } = window.dbRef;
-            const companyDoc = await getDoc(doc(db, "companies", user.company));
-            if (companyDoc.exists()) {
-                window.DADOS_LICENCA = companyDoc.data();
+function configurarNavegacao() {
+    var items = document.querySelectorAll('.nav-item');
+    items.forEach(item => {
+        item.onclick = function() {
+            var pageId = this.getAttribute('data-page');
+            
+            // Navegação Visual
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.querySelectorAll('.page').forEach(p => { p.classList.remove('active'); p.style.display = 'none'; });
+            
+            this.classList.add('active');
+            var target = document.getElementById(pageId);
+            if (target) { 
+                target.style.display = 'block'; 
+                // Pequeno delay para permitir transição CSS se houver
+                setTimeout(() => target.classList.add('active'), 10); 
             }
-        } catch (e) {
-            console.warn("Licença não encontrada ou erro de rede (Sistema Legacy).");
-        }
-    }
-
-    // 3. CARREGAR DADOS DO FIREBASE (Sincronização Operacional)
-    // Isso trará as tabelas de volta para empresas antigas
-    await carregarDadosDoFirebase(user.company);
-
-    // 4. PERFIL ADMINISTRADOR
-    if (user.role === 'admin') {
-        document.getElementById('menu-admin').style.display = 'block';
-        
-        // Abre Dashboard por padrão
-        const homeSection = document.getElementById('home');
-        if(homeSection) homeSection.classList.add('active');
-        
-        const menuHome = document.querySelector('.nav-item[data-page="home"]');
-        if(menuHome) menuHome.classList.add('active');
-        
-        atualizarDashboard();
-        verificarNotificacoesEquipe();
-    } 
-    // 5. PERFIL MOTORISTA / AJUDANTE
-    else {
-        document.getElementById('menu-employee').style.display = 'block';
-        window.MODO_APENAS_LEITURA = true; 
-        
-        const empHome = document.getElementById('employee-home');
-        if(empHome) empHome.classList.add('active');
-        
-        const menuEmp = document.querySelector('.nav-item[data-page="employee-home"]');
-        if(menuEmp) menuEmp.classList.add('active');
-
-        carregarDadosFuncionarioLogado();
-    }
-};
-
-// Carregamento de Dados Específicos da Empresa (Firestore)
-async function carregarDadosDoFirebase(companyId) {
-    if(!companyId) return;
-    const { db, doc, getDoc } = window.dbRef;
-    
-    // Lista de chaves a carregar
-    const keys = [
-        {k: CHAVE_DB_FUNCIONARIOS, v: 'CACHE_FUNCIONARIOS', def: []},
-        {k: CHAVE_DB_VEICULOS, v: 'CACHE_VEICULOS', def: []},
-        {k: CHAVE_DB_CONTRATANTES, v: 'CACHE_CONTRATANTES', def: []},
-        {k: CHAVE_DB_OPERACOES, v: 'CACHE_OPERACOES', def: []},
-        {k: CHAVE_DB_MINHA_EMPRESA, v: 'CACHE_MINHA_EMPRESA', def: {}},
-        {k: CHAVE_DB_DESPESAS, v: 'CACHE_DESPESAS', def: []},
-        {k: CHAVE_DB_ATIVIDADES, v: 'CACHE_ATIVIDADES', def: []},
-        {k: CHAVE_DB_PROFILE_REQUESTS, v: 'CACHE_PROFILE_REQUESTS', def: []},
-        {k: CHAVE_DB_RECIBOS, v: 'CACHE_RECIBOS', def: []}
-    ];
-
-    console.log("Baixando dados da nuvem...");
-
-    for (let item of keys) {
-        try {
-            const snap = await getDoc(doc(db, 'companies', companyId, 'data', item.k));
-            if (snap.exists()) {
-                const data = snap.data();
-                
-                // Suporte Híbrido: Estrutura antiga (Array direto) vs Nova ({items:[]})
-                let valorFinal = item.def;
-                if (data.items !== undefined) {
-                    valorFinal = data.items;
-                } else if (Array.isArray(data)) {
-                    valorFinal = data; // Legado
+            
+            // Ações específicas ao entrar nas páginas (Callbacks)
+            if (pageId === 'home') { renderizarCalendario(); atualizarDashboard(); }
+            if (pageId === 'despesas') renderizarTabelaDespesasGerais();
+            if (pageId === 'checkins-pendentes') {
+                // Tenta atualizar se estiver online, mas exibe o que tem localmente primeiro
+                renderizarTabelaMonitoramento(); 
+                sincronizarDadosDaNuvem(false); 
+            }
+            if (pageId === 'access-management') { renderizarPainelEquipe(); renderizarTabelaProfileRequests(); }
+            if (pageId === 'super-admin') { carregarPainelSuperAdmin(); }
+            
+            // Lógica específica para Funcionários vs Admin
+            if (window.USUARIO_ATUAL && window.USUARIO_ATUAL.role !== 'admin') {
+                if (pageId === 'employee-home') { 
+                    verificarNovasMensagens();
+                    renderizarPainelCheckinFuncionario();
+                    sincronizarDadosDaNuvem(false);
                 }
-
-                // Atualiza Variável Global e LocalStorage
-                window[item.v] = valorFinal;
-                localStorage.setItem(item.k, JSON.stringify(valorFinal));
+                if (pageId === 'recibos') {
+                    document.getElementById('adminRecibosPanel').style.display = 'none';
+                    document.getElementById('employeeRecibosPanel').style.display = 'block';
+                    renderizarTabelasRecibos();
+                }
+            } else {
+                // Se for Admin
+                if (pageId === 'recibos') {
+                    document.getElementById('adminRecibosPanel').style.display = 'block';
+                    document.getElementById('employeeRecibosPanel').style.display = 'none';
+                    renderizarTabelasRecibos();
+                }
             }
-        } catch(err) {
-            console.warn(`Info: Dados de ${item.k} não encontrados na nuvem.`);
-        }
-    }
-    
-    console.log("Dados sincronizados. Renderizando telas...");
-    
-    // RENDERIZAÇÃO FORÇADA (CRUCIAL PARA OS DADOS APARECEREM)
-    if(window.renderizarTabelaFuncionarios) window.renderizarTabelaFuncionarios();
-    if(window.renderizarTabelaVeiculos) window.renderizarTabelaVeiculos();
-    if(window.renderizarTabelaContratantes) window.renderizarTabelaContratantes();
-    if(window.renderizarTabelaAtividades) window.renderizarTabelaAtividades();
-    if(window.renderizarTabelaDespesasGerais) window.renderizarTabelaDespesasGerais();
-    
-    // Crucial: Operações e Dashboard
-    if(window.renderizarTabelaOperacoes) window.renderizarTabelaOperacoes();
-    if(window.renderizarTabelaCheckinsPendentes) window.renderizarTabelaCheckinsPendentes();
-    if(window.renderizarCalendario) window.renderizarCalendario();
-    if(window.atualizarDashboard) window.atualizarDashboard();
+
+            if (pageId === 'meus-dados') { carregarDadosMeuPerfil(window.USUARIO_ATUAL.email); }
+            
+            // Mobile: Fecha menu
+            if (window.innerWidth <= 768) {
+                document.getElementById('sidebar').classList.remove('active');
+                document.getElementById('sidebarOverlay')?.classList.remove('active');
+            }
+        };
+    });
+
+    // Abas de Cadastro
+    var tabs = document.querySelectorAll('.cadastro-tab-btn');
+    tabs.forEach(tab => {
+        tab.onclick = function() {
+            tabs.forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.cadastro-form').forEach(f => f.classList.remove('active'));
+            this.classList.add('active');
+            var formId = this.getAttribute('data-tab');
+            document.getElementById(formId).classList.add('active');
+        };
+    });
 }
 
 // -----------------------------------------------------------------------------
-// 18. PAINEL DO SUPER ADMIN (CORREÇÃO PARA LISTAR EMPRESAS ANTIGAS)
+// SISTEMA DE MENSAGENS E NOTIFICAÇÕES
 // -----------------------------------------------------------------------------
 
-window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
-    const container = document.getElementById('superAdminContainer');
-    if (!container) return;
-    
-    if (forceRefresh) container.innerHTML = '<p style="text-align:center; padding:50px; color:#666;"><i class="fas fa-spinner fa-spin"></i> Analisando base de usuários e empresas...</p>';
+window._idsLidosLocalmente = []; 
 
-    const { db, collection, getDocs } = window.dbRef;
+window.verificarNovasMensagens = async function() {
+    if (!window.dbRef || !window.USUARIO_ATUAL) return;
+    const { db, collection, query, where, getDocs } = window.dbRef;
+    if(document.getElementById('modalNotification').style.display === 'block') return;
 
     try {
-        // 1. Busca TUDO (Empresas registradas e Usuários para achar empresas legadas)
-        const companiesSnap = await getDocs(collection(db, "companies"));
-        const usersSnap = await getDocs(collection(db, "users"));
+        const q = query(collection(db, "messages"), where("company", "==", window.USUARIO_ATUAL.company));
+        const snap = await getDocs(q);
         
-        const allUsers = [];
-        const uniqueCompaniesIDs = new Set(); // Para listar IDs únicos
+        for (const msgDoc of snap.docs) {
+            const data = msgDoc.data();
+            const myId = window.USUARIO_ATUAL.uid;
+            const msgId = msgDoc.id;
+            const isForMe = (data.to === 'all' || data.to === myId);
+            const alreadyReadDB = data.readBy && data.readBy.includes(myId);
+            const justReadLocal = window._idsLidosLocalmente.includes(msgId);
+            
+            if (isForMe && !alreadyReadDB && !justReadLocal) {
+                window._mensagemAtualId = msgId; 
+                document.getElementById('notificationMessageText').innerText = data.content;
+                document.getElementById('notificationSender').innerText = "Enviado por: " + data.from;
+                document.getElementById('modalNotification').style.display = 'block';
+                break; 
+            }
+        }
+    } catch (e) { console.error("Erro msg:", e); }
+};
 
-        usersSnap.forEach(doc => {
-            const u = doc.data();
-            allUsers.push(u);
-            if(u.company) uniqueCompaniesIDs.add(u.company);
+window.confirmarLeituraMensagem = async function() {
+    document.getElementById('modalNotification').style.display = 'none';
+    if(!window._mensagemAtualId || !window.dbRef || !window.USUARIO_ATUAL) return;
+    
+    const msgId = window._mensagemAtualId;
+    const myId = window.USUARIO_ATUAL.uid;
+    window._idsLidosLocalmente.push(msgId);
+    
+    const { db, doc, getDoc, updateDoc } = window.dbRef;
+    try {
+        const msgRef = doc(db, "messages", msgId);
+        const snapshot = await getDoc(msgRef);
+        if (snapshot.exists()) {
+            let dadosAtuais = snapshot.data();
+            let listaLeitura = dadosAtuais.readBy || [];
+            if (!listaLeitura.includes(myId)) {
+                listaLeitura.push(myId);
+                await updateDoc(msgRef, { readBy: listaLeitura });
+            }
+        }
+        window._mensagemAtualId = null;
+        setTimeout(window.verificarNovasMensagens, 1500);
+    } catch(e) { console.error("Erro leitura:", e); }
+};
+
+// -----------------------------------------------------------------------------
+// SINCRONIZAÇÃO DE DADOS (CACHE + NUVEM)
+// -----------------------------------------------------------------------------
+
+window.sincronizarDadosDaNuvem = async function(manual = false) {
+    if (!window.dbRef || !window.USUARIO_ATUAL || !window.USUARIO_ATUAL.company) return;
+    
+    // Indicador visual discreto se for automático, ou no botão se for manual
+    var btn = null;
+    if(manual) { 
+        btn = document.querySelector('button[onclick*="sincronizar"]'); 
+        if(btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Baixando...'; 
+    } else {
+        console.log("Sincronizando em background...");
+    }
+    
+    const { db, doc, getDoc } = window.dbRef; 
+    const company = window.USUARIO_ATUAL.company;
+
+    const carregarColecao = async (chave, varCacheName, callback) => { 
+        try { 
+            const docRef = doc(db, 'companies', company, 'data', chave); 
+            const snap = await getDoc(docRef); 
+            if (snap.exists()) { 
+                const data = snap.data();
+                // Suporte legado (Array direto vs Objeto {items:[]})
+                const itens = Array.isArray(data) ? data : (data.items || []);
+                
+                localStorage.setItem(chave, JSON.stringify(itens)); 
+                callback(itens); 
+            }
+        } catch (e) { 
+            console.warn(`Erro sync ${chave} (Pode ser vazio inicialmente):`, e); 
+        } 
+    };
+    
+    // Executa downloads em paralelo
+    await Promise.all([ 
+        carregarColecao(CHAVE_DB_FUNCIONARIOS, 'CACHE_FUNCIONARIOS', (d) => CACHE_FUNCIONARIOS = d), 
+        carregarColecao(CHAVE_DB_OPERACOES, 'CACHE_OPERACOES', (d) => CACHE_OPERACOES = d), 
+        carregarColecao(CHAVE_DB_VEICULOS, 'CACHE_VEICULOS', (d) => CACHE_VEICULOS = d), 
+        carregarColecao(CHAVE_DB_CONTRATANTES, 'CACHE_CONTRATANTES', (d) => CACHE_CONTRATANTES = d), 
+        carregarColecao(CHAVE_DB_ATIVIDADES, 'CACHE_ATIVIDADES', (d) => CACHE_ATIVIDADES = d), 
+        carregarColecao(CHAVE_DB_MINHA_EMPRESA, 'CACHE_MINHA_EMPRESA', (d) => CACHE_MINHA_EMPRESA = d),
+        carregarColecao(CHAVE_DB_PROFILE_REQUESTS, 'CACHE_PROFILE_REQUESTS', (d) => CACHE_PROFILE_REQUESTS = d),
+        carregarColecao(CHAVE_DB_RECIBOS, 'CACHE_RECIBOS', (d) => CACHE_RECIBOS = d)
+    ]);
+    
+    // Atualiza UI globalmente após download
+    if(typeof renderizarTabelaMonitoramento === 'function') renderizarTabelaMonitoramento();
+    if(typeof renderizarTabelaProfileRequests === 'function') renderizarTabelaProfileRequests();
+    if(typeof renderizarTabelaOperacoes === 'function') renderizarTabelaOperacoes();
+    if(typeof atualizarDashboard === 'function') atualizarDashboard();
+    if(typeof preencherTodosSelects === 'function') preencherTodosSelects(); // Atualiza selects com novos dados
+    
+    if(manual) { 
+        alert("Dados sincronizados com sucesso!"); 
+        if(btn) btn.innerHTML = '<i class="fas fa-sync"></i> ATUALIZAR AGORA'; 
+        if(typeof renderizarPainelCheckinFuncionario === 'function') renderizarPainelCheckinFuncionario(); 
+    }
+};
+
+function iniciarAutoSync() {
+    if (window._intervaloMonitoramento) clearInterval(window._intervaloMonitoramento);
+    // Sincroniza a cada 30 segundos automaticamente
+    window._intervaloMonitoramento = setInterval(() => {
+        if(window.USUARIO_ATUAL && window.USUARIO_ATUAL.company) {
+            sincronizarDadosDaNuvem(false);
+        }
+    }, 30000); 
+}
+
+// === IMPLEMENTAÇÃO DO SUPER ADMIN HÍBRIDO (LEGACY + NOVO) ===
+window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
+    if (!window.dbRef) return;
+    const { db, collection, getDocs } = window.dbRef;
+    const container = document.getElementById('superAdminContainer');
+    
+    if (!container) return;
+    container.innerHTML = '<p style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Analisando base global (Legacy & SaaS)...</p>';
+
+    try {
+        // Busca TODOS os usuários e TODAS as empresas registradas
+        const usersSnap = await getDocs(collection(db, "users"));
+        const companiesSnap = await getDocs(collection(db, "companies"));
+        
+        // Mapeamento
+        const empresasMap = {};
+        
+        // 1. Processa Empresas Oficiais (Com Licença)
+        companiesSnap.forEach(doc => {
+            const data = doc.data();
+            empresasMap[doc.id] = {
+                id: doc.id,
+                nome: doc.id.toUpperCase(),
+                licenca: data, // Dados da licença (validade, vitalicio)
+                admins: [],
+                users: [],
+                isLegacy: false // Tem documento oficial
+            };
         });
 
-        // Adiciona também IDs que existam na coleção companies mas talvez não tenham users
-        companiesSnap.forEach(doc => uniqueCompaniesIDs.add(doc.id));
+        // 2. Processa Usuários (Encontra empresas Legacy sem documento)
+        usersSnap.forEach(doc => {
+            const u = doc.data();
+            const empresaId = u.company || 'SEM_EMPRESA';
+            
+            if (!empresasMap[empresaId]) {
+                // Se não existe no mapa oficial, é Legacy
+                empresasMap[empresaId] = {
+                    id: empresaId,
+                    nome: empresaId.toUpperCase(),
+                    licenca: null,
+                    admins: [],
+                    users: [],
+                    isLegacy: true // Marca como legado
+                };
+            }
+            
+            if (u.role === 'admin') {
+                empresasMap[empresaId].admins.push(u);
+            } else {
+                empresasMap[empresaId].users.push(u);
+            }
+        });
 
         container.innerHTML = '';
+        const listaEmpresas = Object.values(empresasMap).sort((a,b) => a.id.localeCompare(b.id));
 
-        if (uniqueCompaniesIDs.size === 0) {
-            container.innerHTML = '<div style="text-align:center; padding:40px;">Nenhuma empresa encontrada.</div>';
+        if (listaEmpresas.length === 0) {
+            container.innerHTML = '<p style="text-align:center;">Nenhuma empresa encontrada.</p>';
             return;
         }
 
-        const empresasArray = Array.from(uniqueCompaniesIDs);
-        
-        empresasArray.forEach(compId => {
-            // Tenta achar dados da licença (doc na coleção companies)
-            // Se não achar, usa dados simulados (Legado)
-            let compData = {
-                ownerEmail: 'Desconhecido (Legado)',
-                createdAt: null,
-                vitalicio: false,
-                validade: null,
-                isLegacy: true // Marca como legado
-            };
-
-            // Verifica se existe registro oficial de licença
-            const docOficial = companiesSnap.docs.find(d => d.id === compId);
-            if (docOficial) {
-                compData = docOficial.data();
-                compData.isLegacy = false;
-            } else {
-                // Tenta descobrir o dono através dos usuários admins
-                const possivelAdmin = allUsers.find(u => u.company === compId && u.role === 'admin');
-                if(possivelAdmin) compData.ownerEmail = possivelAdmin.email;
-            }
-
+        listaEmpresas.forEach(emp => {
             // Filtro de Busca
             const termo = document.getElementById('superAdminSearch').value.toLowerCase();
-            const emailOwner = compData.ownerEmail ? compData.ownerEmail.toLowerCase() : '';
-            if (termo && !compId.toLowerCase().includes(termo) && !emailOwner.includes(termo)) {
-                return; 
+            const donoEmail = emp.licenca ? emp.licenca.ownerEmail : (emp.admins[0]?.email || '');
+            if (termo && !emp.id.toLowerCase().includes(termo) && !donoEmail.toLowerCase().includes(termo)) {
+                return;
             }
-
-            // Lógica de Status
-            let statusBadge = '';
-            let statusClass = '';
-
-            if (compData.isLegacy) {
-                statusBadge = 'LEGADO / SEM LICENÇA';
-                statusClass = 'credit-expired'; // Vermelho para chamar atenção
-            } else if (compData.vitalicio === true) {
-                statusBadge = 'VITALÍCIO';
-                statusClass = 'credit-lifetime';
-            } else {
-                const validade = compData.validade ? new Date(compData.validade) : new Date(0);
-                const agora = new Date();
-                const diasRestantes = Math.ceil((validade - agora) / (1000 * 60 * 60 * 24));
-                
-                if (agora > validade) {
-                    statusBadge = 'EXPIRADO';
-                    statusClass = 'credit-expired';
-                } else {
-                    statusBadge = `ATIVO (${diasRestantes} DIAS)`;
-                    statusClass = 'credit-active';
-                }
-            }
-
-            // Contagem de usuários
-            const usersDaEmpresa = allUsers.filter(u => u.company === compId);
-            const totalUsers = usersDaEmpresa.length;
 
             const div = document.createElement('div');
             div.className = 'company-block';
+            
+            // Define Status Badge
+            let statusHtml = '';
+            let statusClass = '';
+            if (emp.isLegacy) {
+                statusHtml = 'LEGADO / SEM LICENÇA';
+                statusClass = 'credit-expired'; // Vermelho
+            } else if (emp.licenca.vitalicio) {
+                statusHtml = 'VITALÍCIO';
+                statusClass = 'credit-lifetime'; // Roxo
+            } else {
+                const val = new Date(emp.licenca.validade);
+                const dias = Math.ceil((val - new Date())/(1000*60*60*24));
+                if(dias < 0) { statusHtml = 'EXPIRADO'; statusClass = 'credit-expired'; }
+                else { statusHtml = `ATIVO (${dias} DIAS)`; statusClass = 'credit-active'; }
+            }
+
+            // Ações do Botão
+            const ownerEmail = emp.licenca ? emp.licenca.ownerEmail : (emp.admins[0]?.email || 'legacy@system');
+            
             div.innerHTML = `
                 <div class="company-header" onclick="this.nextElementSibling.classList.toggle('expanded')">
                     <div style="display:flex; align-items:center;">
-                        <i class="fas fa-building" style="margin-right:10px; color:${compData.isLegacy ? 'orange' : 'var(--secondary-color)'};"></i>
+                        <i class="fas fa-building" style="margin-right:10px; color:${emp.isLegacy ? 'orange' : 'var(--secondary-color)'};"></i>
                         <div>
-                            <div style="font-weight:bold; font-size:1rem;">${compId} <span class="credit-badge ${statusClass}">${statusBadge}</span></div>
-                            <small style="font-weight:normal; color:#666;">Admin: ${compData.ownerEmail}</small>
+                            <div>${emp.id} <span class="credit-badge ${statusClass}">${statusHtml}</span></div>
+                            <small style="color:#666;">${ownerEmail}</small>
                         </div>
                     </div>
                     <div>
-                        <span style="font-size:0.8rem; margin-right:10px;">${totalUsers} Users</span>
-                        <i class="fas fa-chevron-down"></i>
+                        ${emp.admins.length} Adm / ${emp.users.length} Func
+                        <i class="fas fa-chevron-down" style="margin-left:10px;"></i>
                     </div>
                 </div>
                 <div class="company-content">
-                    <div style="display:flex; gap:20px; font-size:0.9rem; color:#555; margin-bottom:10px; flex-wrap:wrap;">
-                        <div><strong>Tipo:</strong> ${compData.isLegacy ? 'Empresa Antiga (Requer Regularização)' : 'Cadastro Novo (SaaS)'}</div>
-                    </div>
-                    
                     <div class="company-actions-bar">
                         <div class="validade-info">
-                            Validade: ${compData.isLegacy ? '---' : (compData.vitalicio ? 'ETERNA' : (compData.validade ? formatarDataParaBrasileiro(compData.validade.split('T')[0]) : '-'))}
+                            <strong>Tipo:</strong> ${emp.isLegacy ? 'Sistema Antigo (Requer Regularização)' : 'LogiMaster SaaS'}
                         </div>
-                        
-                        <button class="btn-mini btn-success" onclick="abrirModalCreditos('${compId}', '${compData.ownerEmail}')">
-                            <i class="fas fa-calendar-plus"></i> ${compData.isLegacy ? 'REGULARIZAR / ADICIONAR' : 'GERENCIAR'}
+                        <button class="btn-mini btn-success" onclick="abrirModalCreditos('${emp.id}', '${ownerEmail}')">
+                            <i class="fas fa-calendar-plus"></i> ${emp.isLegacy ? 'CRIAR LICENÇA' : 'GERENCIAR'}
                         </button>
-                        
-                        <button class="btn-mini btn-danger" onclick="excluirEmpresaGlobal('${compId}')">
+                        <button class="btn-mini btn-danger" onclick="excluirEmpresaGlobal('${emp.id}')">
                             <i class="fas fa-trash"></i> EXCLUIR
                         </button>
                     </div>
-
-                    <div style="margin-top:10px; background:#f5f5f5; padding:10px; border-radius:4px;">
-                        <strong style="font-size:0.85rem;">Usuários Vinculados:</strong>
-                        <ul style="margin:5px 0 0 20px; font-size:0.8rem; color:#444;">
-                            ${usersDaEmpresa.length > 0 ? usersDaEmpresa.map(u => `<li>${u.name} - ${u.role}</li>`).join('') : '<li>Nenhum usuário</li>'}
-                        </ul>
+                    <div style="margin-top:10px; padding:10px; background:#f9f9f9;">
+                        <strong>Administradores:</strong> ${emp.admins.map(a => a.name).join(', ') || 'Nenhum'}<br>
+                        <strong>Funcionários:</strong> ${emp.users.length} cadastrados.
                     </div>
                 </div>
             `;
@@ -2120,302 +2176,103 @@ window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
         });
 
     } catch (e) {
-        console.error(e);
-        container.innerHTML = '<p style="color:red; text-align:center;">Erro ao carregar dados: ' + e.message + '</p>';
+        console.error("Erro super admin:", e);
+        container.innerHTML = '<p style="color:red; text-align:center;">Erro ao carregar dados. Verifique console.</p>';
     }
 };
 
 window.filterGlobalUsers = function() {
+    // Recarrega aplicando filtro (poderia ser feito só com CSS hide, mas reload garante consistência)
     carregarPainelSuperAdmin(false);
+};
+
+// --- INICIALIZAÇÃO DO SISTEMA (CORREÇÃO DE TELA BRANCA) ---
+
+window.initSystemByRole = async function(user) {
+    console.log("Inicializando:", user.email, "| Role:", user.role);
+    window.USUARIO_ATUAL = user;
+    
+    // Configura listeners de clique
+    configurarNavegacao();
+    
+    // Inicia sync automático em background
+    iniciarAutoSync();
+
+    // 1. ROTA SUPER ADMIN
+    if (user.email.toUpperCase() === 'ADMIN@LOGIMASTER.COM') { 
+        document.getElementById('menu-admin').style.display = 'none'; 
+        document.getElementById('menu-employee').style.display = 'none'; 
+        document.getElementById('menu-super-admin').style.display = 'block'; 
+        
+        // Simula clique para abrir painel
+        var btnSuper = document.querySelector('[data-page="super-admin"]');
+        if(btnSuper) btnSuper.click(); 
+        return; 
+    }
+    
+    // 2. CARREGAMENTO HÍBRIDO (Cache primeiro, Nuvem depois)
+    // Isso previne a tela branca. Carrega o que tem no LocalStorage e mostra a tela IMEDIATAMENTE.
+    carregarTodosDadosLocais(); 
+    
+    // Preenche selects com dados do cache
+    preencherTodosSelects();
+
+    // 3. ROTA ADMIN
+    if (user.role === 'admin') { 
+        document.getElementById('menu-admin').style.display = 'block'; 
+        window.MODO_APENAS_LEITURA = false; 
+        
+        // Força ir para Home imediatamente
+        var btnHome = document.querySelector('[data-page="home"]'); 
+        if(btnHome) btnHome.click(); 
+        
+        // Dispara sync em background (sem await para não travar)
+        sincronizarDadosDaNuvem(false).then(() => {
+            console.log("Sync inicial concluído.");
+            // Atualiza dashboard com dados novos se houver
+            atualizarDashboard(); 
+        });
+    } 
+    // 4. ROTA FUNCIONÁRIO
+    else if (user.role === 'motorista' || user.role === 'ajudante') { 
+        document.getElementById('menu-employee').style.display = 'block'; 
+        window.MODO_APENAS_LEITURA = true; 
+        
+        var btnHomeEmp = document.querySelector('[data-page="employee-home"]'); 
+        if(btnHomeEmp) btnHomeEmp.click(); 
+        
+        sincronizarDadosDaNuvem(false).then(() => {
+            verificarNovasMensagens(); 
+            renderizarPainelCheckinFuncionario(); 
+        });
+    }
+    
+    // Verificação de Licença (SaaS) - Executa em background, não bloqueia UI inicial
+    // Se estiver vencido, o login.html já barrou, mas aqui reforçamos
+    if(window.dbRef && user.company) {
+        const { db, doc, getDoc } = window.dbRef;
+        getDoc(doc(db, "companies", user.company)).then(snap => {
+            if(snap.exists()) {
+                window.DADOS_LICENCA = snap.data();
+                atualizarDashboard(); // Atualiza badge de licença
+            }
+        }).catch(e => console.log("Empresa Legacy ou erro licença:", e));
+    }
+};
+
+document.getElementById('mobileMenuBtn').onclick = function() { document.getElementById('sidebar').classList.add('active'); document.getElementById('sidebarOverlay').classList.add('active'); };
+document.getElementById('sidebarOverlay').onclick = function() { document.getElementById('sidebar').classList.remove('active'); this.classList.remove('active'); };
+
+function carregarDadosMeuPerfil(email) {
+    var f = CACHE_FUNCIONARIOS.find(x => x.email && x.email.trim().toLowerCase() === email.trim().toLowerCase());
+    var div = document.getElementById('meus-dados');
+    if (f) {
+        div.innerHTML = `<h2>MEUS DADOS</h2><div class="card"><h3>${f.nome} <span class="status-pill pill-active">${f.funcao}</span></h3><p><strong>CPF:</strong> ${f.documento}</p><p><strong>Tel:</strong> ${formatarTelefoneBrasil(f.telefone)}</p><p><strong>Pix:</strong> ${f.pix || '-'}</p><button class="btn-warning" onclick="document.getElementById('modalRequestProfileChange').style.display='block'" style="margin-top:15px;">SOLICITAR ALTERAÇÃO</button></div>`;
+    } else { div.innerHTML = '<p>Dados não encontrados ou incompletos.</p>'; }
 }
 
-// -----------------------------------------------------------------------------
-// 19. LÓGICA DE CRÉDITOS E CRIAÇÃO DE EMPRESAS (MODAIS)
-// -----------------------------------------------------------------------------
+document.addEventListener('submit', async function(e) { if (e.target.id === 'formCreateCompany') { /* Tratado no listener anterior */ } });
+document.addEventListener('submit', async function(e) { if (e.target.id === 'formRequestProfileChange') { e.preventDefault(); var tipo = document.getElementById('reqFieldType').value; var novoValor = document.getElementById('reqNewValue').value; if (!window.USUARIO_ATUAL) return; var novaReq = { id: Date.now().toString(), data: new Date().toISOString(), funcionarioEmail: window.USUARIO_ATUAL.email, campo: tipo, valorNovo: novoValor, status: 'PENDENTE' }; CACHE_PROFILE_REQUESTS.push(novaReq); salvarProfileRequests(CACHE_PROFILE_REQUESTS).then(() => { alert("Solicitação enviada!"); document.getElementById('modalRequestProfileChange').style.display='none'; e.target.reset(); }); } });
+document.addEventListener('DOMContentLoaded', function() { configurarNavegacao(); });
 
-window.abrirModalCriarEmpresa = function() {
-    document.getElementById('formCreateCompany').reset();
-    document.getElementById('modalCreateCompany').style.display = 'flex';
-};
-
-document.getElementById('formCreateCompany').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const email = document.getElementById('newCompEmail').value.trim().toLowerCase();
-    const senha = document.getElementById('newCompPassword').value;
-    const nome = document.getElementById('newCompName').value.trim().toUpperCase();
-    const isVitalicio = document.getElementById('newCompVitalicio').checked;
-
-    const btn = this.querySelector('button[type="submit"]');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> CRIANDO...';
-    btn.disabled = true;
-
-    try {
-        // 1. Cria usuário no Auth
-        const uid = await window.dbRef.criarAuthUsuario(email, senha);
-        
-        // 2. ID Empresa
-        const companyId = 'emp_' + Date.now();
-        const { db, setDoc, doc } = window.dbRef;
-
-        // 3. Validade Inicial (30 dias)
-        const validadeInicial = new Date();
-        validadeInicial.setDate(validadeInicial.getDate() + 30); 
-
-        // 4. Salva Docs
-        await setDoc(doc(db, "companies", companyId), {
-            createdAt: new Date().toISOString(),
-            ownerEmail: email,
-            vitalicio: isVitalicio,
-            validade: validadeInicial.toISOString()
-        });
-
-        await setDoc(doc(db, "users", uid), {
-            uid: uid,
-            name: nome,
-            email: email,
-            role: 'admin',
-            company: companyId,
-            approved: true,
-            createdAt: new Date().toISOString(),
-            senhaVisual: senha 
-        });
-
-        alert(`SUCESSO!\nEmpresa: ${companyId}\nLogin: ${email}`);
-        document.getElementById('modalCreateCompany').style.display = 'none';
-        carregarPainelSuperAdmin(true);
-
-    } catch (erro) {
-        alert("Erro: " + erro.message);
-    } finally {
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-    }
-});
-
-window.abrirModalCreditos = async function(companyId, ownerEmail) {
-    const modal = document.getElementById('modalManageCredits');
-    const body = document.getElementById('manageCreditBody');
-    if(!modal || !body) return;
-
-    body.innerHTML = 'Carregando...';
-    modal.style.display = 'flex';
-
-    try {
-        const { db, doc, getDoc } = window.dbRef;
-        const snap = await getDoc(doc(db, "companies", companyId));
-        
-        let data = {};
-        let isVitalicio = false;
-        let validade = '---';
-
-        // Se o documento existe, usa ele. Se não (Legacy), prepara para criar.
-        if (snap.exists()) {
-            data = snap.data();
-            isVitalicio = data.vitalicio === true;
-            validade = data.validade ? data.validade.split('T')[0] : '---';
-        } else {
-            body.innerHTML += '<p style="color:orange;">(Esta empresa não possui registro de licença. Adicionar créditos criará o registro.)</p>';
-        }
-
-        body.innerHTML = `
-            <div style="background:#f5f5f5; padding:15px; border-radius:4px; margin-bottom:15px;">
-                <p><strong>Empresa:</strong> ${companyId}</p>
-                <p><strong>Admin:</strong> ${ownerEmail}</p>
-                <p><strong>Status:</strong> ${isVitalicio ? 'VITALÍCIO' : 'Validade até ' + formatarDataParaBrasileiro(validade)}</p>
-            </div>
-
-            <h4 style="border-bottom:1px solid #ddd; padding-bottom:5px;">Adicionar Tempo</h4>
-            <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
-                <button class="btn-primary" onclick="adicionarCreditos('${companyId}', 1)">+1 Mês</button>
-                <button class="btn-primary" onclick="adicionarCreditos('${companyId}', 3)">+3 Meses</button>
-                <button class="btn-primary" onclick="adicionarCreditos('${companyId}', 12)">+1 Ano</button>
-            </div>
-
-            <h4 style="border-bottom:1px solid #ddd; padding-bottom:5px;">Controle</h4>
-            <div style="display:flex; flex-direction:column; gap:10px;">
-                <label style="display:flex; align-items:center; gap:10px; cursor:pointer; background:#fff3e0; padding:10px; border:1px solid #ffe0b2;">
-                    <input type="checkbox" id="chkVitalicio" ${isVitalicio ? 'checked' : ''} onchange="toggleVitalicio('${companyId}', this.checked)">
-                    <strong>VITALÍCIO</strong>
-                </label>
-                <button class="btn-danger" onclick="bloquearEmpresa('${companyId}')">
-                    <i class="fas fa-ban"></i> BLOQUEAR ACESSO
-                </button>
-            </div>
-        `;
-    } catch (e) {
-        body.innerHTML = 'Erro: ' + e.message;
-    }
-};
-
-window.adicionarCreditos = async function(companyId, meses) {
-    if(!confirm(`Adicionar ${meses} mês(es)?`)) return;
-
-    try {
-        const { db, doc, getDoc, setDoc, updateDoc } = window.dbRef;
-        const ref = doc(db, "companies", companyId);
-        const snap = await getDoc(ref);
-        
-        let novaValidade = new Date();
-        
-        if (snap.exists()) {
-            const data = snap.data();
-            const validadeAtual = data.validade ? new Date(data.validade) : new Date(0);
-            if (validadeAtual > novaValidade) {
-                novaValidade = validadeAtual;
-            }
-            novaValidade.setDate(novaValidade.getDate() + (meses * 30));
-            
-            await updateDoc(ref, {
-                validade: novaValidade.toISOString(),
-                vitalicio: false
-            });
-        } else {
-            // Cria o documento se não existir (Regularização de Legacy)
-            novaValidade.setDate(novaValidade.getDate() + (meses * 30));
-            // Tenta pegar o email do admin da lista global se possível, senão placeholder
-            const emailOwner = document.querySelector(`button[onclick*="${companyId}"]`).getAttribute('onclick').split("'")[3] || 'legacy@system';
-            
-            await setDoc(ref, {
-                createdAt: new Date().toISOString(),
-                ownerEmail: emailOwner,
-                vitalicio: false,
-                validade: novaValidade.toISOString()
-            });
-        }
-
-        alert("Atualizado!");
-        // Fecha modal e recarrega
-        document.getElementById('modalManageCredits').style.display = 'none';
-        carregarPainelSuperAdmin(false);
-    } catch (e) {
-        alert("Erro: " + e.message);
-    }
-};
-
-window.toggleVitalicio = async function(companyId, checked) {
-    try {
-        const { db, doc, updateDoc, setDoc, getDoc } = window.dbRef;
-        const ref = doc(db, "companies", companyId);
-        const snap = await getDoc(ref);
-
-        if(snap.exists()) {
-            await updateDoc(ref, { vitalicio: checked });
-        } else {
-            // Regulariza Legacy como Vitalício
-            const emailOwner = document.querySelector(`button[onclick*="${companyId}"]`).getAttribute('onclick').split("'")[3] || 'legacy@system';
-            await setDoc(ref, {
-                createdAt: new Date().toISOString(),
-                ownerEmail: emailOwner,
-                vitalicio: checked,
-                validade: new Date().toISOString()
-            });
-        }
-        alert("Status atualizado.");
-        carregarPainelSuperAdmin(false);
-    } catch (e) {
-        alert("Erro: " + e.message);
-    }
-};
-
-window.bloquearEmpresa = async function(companyId) {
-    if(!confirm("Bloquear acesso?")) return;
-    try {
-        const { db, doc, updateDoc, getDoc, setDoc } = window.dbRef;
-        const ontem = new Date();
-        ontem.setDate(ontem.getDate() - 1);
-        
-        const ref = doc(db, "companies", companyId);
-        const snap = await getDoc(ref);
-
-        if(snap.exists()) {
-            await updateDoc(ref, { validade: ontem.toISOString(), vitalicio: false });
-        } else {
-            // Bloqueia Legacy criando o doc vencido
-            const emailOwner = document.querySelector(`button[onclick*="${companyId}"]`).getAttribute('onclick').split("'")[3] || 'legacy@system';
-            await setDoc(ref, {
-                createdAt: new Date().toISOString(),
-                ownerEmail: emailOwner,
-                vitalicio: false,
-                validade: ontem.toISOString()
-            });
-        }
-        alert("Empresa bloqueada.");
-        carregarPainelSuperAdmin(false);
-    } catch (e) {
-        alert("Erro: " + e.message);
-    }
-};
-
-window.excluirEmpresaGlobal = async function(companyId) {
-    const c = prompt(`DIGITE "DELETAR" PARA EXCLUIR ${companyId}`);
-    if (c !== "DELETAR") return;
-
-    try {
-        const { db, doc, deleteDoc, collection, getDocs, query, where } = window.dbRef;
-        
-        // Deleta licença se existir
-        await deleteDoc(doc(db, "companies", companyId));
-
-        // Deleta usuários vinculados
-        const q = query(collection(db, "users"), where("company", "==", companyId));
-        const qs = await getDocs(q);
-        const promises = [];
-        qs.forEach((d) => promises.push(deleteDoc(doc(db, "users", d.id))));
-        await Promise.all(promises);
-
-        alert("Excluído.");
-        carregarPainelSuperAdmin(true);
-    } catch (e) {
-        alert("Erro: " + e.message);
-    }
-};
-
-// -----------------------------------------------------------------------------
-// 20. CONTROLADORES DE NAVEGAÇÃO E EVENTOS FINAIS
-// -----------------------------------------------------------------------------
-
-document.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', function() {
-        const pageId = this.getAttribute('data-page');
-        
-        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-
-        this.classList.add('active');
-        const target = document.getElementById(pageId);
-        if (target) target.classList.add('active');
-
-        if (pageId === 'home') atualizarDashboard();
-        if (pageId === 'checkins-pendentes') renderizarTabelaCheckinsPendentes();
-        if (pageId === 'super-admin') carregarPainelSuperAdmin();
-
-        if (window.innerWidth <= 768) {
-            document.getElementById('sidebar').classList.remove('active');
-            document.getElementById('sidebarOverlay').classList.remove('active');
-        }
-    });
-});
-
-document.getElementById('mobileMenuBtn').addEventListener('click', () => {
-    document.getElementById('sidebar').classList.add('active');
-    document.getElementById('sidebarOverlay').classList.add('active');
-});
-document.getElementById('sidebarOverlay').addEventListener('click', () => {
-    document.getElementById('sidebar').classList.remove('active');
-    document.getElementById('sidebarOverlay').classList.remove('active');
-});
-
-document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-        document.querySelectorAll('.cadastro-tab-btn').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.cadastro-form').forEach(f => f.classList.remove('active'));
-        
-        this.classList.add('active');
-        const tabId = this.getAttribute('data-tab');
-        document.getElementById(tabId).classList.add('active');
-    });
-});
-
-console.log("Sistema LogiMaster v7.2 (Final Completo) carregado.");
+console.log("LogiMaster v7.2 - Inicialização Otimizada (Lazy Load)");
