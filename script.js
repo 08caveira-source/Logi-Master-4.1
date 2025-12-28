@@ -1560,7 +1560,7 @@ window.excluirRecibo = function(id) {
 };
 // =============================================================================
 // ARQUIVO: script.js
-// PARTE 5: SUPER ADMIN (LAYOUT EXCLUSIVO), CRÉDITOS E INICIALIZAÇÃO (CORRIGIDO)
+// PARTE 5: SUPER ADMIN (CORREÇÃO DE LAYOUT/INTERFACE), CRÉDITOS E INICIALIZAÇÃO
 // =============================================================================
 
 // -----------------------------------------------------------------------------
@@ -1573,7 +1573,7 @@ window.carregarPainelSuperAdmin = async function(forceUpdate = false) {
     const { db, collection, getDocs } = window.dbRef;
     
     var container = document.getElementById('superAdminContainer');
-    if(container) container.innerHTML = '<p style="text-align:center; padding:20px; color:#555;"><i class="fas fa-spinner fa-spin"></i> Acessando banco de dados global...</p>';
+    if(container) container.innerHTML = '<div style="text-align:center; padding:50px;"><i class="fas fa-circle-notch fa-spin fa-3x" style="color:var(--primary-color);"></i><br><br>Conectando ao banco de dados global...</div>';
 
     try {
         // Busca Global de Empresas e Usuários
@@ -1624,45 +1624,45 @@ window.carregarPainelSuperAdmin = async function(forceUpdate = false) {
             }
 
             var htmlBlock = `
-                <div class="company-block" style="border-left: 5px solid ${corLicenca};">
-                    <div class="company-header" onclick="toggleCompanyDetails('${comp.id}')">
+                <div class="company-block" style="border-left: 5px solid ${corLicenca}; margin-bottom: 20px;">
+                    <div class="company-header" onclick="toggleCompanyDetails('${comp.id}')" style="background:white; padding:20px;">
                         <div style="display:flex; align-items:center; gap:15px;">
-                            <div style="background:#eceff1; padding:10px; border-radius:50%; color:#455a64;">
+                            <div style="background:#eceff1; padding:15px; border-radius:50%; color:#455a64;">
                                 <i class="fas fa-building fa-lg"></i>
                             </div>
                             <div>
-                                <h4 style="font-size:1.1rem; color:#37474f;">${comp.id.toUpperCase()}</h4>
-                                <small style="color:#78909c;">Admin Principal: ${adminUser.email}</small>
+                                <h4 style="font-size:1.2rem; color:#37474f; margin:0;">${comp.id.toUpperCase()}</h4>
+                                <small style="color:#78909c;">Admin: ${adminUser.email}</small>
                             </div>
                         </div>
                         <div style="text-align:right;">
-                            <div style="font-weight:bold; font-size:0.8rem; color:${corLicenca}; margin-bottom:5px;">
+                            <div style="font-weight:bold; font-size:0.9rem; color:${corLicenca}; margin-bottom:5px;">
                                 ${iconeStatus} ${statusLicenca}
                             </div>
-                            <small style="background:#cfd8dc; padding:2px 8px; border-radius:10px; font-size:0.7rem;">
-                                ${usersComp.length} Usuários Cadastrados
-                            </small>
+                            <span style="background:#cfd8dc; padding:3px 10px; border-radius:15px; font-size:0.75rem; color:#455a64;">
+                                ${usersComp.length} Usuários
+                            </span>
                         </div>
                     </div>
                     
-                    <div id="comp-details-${comp.id}" class="company-content">
-                        <div style="background:#f5f5f5; padding:15px; border-radius:6px; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+                    <div id="comp-details-${comp.id}" class="company-content" style="background:#fafafa;">
+                        <div style="background:#fff; padding:15px; border:1px solid #eee; border-radius:6px; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
                             <div>
-                                <h5 style="margin:0 0 5px 0;">GESTÃO DE CRÉDITOS</h5>
-                                <p style="margin:0; font-size:0.8rem; color:#666;">Adicione tempo de uso ou torne vitalício.</p>
+                                <h5 style="margin:0 0 5px 0; color:var(--primary-color);">GESTÃO DE CRÉDITOS</h5>
+                                <p style="margin:0; font-size:0.8rem; color:#666;">Adicione tempo de uso ou torne o acesso vitalício.</p>
                             </div>
                             <button class="btn-warning" onclick="abrirModalCreditos('${comp.id}', '${comp.id}', ${isLifetime})">
-                                <i class="fas fa-edit"></i> ALTERAR LICENÇA
+                                <i class="fas fa-edit"></i> GERENCIAR LICENÇA
                             </button>
                         </div>
 
-                        <h5 style="border-bottom:1px solid #ddd; padding-bottom:5px; margin-bottom:10px; color:#555;">USUÁRIOS DO DOMÍNIO</h5>
-                        <div class="table-responsive">
+                        <h5 style="border-bottom:1px solid #ddd; padding-bottom:5px; margin-bottom:10px; color:#555;">USUÁRIOS CADASTRADOS</h5>
+                        <div class="table-responsive" style="background:white;">
                             <table class="data-table">
                                 <thead>
                                     <tr>
                                         <th>NOME</th>
-                                        <th>EMAIL (LOGIN)</th>
+                                        <th>EMAIL</th>
                                         <th>FUNÇÃO</th>
                                         <th>STATUS</th>
                                         <th>AÇÃO GLOBAL</th>
@@ -1676,7 +1676,7 @@ window.carregarPainelSuperAdmin = async function(forceUpdate = false) {
                                             <td>${u.role}</td>
                                             <td>${u.approved ? '<span style="color:green; font-weight:bold;">ATIVO</span>' : '<span style="color:red;">BLOQUEADO</span>'}</td>
                                             <td>
-                                                ${u.role !== 'admin' ? `<button class="btn-mini btn-danger" onclick="excluirFuncionarioGlobal('${u.id}', '${u.company}')" title="Forçar Exclusão"><i class="fas fa-trash"></i></button>` : '<small style="color:#999;">(Admin)</small>'}
+                                                ${u.role !== 'admin' ? `<button class="btn-mini btn-danger" onclick="excluirFuncionarioGlobal('${u.id}', '${u.company}')" title="Excluir Definitivamente"><i class="fas fa-trash"></i></button>` : '<small style="color:#999;">(Admin Principal)</small>'}
                                             </td>
                                         </tr>
                                     `).join('')}
@@ -1709,14 +1709,14 @@ window.filterGlobalUsers = function() {
     });
 };
 
-// Exclusão Global (Super Admin deletando funcionário de empresa)
+// Exclusão Global
 window.excluirFuncionarioGlobal = async function(uid, companyId) {
-    if(!confirm("SUPER ADMIN: Tem certeza que deseja excluir este usuário do banco de dados global?")) return;
+    if(!confirm("SUPER ADMIN: Tem certeza? Isso excluirá o usuário de todos os registros.")) return;
     try {
         const { db, doc, deleteDoc } = window.dbRef;
         await deleteDoc(doc(db, "users", uid));
-        alert("Usuário removido da base global.");
-        carregarPainelSuperAdmin(true); // Recarrega lista
+        alert("Usuário removido.");
+        carregarPainelSuperAdmin(true);
     } catch(e) {
         alert("Erro: " + e.message);
     }
@@ -1729,7 +1729,6 @@ window.abrirModalCreditos = function(compId, nome, isLife) {
     document.getElementById('checkLifetime').checked = isLife;
     document.getElementById('manualCredits').value = '';
     
-    // Toggle input visibility
     var divAmount = document.getElementById('divCreditAmount');
     divAmount.style.opacity = isLife ? '0.5' : '1';
     divAmount.style.pointerEvents = isLife ? 'none' : 'auto';
@@ -1753,22 +1752,19 @@ document.getElementById('formAddCredits').addEventListener('submit', async funct
     var isLife = document.getElementById('checkLifetime').checked;
     var monthsToAdd = parseInt(document.getElementById('manualCredits').value) || 0;
     
-    if (!isLife && monthsToAdd <= 0) return alert("Insira a quantidade de meses ou marque Vitalício.");
+    if (!isLife && monthsToAdd <= 0) return alert("Insira os meses ou marque Vitalício.");
 
     try {
         const { db, doc, getDoc, updateDoc } = window.dbRef;
         const compRef = doc(db, "companies", compId);
         
         var newDate = new Date();
-        // Se não for vitalício, calcula a nova data
         if (!isLife) {
             const snap = await getDoc(compRef);
             var currentData = snap.data();
             var currentValid = currentData.creditsValidUntil ? new Date(currentData.creditsValidUntil) : new Date();
             
-            // Se já venceu, começa de hoje. Se não, soma ao atual.
             if (currentValid < new Date()) currentValid = new Date();
-            
             currentValid.setMonth(currentValid.getMonth() + monthsToAdd);
             newDate = currentValid;
         }
@@ -1778,25 +1774,24 @@ document.getElementById('formAddCredits').addEventListener('submit', async funct
             creditsValidUntil: isLife ? null : newDate.toISOString()
         });
 
-        alert("Licença atualizada com sucesso!");
+        alert("Status da licença atualizado!");
         document.getElementById('modalManageCredits').style.display = 'none';
-        carregarPainelSuperAdmin(true); // Recarrega lista global
+        carregarPainelSuperAdmin(true);
 
     } catch (err) {
         console.error(err);
-        alert("Erro ao atualizar créditos: " + err.message);
+        alert("Erro: " + err.message);
     }
 });
 
 // -----------------------------------------------------------------------------
-// SISTEMA DE VERIFICAÇÃO DE LICENÇA (BLOQUEIO DE USUÁRIOS)
+// SISTEMA DE VERIFICAÇÃO DE LICENÇA (BLOQUEIO)
 // -----------------------------------------------------------------------------
 
 async function verificarStatusLicenca() {
-    // SUPER ADMIN NÃO PASSA POR AQUI (SEGURANÇA DUPLA)
+    // PROTEÇÃO CRÍTICA: Super Admin nunca é verificado
     if (!window.USUARIO_ATUAL || window.USUARIO_ATUAL.role === 'super_admin') return;
-
-    if (!window.USUARIO_ATUAL.company) return; // Se não tem empresa, não tem o que verificar
+    if (!window.USUARIO_ATUAL.company) return;
 
     const { db, doc, getDoc } = window.dbRef;
     try {
@@ -1806,10 +1801,7 @@ async function verificarStatusLicenca() {
             const elDisplay = document.getElementById('systemCreditsDisplay');
             const elDays = document.getElementById('daysRemaining');
             
-            // Exibir aviso no menu (apenas Admin vê dias, mas todos sofrem bloqueio)
-            if (elDisplay && window.USUARIO_ATUAL.role === 'admin') {
-                elDisplay.style.display = 'block';
-            }
+            if (elDisplay && window.USUARIO_ATUAL.role === 'admin') elDisplay.style.display = 'block';
 
             if (data.isLifetime) {
                 if(elDays) {
@@ -1827,26 +1819,27 @@ async function verificarStatusLicenca() {
                     elDays.style.color = diffDays > 5 ? "var(--success-color)" : (diffDays > 0 ? "orange" : "red");
                 }
 
-                // LÓGICA DE BLOQUEIO DO SISTEMA
                 if (diffDays <= 0) {
                     bloquearSistemaPorFaltaDeCredito();
                 }
             }
         }
     } catch (e) {
-        console.error("Erro checando licença", e);
+        console.error("Erro licença:", e);
     }
 }
 
 function bloquearSistemaPorFaltaDeCredito() {
-    // Cria Overlay de Bloqueio Intransponível
+    // Se por acaso um super admin cair aqui (impossível pela lógica, mas por segurança)
+    if(window.USUARIO_ATUAL && window.USUARIO_ATUAL.role === 'super_admin') return;
+
     var overlay = document.createElement('div');
     overlay.style.position = 'fixed';
     overlay.style.top = '0';
     overlay.style.left = '0';
     overlay.style.width = '100vw';
     overlay.style.height = '100vh';
-    overlay.style.backgroundColor = 'rgba(38, 50, 56, 0.98)'; // Fundo escuro sistema
+    overlay.style.backgroundColor = '#263238';
     overlay.style.zIndex = '99999';
     overlay.style.display = 'flex';
     overlay.style.flexDirection = 'column';
@@ -1854,87 +1847,99 @@ function bloquearSistemaPorFaltaDeCredito() {
     overlay.style.alignItems = 'center';
     overlay.style.color = 'white';
     overlay.style.textAlign = 'center';
-    overlay.style.padding = '20px';
 
     overlay.innerHTML = `
-        <i class="fas fa-lock" style="font-size: 5rem; color: #ef5350; margin-bottom: 30px;"></i>
-        <h1 style="color: #ef5350; font-family: 'Segoe UI', sans-serif;">ACESSO SUSPENSO</h1>
-        <h3 style="margin-top:0;">LICENÇA DE USO EXPIRADA</h3>
-        <p style="font-size: 1.1rem; max-width: 600px; line-height: 1.6; color: #b0bec5;">
-            A licença para a empresa <strong>${window.USUARIO_ATUAL.company.toUpperCase()}</strong> atingiu o vencimento.
-            <br>Todas as funcionalidades do sistema estão temporariamente bloqueadas.
-        </p>
-        <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 6px; margin-top: 20px;">
-            <p style="margin:0; font-size: 0.9rem;">Por favor, contate o administrador do sistema para renovação.</p>
-        </div>
-        <button onclick="logoutSystem()" class="btn-secondary" style="margin-top: 40px; padding: 12px 30px; font-size: 1rem;">
-            <i class="fas fa-sign-out-alt"></i> SAIR DO SISTEMA
-        </button>
+        <i class="fas fa-lock" style="font-size: 5rem; color: #ef5350; margin-bottom: 20px;"></i>
+        <h1 style="color: #ef5350;">ACESSO SUSPENSO</h1>
+        <p style="font-size: 1.2rem; color: #b0bec5;">A licença da empresa expirou.</p>
+        <button onclick="logoutSystem()" class="btn-secondary" style="margin-top: 30px;">SAIR</button>
     `;
-
     document.body.appendChild(overlay);
-    document.body.style.overflow = 'hidden'; // Impede scroll
+    document.body.style.overflow = 'hidden';
 }
 
 // -----------------------------------------------------------------------------
-// INICIALIZAÇÃO E ROTAS (ENTRY POINT) - LÓGICA CORRIGIDA
+// INICIALIZAÇÃO GLOBAL (ROTEAMENTO E UI) - CORREÇÃO CRÍTICA DE INTERFACE
 // -----------------------------------------------------------------------------
 
 window.initSystemByRole = async function(user) {
-    console.log("Inicializando sistema para perfil:", user.role);
+    console.log("Inicializando sistema. Perfil:", user.role);
     window.USUARIO_ATUAL = user;
     
-    // Esconde todos os menus inicialmente
+    // ELEMENTOS DE UI PRINCIPAIS
+    var sidebar = document.getElementById('sidebar');
+    var mobileNav = document.querySelector('.mobile-nav');
+    var mainContent = document.querySelector('.content');
+    
+    // MENU LISTS
     var menuAdmin = document.getElementById('menu-admin');
     var menuSuper = document.getElementById('menu-super-admin');
     var menuEmp = document.getElementById('menu-employee');
     
+    // RESET INICIAL
     if(menuAdmin) menuAdmin.style.display = 'none';
     if(menuSuper) menuSuper.style.display = 'none';
     if(menuEmp) menuEmp.style.display = 'none';
 
-    // Roteamento
+    // ROTEAMENTO
     if (user.role === 'super_admin') {
-        // === SUPER ADMIN (Layout Exclusivo) ===
-        if(menuSuper) menuSuper.style.display = 'block';
+        // ===========================================
+        // MODO SUPER ADMIN (INTERFACE ISOLADA)
+        // ===========================================
         
-        // Esconde sidebar se estiver em mobile para dar foco total
-        var sidebar = document.getElementById('sidebar');
-        var mobileBtn = document.getElementById('mobileMenuBtn');
+        // 1. Remove Sidebar e Header Mobile da visão
+        if(sidebar) sidebar.style.display = 'none';
+        if(mobileNav) mobileNav.style.display = 'none';
         
-        // Oculta elementos de usuário comum que não servem para o Super Admin
-        var userProfileSection = document.querySelector('.user-profile-section');
-        if(userProfileSection) {
-            userProfileSection.style.borderBottom = "none";
-            // Opcional: Pode simplificar a sidebar visualmente
+        // 2. Ajusta o conteúdo para Full Width (sem margem à esquerda)
+        if(mainContent) {
+            mainContent.style.marginLeft = '0';
+            mainContent.style.marginTop = '0'; // Remove margem do header mobile
+            mainContent.style.padding = '40px';
+            mainContent.style.width = '100%';
         }
 
-        // Navega para a página única do Super Admin
+        // 3. Exibe apenas a seção Super Admin
+        if(menuSuper) menuSuper.style.display = 'block';
         var pageSuper = document.querySelector('[data-page="super-admin"]');
-        if(pageSuper) pageSuper.click();
         
-        // Carrega a lista global
+        // Esconde todas as outras páginas manualmente para garantir
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById('super-admin').classList.add('active');
+
+        // 4. Carrega os dados
         carregarPainelSuperAdmin();
 
     } else {
-        // === ADMIN DE EMPRESA OU FUNCIONÁRIO ===
+        // ===========================================
+        // MODO EMPRESA (ADMIN E FUNCIONÁRIOS)
+        // ===========================================
+
+        // 1. Restaura Sidebar e Header (Caso tenha logado como super admin antes)
+        if(sidebar) sidebar.style.display = 'flex';
+        // Mobile nav é flex apenas em telas pequenas (controlado pelo CSS media query), 
+        // mas removemos o 'none' inline forçado se existir
+        if(mobileNav) mobileNav.style.removeProperty('display'); 
         
-        // 1. Verifica Licença (Bloqueio) - Super Admin já foi descartado acima
+        if(mainContent) {
+            mainContent.style.removeProperty('margin-left');
+            mainContent.style.removeProperty('margin-top');
+            mainContent.style.removeProperty('width');
+            mainContent.style.removeProperty('padding');
+        }
+
+        // 2. Verifica Licença
         await verificarStatusLicenca();
         
-        // 2. Carrega dados da Empresa
+        // 3. Sync Firebase Empresa
         if (window.dbRef && user.company) {
             const { db, doc, onSnapshot } = window.dbRef;
-            
-            // Listener para atualização em tempo real
             const types = [CHAVE_DB_FUNCIONARIOS, CHAVE_DB_VEICULOS, CHAVE_DB_OPERACOES, CHAVE_DB_DESPESAS, CHAVE_DB_RECIBOS];
             types.forEach(type => {
                 onSnapshot(doc(db, 'companies', user.company, 'data', type), (docSnap) => {
                     if (docSnap.exists() && docSnap.data().items) {
                         localStorage.setItem(type, JSON.stringify(docSnap.data().items));
                         carregarTodosDadosLocais(); 
-                        
-                        // Atualiza tela ativa
                         if (user.role === 'admin' && typeof atualizarDashboard === 'function') atualizarDashboard();
                         if (user.role !== 'admin' && typeof carregarPainelFuncionario === 'function') carregarPainelFuncionario();
                     }
@@ -1949,19 +1954,14 @@ window.initSystemByRole = async function(user) {
             renderizarCalendario();
             atualizarDashboard();
         } else {
-            // Motorista/Ajudante
             if(menuEmp) menuEmp.style.display = 'block';
             window.MODO_APENAS_LEITURA = true;
-            
             document.querySelector('[data-page="employee-home"]').click();
-            
-            // Carrega funções do módulo 5 (Parte anterior + essa)
             if(typeof carregarPainelFuncionario === 'function') carregarPainelFuncionario();
             if(typeof renderizarMeusDados === 'function') renderizarMeusDados(); 
         }
         
-        // Inicia verificação de licença periódica
-        window._verificacaoCreditosIntervalo = setInterval(verificarStatusLicenca, 3600000); // 1 hora
+        window._verificacaoCreditosIntervalo = setInterval(verificarStatusLicenca, 3600000);
     }
 };
 
@@ -1970,41 +1970,32 @@ window.renderizarMeusDados = function() {
     if(div) {
         var u = window.USUARIO_ATUAL;
         var f = CACHE_FUNCIONARIOS.find(x => x.email === u.email) || u;
-        
-        div.innerHTML = `
-            <div style="text-align:center;">
-                <h3>${f.nome || f.name}</h3>
-                <p>${f.email}</p>
-                <p>Função: ${f.funcao || f.role}</p>
-            </div>
-            <hr>
-            <p><strong>Telefone:</strong> ${f.telefone || '-'}</p>
-            <p><strong>Endereço:</strong> ${f.endereco || '-'}</p>
-            <p><strong>PIX:</strong> ${f.pix || '-'}</p>
-            <button class="btn-warning" onclick="document.getElementById('modalRequestProfileChange').style.display='block'" style="margin-top:15px;">SOLICITAR ALTERAÇÃO</button>
-        `;
+        div.innerHTML = `<div style="text-align:center;"><h3>${f.nome||f.name}</h3><p>${f.email}</p><p>Função: ${f.funcao||f.role}</p></div><hr><p><strong>Telefone:</strong> ${f.telefone||'-'}</p><p><strong>Endereço:</strong> ${f.endereco||'-'}</p><p><strong>PIX:</strong> ${f.pix||'-'}</p><button class="btn-warning" onclick="document.getElementById('modalRequestProfileChange').style.display='block'" style="margin-top:15px;">SOLICITAR ALTERAÇÃO</button>`;
     }
 };
 
-// Navegação Genérica
+// Navegação (Com correção para não afetar super admin)
 document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', function() {
+        // Se for Super Admin, ignora cliques em itens que não sejam do seu menu (segurança visual)
+        if(window.USUARIO_ATUAL.role === 'super_admin' && this.parentElement.id !== 'menu-super-admin') return;
+
         document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
         this.classList.add('active');
         
         var pageId = this.getAttribute('data-page');
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        var targetPage = document.getElementById(pageId);
-        if(targetPage) targetPage.classList.add('active');
+        var tg = document.getElementById(pageId);
+        if(tg) tg.classList.add('active');
         
         if (window.innerWidth <= 768) {
             var sb = document.getElementById('sidebar');
             if(sb) sb.classList.remove('active');
         }
 
-        if (pageId === 'home' && typeof atualizarDashboard === 'function') atualizarDashboard();
-        if (pageId === 'employee-home' && typeof carregarPainelFuncionario === 'function') carregarPainelFuncionario();
-        if (pageId === 'super-admin' && typeof carregarPainelSuperAdmin === 'function') carregarPainelSuperAdmin();
+        if (pageId === 'home') atualizarDashboard();
+        if (pageId === 'employee-home') carregarPainelFuncionario();
+        if (pageId === 'super-admin') carregarPainelSuperAdmin();
     });
 });
 
@@ -2017,5 +2008,4 @@ document.getElementById('sidebarOverlay')?.addEventListener('click', function() 
     if(sb) sb.classList.remove('active');
 });
 
-// FIM DO SCRIPT
-console.log("LOGIMASTER V20.0: Inicializado com sucesso.");
+console.log("LOGIMASTER V20.1: Sistema carregado (Correção Super Admin).");
