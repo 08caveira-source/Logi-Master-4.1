@@ -10,10 +10,10 @@
     
     <style>
         /* =============================================================================
-           ESTILOS ESPECÍFICOS DA TELA DE LOGIN
+           ESTILOS ESPECÍFICOS DA TELA DE LOGIN (VERSÃO SOMENTE LOGIN)
            ============================================================================= */
         body {
-            background-color: #263238; /* Fundo Escuro Profissional */
+            background-color: #263238; 
             background-image: linear-gradient(135deg, #263238 0%, #37474f 100%);
             display: flex;
             align-items: center;
@@ -30,10 +30,9 @@
             border-radius: 8px;
             box-shadow: 0 15px 35px rgba(0,0,0,0.5);
             width: 100%;
-            max-width: 450px;
+            max-width: 400px;
             text-align: center;
             position: relative;
-            overflow: hidden;
         }
 
         .login-header { margin-bottom: 30px; }
@@ -44,7 +43,7 @@
             font-weight: 800;
             letter-spacing: 1px;
         }
-        .login-header span { color: #00796b; } /* Cor Principal do Sistema */
+        .login-header span { color: #00796b; } 
         .login-header p { color: #78909c; margin-top: 5px; font-size: 0.9rem; }
 
         .input-group {
@@ -61,10 +60,10 @@
             font-size: 0.9rem;
         }
 
-        .input-group input, .input-group select {
+        .input-group input {
             width: 100%;
             padding: 12px 15px;
-            padding-left: 40px; /* Espaço para ícone */
+            padding-left: 40px; 
             border: 1px solid #cfd8dc;
             border-radius: 4px;
             font-size: 1rem;
@@ -79,7 +78,7 @@
             color: #b0bec5;
         }
 
-        .input-group input:focus, .input-group select:focus {
+        .input-group input:focus {
             border-color: #00796b;
             outline: none;
         }
@@ -101,10 +100,8 @@
         button.btn-login:hover { background-color: #004d40; }
         button.btn-login:disabled { background-color: #ccc; cursor: not-allowed; }
 
-        .links { margin-top: 20px; font-size: 0.9rem; }
-        .links a { color: #00796b; text-decoration: none; font-weight: 600; cursor: pointer; }
-        .links a:hover { text-decoration: underline; }
-
+        .links { margin-top: 25px; font-size: 0.85rem; color: #78909c; }
+        
         .error-message {
             background-color: #ffebee;
             color: #c62828;
@@ -115,37 +112,9 @@
             display: none;
             border: 1px solid #ffcdd2;
         }
-
-        /* Animação simples */
-        .hidden { display: none; }
+        
         .fade-in { animation: fadeIn 0.5s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        /* Estilo para Radio Buttons de Tipo de Cadastro */
-        .register-type-selector {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-            background: #f5f5f5;
-            padding: 5px;
-            border-radius: 4px;
-        }
-        .register-type-selector label {
-            flex: 1;
-            text-align: center;
-            padding: 8px;
-            cursor: pointer;
-            font-size: 0.85rem;
-            border-radius: 4px;
-            transition: background 0.2s;
-            margin: 0 !important;
-        }
-        .register-type-selector input[type="radio"] { display: none; }
-        .register-type-selector input:checked + label {
-            background: #00796b;
-            color: #fff;
-            font-weight: bold;
-        }
     </style>
 </head>
 <body>
@@ -153,20 +122,20 @@
     <div class="login-container fade-in">
         <div class="login-header">
             <h1>LOGI<span>MASTER</span></h1>
-            <p>Gestão Inteligente de Frotas v7.1</p>
+            <p>Acesso Restrito v7.1</p>
         </div>
 
         <div id="errorDisplay" class="error-message"></div>
 
         <form id="formLogin">
             <div class="input-group">
-                <label for="loginEmail">E-mail</label>
+                <label for="loginEmail">E-mail Corporativo</label>
                 <i class="fas fa-envelope"></i>
                 <input type="email" id="loginEmail" placeholder="seu@email.com" required>
             </div>
             
             <div class="input-group">
-                <label for="loginPassword">Senha</label>
+                <label for="loginPassword">Senha de Acesso</label>
                 <i class="fas fa-lock"></i>
                 <input type="password" id="loginPassword" placeholder="******" required>
             </div>
@@ -174,70 +143,19 @@
             <button type="submit" class="btn-login" id="btnLogin">ENTRAR</button>
             
             <div class="links">
-                <p>Não tem uma conta? <a onclick="toggleForms()">CADASTRE-SE</a></p>
-                <p><a href="#" onclick="alert('Entre em contato com o suporte ou seu administrador.')">Esqueceu a senha?</a></p>
-            </div>
-        </form>
-
-        <form id="formRegister" class="hidden">
-            <h3 style="color:#00796b; margin-top:0;">CRIAR CONTA</h3>
-            
-            <div class="register-type-selector">
-                <input type="radio" name="regType" id="typeJoin" value="join" checked onchange="toggleCompanyInput()">
-                <label for="typeJoin">ENTRAR EM EQUIPE</label>
-                
-                <input type="radio" name="regType" id="typeCreate" value="create" onchange="toggleCompanyInput()">
-                <label for="typeCreate">NOVA EMPRESA</label>
-            </div>
-
-            <div class="input-group">
-                <label for="regName">Nome Completo</label>
-                <i class="fas fa-user"></i>
-                <input type="text" id="regName" placeholder="Seu Nome" required>
-            </div>
-
-            <div class="input-group">
-                <label for="regEmail">E-mail</label>
-                <i class="fas fa-envelope"></i>
-                <input type="email" id="regEmail" placeholder="seu@email.com" required>
-            </div>
-
-            <div class="input-group">
-                <label for="regPassword">Senha (Mín. 6 dígitos)</label>
-                <i class="fas fa-lock"></i>
-                <input type="password" id="regPassword" placeholder="******" required minlength="6">
-            </div>
-
-            <div class="input-group" id="groupCompanyId">
-                <label for="regCompanyId">ID da Empresa (Fornecido pelo Admin)</label>
-                <i class="fas fa-building"></i>
-                <input type="text" id="regCompanyId" placeholder="Ex: emp_123456789">
-            </div>
-
-            <div class="input-group" id="groupRoleSelect">
-                <label for="regRole">Função</label>
-                <i class="fas fa-id-badge"></i>
-                <select id="regRole">
-                    <option value="motorista">MOTORISTA</option>
-                    <option value="ajudante">AJUDANTE</option>
-                    <option value="admin">ADMINISTRADOR</option>
-                </select>
-            </div>
-
-            <button type="submit" class="btn-login" id="btnRegister">CRIAR CONTA</button>
-
-            <div class="links">
-                <p>Já tem conta? <a onclick="toggleForms()">FAZER LOGIN</a></p>
+                <p>Esqueceu sua senha? Contate o Administrador.</p>
+                <p style="margin-top:10px; font-size:0.75rem;">
+                    <i class="fas fa-lock"></i> Sistema protegido e monitorado.
+                </p>
             </div>
         </form>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // Configuração conforme solicitado
         const firebaseConfig = {
             apiKey: "AIzaSyBZjVdcyjbEoR_-X6_lZuTRDMeN2wIntZI",
             authDomain: "logi-master-dd4cd.firebaseapp.com",
@@ -247,45 +165,9 @@
             appId: "1:673000154258:web:fc9d6fced43e557076324b"
         };
 
-        // Inicializa Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-
-        // --- LÓGICA DE INTERFACE ---
-        window.toggleForms = function() {
-            const formLogin = document.getElementById('formLogin');
-            const formRegister = document.getElementById('formRegister');
-            const errorDisplay = document.getElementById('errorDisplay');
-            
-            errorDisplay.style.display = 'none';
-            if (formLogin.classList.contains('hidden')) {
-                formLogin.classList.remove('hidden');
-                formRegister.classList.add('hidden');
-            } else {
-                formLogin.classList.add('hidden');
-                formRegister.classList.remove('hidden');
-            }
-        };
-
-        window.toggleCompanyInput = function() {
-            const isCreate = document.getElementById('typeCreate').checked;
-            const groupCompanyId = document.getElementById('groupCompanyId');
-            const groupRoleSelect = document.getElementById('groupRoleSelect');
-            const regCompanyId = document.getElementById('regCompanyId');
-
-            if (isCreate) {
-                // Se for criar empresa, esconde campo de ID (gerado auto) e força Admin
-                groupCompanyId.style.display = 'none';
-                groupRoleSelect.style.display = 'none'; 
-                regCompanyId.required = false;
-            } else {
-                // Se for entrar, exige ID e permite escolher cargo
-                groupCompanyId.style.display = 'block';
-                groupRoleSelect.style.display = 'block';
-                regCompanyId.required = true;
-            }
-        };
 
         // --- LÓGICA DE LOGIN ---
         document.getElementById('formLogin').addEventListener('submit', async (e) => {
@@ -300,9 +182,8 @@
             errDiv.style.display = 'none';
 
             try {
-                // O redirecionamento acontece no onAuthStateChanged
                 await signInWithEmailAndPassword(auth, email, password);
-                // Sucesso: listener redireciona
+                // O redirecionamento é feito pelo listener abaixo
             } catch (error) {
                 console.error(error);
                 btn.disabled = false;
@@ -312,145 +193,55 @@
             }
         });
 
-        // --- LÓGICA DE CADASTRO ---
-        document.getElementById('formRegister').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const btn = document.getElementById('btnRegister');
-            const errDiv = document.getElementById('errorDisplay');
-            
-            const isCreate = document.getElementById('typeCreate').checked;
-            const name = document.getElementById('regName').value.trim();
-            const email = document.getElementById('regEmail').value.trim();
-            const password = document.getElementById('regPassword').value;
-            
-            let companyId = '';
-            let role = '';
-            let approved = false;
-
-            if (isCreate) {
-                // Nova Empresa: Gera ID único, vira Admin e Aprovado
-                companyId = 'emp_' + Date.now();
-                role = 'admin';
-                approved = true; 
-            } else {
-                // Entrar em Equipe: Pega ID digitado, usa Role escolhida, Não Aprovado
-                companyId = document.getElementById('regCompanyId').value.trim();
-                role = document.getElementById('regRole').value;
-                approved = false;
-
-                if (companyId.length < 5) {
-                    errDiv.textContent = "ID da empresa inválido.";
-                    errDiv.style.display = 'block';
-                    return;
-                }
-            }
-
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
-            errDiv.style.display = 'none';
-
-            try {
-                // 1. Cria usuário no Auth
-                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                const user = userCredential.user;
-
-                // 2. Atualiza perfil básico
-                await updateProfile(user, { displayName: name });
-
-                // 3. Salva documento no Firestore
-                // Nota: approved=false impedirá ações até que um admin aprove
-                await setDoc(doc(db, "users", user.uid), {
-                    uid: user.uid,
-                    name: name.toUpperCase(),
-                    email: email.toLowerCase(),
-                    role: role,
-                    company: companyId,
-                    approved: approved,
-                    createdAt: new Date().toISOString(),
-                    senhaVisual: password // Opcional: para o admin visualizar facil
-                });
-
-                if (isCreate) {
-                    // CRIA O DOCUMENTO DA EMPRESA (METADADOS DE LICENÇA)
-                    // Nasce SEM validade (Bloqueada) até que o Super Admin adicione crédito
-                    await setDoc(doc(db, "companies", companyId), {
-                        createdAt: new Date().toISOString(),
-                        ownerEmail: email.toLowerCase(),
-                        vitalicio: false,
-                        validade: new Date(Date.now() - 86400000).toISOString() // Data no passado (vencido)
-                    });
-
-                    alert(`EMPRESA CRIADA COM SUCESSO!\n\nSeu ID de Empresa é: ${companyId}\n\nATENÇÃO: Sua conta foi criada, mas a empresa está SEM CRÉDITOS.\nEntre em contato com o Super Admin para liberar o acesso.`);
-                } else {
-                    alert("CADASTRO REALIZADO!\n\nSua conta foi criada, mas precisa ser aprovada pelo administrador da empresa (" + companyId + ") antes de acessar todas as funções.\n\nVocê será redirecionado para preencher seus dados básicos.");
-                }
-
-                // onAuthStateChanged cuidará do resto
-
-            } catch (error) {
-                console.error(error);
-                btn.disabled = false;
-                btn.innerHTML = 'CRIAR CONTA';
-                errDiv.textContent = 'Erro: ' + translateError(error.code);
-                errDiv.style.display = 'block';
-            }
-        });
-
         // --- LISTENER GLOBAL DE AUTENTICAÇÃO ---
         onAuthStateChanged(auth, async (user) => {
             if (user) {
-                console.log("Usuário detectado:", user.uid);
+                console.log("Login autorizado:", user.uid);
                 
-                // Busca dados do usuário para saber a empresa
+                // Busca dados para validar bloqueio antes de entrar
                 const userRef = doc(db, "users", user.uid);
                 const userSnap = await getDoc(userRef);
 
                 if (userSnap.exists()) {
                     const userData = userSnap.data();
 
-                    // --- NOVA VERIFICAÇÃO DE LICENÇA (CRÉDITOS) ---
-                    // Se NÃO for o Super Admin, verifica a licença da empresa
+                    // Validação de Licença (SaaS)
                     if (userData.email !== 'admin@logimaster.com') {
                         const companyRef = doc(db, "companies", userData.company);
                         const companySnap = await getDoc(companyRef);
                         
                         if (companySnap.exists()) {
-                            const companyData = companySnap.data();
+                            const cData = companySnap.data();
                             const agora = new Date();
-                            const validade = companyData.validade ? new Date(companyData.validade) : new Date(0);
-                            const isVitalicio = companyData.vitalicio === true;
-
-                            if (!isVitalicio && agora > validade) {
-                                alert("ACESSO BLOQUEADO: LICENÇA EXPIRADA.\n\nA empresa '" + userData.company + "' não possui créditos ativos.\nSolicite ao administrador a renovação da licença.");
+                            const validade = cData.validade ? new Date(cData.validade) : new Date(0);
+                            
+                            // Verifica se expirou e se não é vitalício
+                            if (cData.vitalicio !== true && agora > validade) {
+                                alert("ACESSO BLOQUEADO: A licença da empresa expirou.\nContate o Super Admin.");
                                 await signOut(auth);
-                                window.location.replace("login.html");
+                                window.location.reload();
                                 return;
                             }
-                        } else {
-                            // Se o documento da empresa não existe (erro de consistência ou cadastro antigo)
-                            // Bloqueia por segurança
-                            alert("ACESSO BLOQUEADO: EMPRESA NÃO REGISTRADA CORRETAMENTE.\nContate o suporte.");
-                            await signOut(auth);
-                            return;
                         }
                     }
                     
-                    // Pequeno delay para garantir gravação do firestore no cadastro e redirecionar
-                    setTimeout(() => {
-                         window.location.replace("index.html");
-                    }, 1000);
+                    window.location.replace("index.html");
+                } else {
+                    // Usuário no Auth mas sem Doc (inconsistência)
+                    alert("Erro de cadastro: Usuário sem registro de dados.");
+                    await signOut(auth);
                 }
             }
         });
 
         function translateError(code) {
             switch(code) {
-                case 'auth/invalid-credential': return "E-mail ou senha incorretos.";
-                case 'auth/email-already-in-use': return "Este e-mail já está cadastrado.";
-                case 'auth/weak-password': return "A senha deve ter pelo menos 6 caracteres.";
-                case 'auth/invalid-email': return "E-mail inválido.";
-                case 'auth/network-request-failed': return "Erro de conexão. Verifique sua internet.";
-                default: return code;
+                case 'auth/invalid-credential': return "Credenciais inválidas.";
+                case 'auth/user-not-found': return "Usuário não encontrado.";
+                case 'auth/wrong-password': return "Senha incorreta.";
+                case 'auth/too-many-requests': return "Muitas tentativas. Tente mais tarde.";
+                case 'auth/network-request-failed': return "Verifique sua conexão.";
+                default: return "Erro no acesso (" + code + ")";
             }
         }
     </script>
