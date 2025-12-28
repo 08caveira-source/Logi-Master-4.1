@@ -1,6 +1,6 @@
 /* =============================================================================
    ARQUIVO: style.css
-   SISTEMA LOGIMASTER - ESTILOS VISUAIS COMPLETOS (VERSÃO 7.1)
+   SISTEMA LOGIMASTER - VERSÃO 7.1 (CORREÇÃO DE FLASH E CONTROLES ADMIN)
    ============================================================================= */
 
 @import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@300;400;600;700;800&display=swap');
@@ -133,8 +133,9 @@ body {
     width: calc(100% - var(--sidebar-width));
 }
 
+/* CORREÇÃO DO FLASH: .page deve ser oculto por padrão de forma estrita */
 .page {
-    display: none; /* Páginas ocultas por padrão */
+    display: none; 
     animation: fadeIn 0.3s ease-in-out;
 }
 
@@ -343,6 +344,7 @@ button:disabled { background: #ccc !important; cursor: not-allowed; }
     max-height: 90vh;
     overflow-y: auto;
     box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    position: relative;
 }
 
 /* =============================================================================
@@ -430,6 +432,30 @@ button:disabled { background: #ccc !important; cursor: not-allowed; }
     color: #555;
 }
 
+/* FAB - Botão Flutuante para criar Nova Empresa (Super Admin) */
+.fab-create {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    background-color: var(--primary-color);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    cursor: pointer;
+    transition: transform 0.2s, background 0.2s;
+    z-index: 1500;
+}
+.fab-create:hover {
+    transform: scale(1.1);
+    background-color: var(--primary-dark);
+}
+
 /* =============================================================================
    RESPONSIVIDADE (MOBILE)
    ============================================================================= */
@@ -488,6 +514,14 @@ button:disabled { background: #ccc !important; cursor: not-allowed; }
     .company-actions-bar button {
         width: 100%;
     }
+    
+    .fab-create {
+        bottom: 20px;
+        right: 20px;
+        width: 50px;
+        height: 50px;
+        font-size: 20px;
+    }
 }
 
 /* =============================================================================
@@ -500,5 +534,5 @@ button:disabled { background: #ccc !important; cursor: not-allowed; }
     padding: 2px 6px;
     font-size: 0.7rem;
     margin-left: 8px;
-    display: none; /* Só aparece via JS se houver pendências */
+    display: none; 
 }
