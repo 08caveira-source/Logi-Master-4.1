@@ -1,6 +1,6 @@
-/* =============================================================================
+/* ====
    LOGIMASTER - ESTILOS VISUAIS (VERSÃO COMPLETA)
-   ============================================================================= */
+   ==== */
 
 @import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@300;400;600;700;800&display=swap');
 
@@ -24,7 +24,7 @@
     --info-color: #0277bd;          /* Blue */
     
     --bg-body: #f4f6f8;
-    --bg-card: #ffffff;
+    --bg-card: #ffff;
     
     --sidebar-width: 260px;
     --header-height: 60px;
@@ -91,6 +91,17 @@ body {
 .user-profile-section p { font-size: 0.85rem; margin-bottom: 5px; }
 #userEmailDisplay { font-weight: bold; color: var(--primary-light); text-transform: lowercase; }
 #userRoleDisplay { font-size: 0.75rem; background: var(--primary-color); padding: 3px 8px; border-radius: 4px; display: inline-block; }
+
+/* ESTILO PARA VALIDADE DE CRÉDITOS NO MENU */
+.credit-info-display {
+    font-size: 0.65rem;
+    color: #b0bec5;
+    margin-top: 8px;
+    padding: 5px;
+    border: 1px dashed rgba(255,255,255,0.2);
+    border-radius: 4px;
+    display: none; /* Mostrado via JS apenas para Admin */
+}
 
 .sidebar nav { flex: 1; overflow-y: auto; padding-top: 20px; }
 
@@ -410,9 +421,9 @@ button:hover { filter: brightness(90%); }
     
     .form-col { flex: 100%; }
 }
-/* =============================================================================
+/* ====
    ESTILOS DO SUPER ADMIN (HIERARQUIA GLOBAL)
-   ============================================================================= */
+   ==== */
 .super-search-box {
     background: #fff;
     padding: 15px;
@@ -480,3 +491,24 @@ button:hover { filter: brightness(90%); }
     font-size: 0.75rem;
     margin-left: 5px;
 }
+
+/* ESTILOS PARA O SISTEMA DE CRÉDITOS NO SUPER ADMIN */
+.credit-management-box {
+    background: #f1f8e9;
+    border: 1px solid #c5e1a5;
+    padding: 15px;
+    border-radius: 6px;
+    margin-top: 15px;
+}
+
+.credit-status-tag {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    margin-left: 10px;
+}
+
+.tag-active { background: #c8e6c9; color: #2e7d32; }
+.tag-expired { background: #ffcdd2; color: #c62828; }
+.tag-lifetime { background: #e1f5fe; color: #0277bd; }
