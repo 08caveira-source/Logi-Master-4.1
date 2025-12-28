@@ -1271,18 +1271,19 @@ window.excluirDespesaGeral = function(id) {
 };
 // =============================================================================
 // ARQUIVO: script.js
-// PARTE 4: OPERAÇÕES (VIAGENS), MONITORAMENTO E RELATÓRIOS
+// =============================================================================
+// ARQUIVO: script.js
+// PARTE 4: OPERAÇÕES (VIAGENS), MONITORAMENTO E RELATÓRIOS (CORRIGIDO)
 // =============================================================================
 
 // -----------------------------------------------------------------------------
 // 14. GESTÃO DE OPERAÇÕES (CRUD COMPLETO COM AJUDANTES)
 // -----------------------------------------------------------------------------
 
-// Função Auxiliar: Adicionar/Remover Ajudante na Lista Temporária da Operação
+// Função Auxiliar: Adicionar/Remover Ajudante na Lista Temporária
 window.adicionarAjudanteNaLista = function(idAjudante) {
     if (!idAjudante) return;
     
-    // Verifica se já está na lista
     var jaExiste = window._operacaoAjudantesTempList.find(a => a.id === idAjudante);
     if (jaExiste) {
         alert("Ajudante já adicionado a esta viagem.");
@@ -1292,14 +1293,8 @@ window.adicionarAjudanteNaLista = function(idAjudante) {
     var func = buscarFuncionarioPorId(idAjudante);
     if (!func) return;
 
-    // Adiciona com valor padrão de diária (pode ser editado no futuro se necessário)
-    // Aqui assumimos um valor padrão de R$ 80,00 ou zero, editável no cadastro se houvesse campo
-    // Para simplificar, vamos usar um prompt ou valor fixo, ou buscar do cadastro se tivesse.
-    // Vamos usar R$ 0,00 e deixar o admin editar no "Recibo" ou assumir fixo.
-    // No sistema original, parecia ser um valor fixo ou calculado depois. 
-    // Vamos definir uma diária base de 80.00 para fins de cálculo.
-    
-    var valorDiaria = 80.00; // Valor base
+    // Valor base de diária (pode ser ajustado)
+    var valorDiaria = 80.00; 
 
     window._operacaoAjudantesTempList.push({
         id: idAjudante,
@@ -1315,7 +1310,7 @@ document.getElementById('btnManualAddAjudante').addEventListener('click', functi
     var id = select.value;
     if(id) {
         adicionarAjudanteNaLista(id);
-        select.value = ""; // Limpa seleção
+        select.value = ""; 
     }
 });
 
@@ -1360,14 +1355,11 @@ document.getElementById('formOperacao').addEventListener('submit', function(e) {
     var atividadeNome = document.getElementById('selectAtividadeOperacao').value;
     var faturamento = parseFloat(document.getElementById('operacaoFaturamento').value);
     
-    // Opcionais
     var adiantamento = parseFloat(document.getElementById('operacaoAdiantamento').value) || 0;
     var comissao = parseFloat(document.getElementById('operacaoComissao').value) || 0;
     
-    // Status
     var isAgendamento = document.getElementById('operacaoIsAgendamento').checked;
     
-    // Preserva dados ocultos se existirem (edição)
     var kmRodado = parseFloat(document.getElementById('operacaoKmRodado').value) || 0;
     var combustivel = parseFloat(document.getElementById('operacaoCombustivel').value) || 0;
     var precoLitro = parseFloat(document.getElementById('operacaoPrecoLitro').value) || 0;
@@ -1378,16 +1370,13 @@ document.getElementById('formOperacao').addEventListener('submit', function(e) {
         return;
     }
 
-    // Define Status Inicial
     var statusInicial = isAgendamento ? 'AGENDADA' : 'CONFIRMADA';
-    
-    // Se for edição, mantém o status atual a menos que seja explicitamente mudado
     var checkinsExistentes = null;
     
     if (id) {
-        var opAntiga = CACHE_OPERACOES.find(o => o.id == id); // Loose equality para string/number
+        var opAntiga = CACHE_OPERACOES.find(o => o.id == id);
         if (opAntiga) {
-            statusInicial = opAntiga.status; // Mantém status (ex: EM_ANDAMENTO)
+            statusInicial = opAntiga.status; 
             checkinsExistentes = opAntiga.checkins;
         }
     }
@@ -1402,16 +1391,12 @@ document.getElementById('formOperacao').addEventListener('submit', function(e) {
         faturamento: faturamento,
         adiantamento: adiantamento,
         comissao: comissao,
-        ajudantes: window._operacaoAjudantesTempList, // Salva a lista de ajudantes
+        ajudantes: window._operacaoAjudantesTempList,
         status: statusInicial,
-        
-        // Dados de Fechamento (iniciam zerados ou preservados)
         kmRodado: kmRodado,
         combustivel: combustivel,
         precoLitro: precoLitro,
         despesas: despesas,
-        
-        // Checkins (preserva se existir)
         checkins: checkinsExistentes || {} 
     };
 
@@ -1426,22 +1411,36 @@ document.getElementById('formOperacao').addEventListener('submit', function(e) {
         alert("Viagem salva com sucesso!");
         document.getElementById('formOperacao').reset();
         document.getElementById('operacaoId').value = '';
-        window._operacaoAjudantesTempList = []; // Limpa temp
+        window._operacaoAjudantesTempList = []; 
         renderizarListaAjudantesTemp();
         renderizarTabelaOperacoes();
-        renderizarCalendario(); // Atualiza calendário
-        atualizarDashboard(); // Atualiza financeiros
+        renderizarCalendario(); 
+        atualizarDashboard(); 
     });
 });
 
 window.renderizarTabelaOperacoes = function() {
+    console.log("Renderizando tabela de operações...");
     var tbody = document.querySelector('#tabelaOperacoes tbody');
-    if (!tbody) return;
+    if (!tbody) {
+        console.error("Erro: Tbody da tabelaOperacoes não encontrado no DOM.");
+        return;
+    }
     tbody.innerHTML = '';
     
-    // Ordena: Mais recentes primeiro
-    var lista = [].concat(CACHE_OPERACOES).sort((a,b) => new Date(b.data) - new Date(a.data));
-    // Limita a 50 itens para não pesar
+    if (!CACHE_OPERACOES || CACHE_OPERACOES.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#666;">Nenhuma operação registrada no sistema.</td></tr>';
+        return;
+    }
+    
+    // Ordena: Mais recentes primeiro (Proteção contra datas nulas)
+    var lista = [].concat(CACHE_OPERACOES).sort((a,b) => {
+        var dateA = new Date(a.data || 0);
+        var dateB = new Date(b.data || 0);
+        return dateB - dateA;
+    });
+
+    // Limita a 50 itens para performance
     lista = lista.slice(0, 50);
 
     lista.forEach(function(op) {
@@ -1482,6 +1481,7 @@ window.renderizarTabelaOperacoes = function() {
 };
 
 window.editarOperacao = function(id) {
+    // Conversão frouxa (==) para garantir que string '123' encontre number 123
     var op = CACHE_OPERACOES.find(o => o.id == id);
     if (!op) return;
 
@@ -1495,26 +1495,27 @@ window.editarOperacao = function(id) {
     document.getElementById('operacaoAdiantamento').value = op.adiantamento;
     document.getElementById('operacaoComissao').value = op.comissao;
     
-    // Checkbox Agendamento
     document.getElementById('operacaoIsAgendamento').checked = (op.status === 'AGENDADA');
 
-    // Campos ocultos
     document.getElementById('operacaoKmRodado').value = op.kmRodado || 0;
     document.getElementById('operacaoCombustivel').value = op.combustivel || 0;
     document.getElementById('operacaoPrecoLitro').value = op.precoLitro || 0;
     document.getElementById('operacaoDespesas').value = op.despesas || 0;
 
-    // Ajudantes
     window._operacaoAjudantesTempList = op.ajudantes ? JSON.parse(JSON.stringify(op.ajudantes)) : [];
     renderizarListaAjudantesTemp();
 
-    // Rola para o topo
     var section = document.getElementById('operacoes');
-    if(section) section.scrollIntoView({ behavior: 'smooth' });
+    if(section) {
+        // Remove active dos outros para focar neste se necessário
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        section.classList.add('active');
+        section.scrollIntoView({ behavior: 'smooth' });
+    }
 };
 
 window.cancelarOperacao = function(id) {
-    if (confirm("Deseja realmente CANCELAR esta viagem? Ela não aparecerá mais nos cálculos financeiros.")) {
+    if (confirm("Deseja realmente CANCELAR esta viagem?")) {
         var idx = CACHE_OPERACOES.findIndex(o => o.id == id);
         if (idx >= 0) {
             CACHE_OPERACOES[idx].status = 'CANCELADA';
@@ -1531,10 +1532,9 @@ window.duplicarOperacao = function(id) {
     if (!op) return;
     
     if(confirm("Duplicar esta viagem para uma nova data?")) {
-        // Preenche o form como se fosse editar, mas limpa o ID
         editarOperacao(id);
-        document.getElementById('operacaoId').value = ''; // Novo ID será gerado
-        document.getElementById('operacaoData').focus(); // Foco na data para alterar
+        document.getElementById('operacaoId').value = ''; 
+        document.getElementById('operacaoData').focus(); 
         alert("Dados carregados! Altere a DATA e clique em GRAVAR.");
     }
 };
@@ -1548,7 +1548,6 @@ window.renderizarTabelaCheckinsPendentes = function() {
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    // Filtra viagens de HOJE ou em andamento
     var hojeStr = new Date().toISOString().split('T')[0];
     
     var listaMonitoramento = CACHE_OPERACOES.filter(op => {
@@ -1563,7 +1562,6 @@ window.renderizarTabelaCheckinsPendentes = function() {
     listaMonitoramento.forEach(op => {
         var tr = document.createElement('tr');
         
-        // Status Motorista
         var mot = buscarFuncionarioPorId(op.motoristaId);
         var statusMot = '<span style="color:#999;"><i class="fas fa-clock"></i> Aguardando...</span>';
         
@@ -1575,7 +1573,6 @@ window.renderizarTabelaCheckinsPendentes = function() {
 
         var htmlEquipe = `<div><strong>Mot:</strong> ${mot ? mot.nome.split(' ')[0] : '---'} - ${statusMot}</div>`;
 
-        // Status Ajudantes
         if (op.ajudantes && op.ajudantes.length > 0) {
             htmlEquipe += `<div style="margin-top:5px; font-size:0.85rem; border-top:1px solid #eee; padding-top:2px;">`;
             op.ajudantes.forEach(aj => {
@@ -1590,7 +1587,6 @@ window.renderizarTabelaCheckinsPendentes = function() {
             htmlEquipe += `</div>`;
         }
 
-        // Botões de Ação Rápida (Admin)
         var btnIniciar = '';
         if (op.status !== 'EM_ANDAMENTO') {
              btnIniciar = `<button class="btn-mini btn-success" onclick="forcarInicioViagem('${op.id}')">INICIAR ROTA</button>`;
@@ -1599,7 +1595,6 @@ window.renderizarTabelaCheckinsPendentes = function() {
              btnIniciar += `<br><button class="btn-mini btn-secondary" onclick="finalizarViagemManual('${op.id}')" style="margin-top:5px;">FINALIZAR</button>`;
         }
 
-        // Registrar Faltas (Admin)
         var btnFalta = `<button class="btn-mini btn-danger" onclick="abrirModalFalta('${op.id}')" title="Registrar Falta"><i class="fas fa-user-slash"></i></button>`;
 
         tr.innerHTML = `
@@ -1617,7 +1612,6 @@ window.forcarInicioViagem = function(id) {
     var idx = CACHE_OPERACOES.findIndex(o => o.id == id);
     if (idx >= 0) {
         CACHE_OPERACOES[idx].status = 'EM_ANDAMENTO';
-        // Registra hora de inicio se não houver
         if(!CACHE_OPERACOES[idx].checkins) CACHE_OPERACOES[idx].checkins = {};
         if(!CACHE_OPERACOES[idx].checkins.inicioRota) CACHE_OPERACOES[idx].checkins.inicioRota = new Date().toISOString();
         
@@ -1632,7 +1626,6 @@ window.finalizarViagemManual = function(id) {
     var op = CACHE_OPERACOES.find(o => o.id == id);
     if(!op) return;
     
-    // Pergunta dados de fechamento
     var km = prompt("KM Final (Total Rodado):", op.kmRodado || 0);
     if(km === null) return;
     var comb = prompt("Valor Total Abastecido (R$):", op.combustivel || 0);
@@ -1654,7 +1647,6 @@ window.abrirModalFalta = function(opId) {
     var op = CACHE_OPERACOES.find(o => o.id == opId);
     if(!op) return;
 
-    // Constrói lista de quem pode faltar (Motorista + Ajudantes)
     var opcoes = [];
     var mot = buscarFuncionarioPorId(op.motoristaId);
     if(mot) opcoes.push({ id: op.motoristaId, nome: mot.nome, tipo: 'motorista' });
@@ -1671,7 +1663,6 @@ window.abrirModalFalta = function(opId) {
 
     var motivo = prompt("Motivo da falta:");
     
-    // Registra a falta
     if(!op.checkins) op.checkins = {};
     
     if (idEscolhido == op.motoristaId) {
@@ -1685,7 +1676,6 @@ window.abrirModalFalta = function(opId) {
     salvarListaOperacoes(CACHE_OPERACOES).then(() => {
         alert("Falta registrada.");
         renderizarTabelaCheckinsPendentes();
-        // Renderizar tabela de faltas acumuladas (Historico) seria ideal aqui também
     });
 };
 
@@ -1694,17 +1684,18 @@ window.sincronizarDadosDaNuvem = function(force) {
         var btn = document.querySelector('button[onclick="sincronizarDadosDaNuvem(true)"]');
         if(btn) btn.innerHTML = '<i class="fas fa-spin fa-spinner"></i> SINCRONIZANDO...';
         
-        // Simula delay de rede ou força reload real
         setTimeout(() => {
-            if(window.carregarDadosIniciaisDoFirebase) {
-                window.carregarDadosIniciaisDoFirebase().then(() => {
-                   alert("Dados sincronizados com a nuvem!");
-                   if(btn) btn.innerHTML = '<i class="fas fa-sync"></i> ATUALIZAR AGORA';
-                   window.location.reload();
+            // Recarrega se houver empresa
+            if(window.USUARIO_ATUAL && window.USUARIO_ATUAL.company) {
+                carregarDadosDoFirebase(window.USUARIO_ATUAL.company).then(() => {
+                    alert("Dados sincronizados com a nuvem!");
+                    if(btn) btn.innerHTML = '<i class="fas fa-sync"></i> ATUALIZAR AGORA';
+                    // Renderiza tabela novamente
+                    renderizarTabelaOperacoes(); 
+                    renderizarTabelaCheckinsPendentes();
                 });
             } else {
-                // Fallback se estiver apenas local
-                window.location.reload();
+                 window.location.reload();
             }
         }, 1500);
     }
@@ -1750,7 +1741,6 @@ window.gerarRelatorioGeral = function() {
     CACHE_OPERACOES.forEach(op => {
         if (op.status === 'CANCELADA') return;
         
-        // Filtros
         if (inicio && op.data < inicio) return;
         if (fim && op.data > fim) return;
         if (motId && op.motoristaId != motId) return;
@@ -1758,11 +1748,9 @@ window.gerarRelatorioGeral = function() {
         if (cliCnpj && op.contratanteCNPJ != cliCnpj) return;
         if (atvNome && op.atividade != atvNome) return;
 
-        // Cálculos
         var receita = Number(op.faturamento)||0;
         var custos = (Number(op.combustivel)||0) + (Number(op.despesas)||0);
         
-        // Custo Pessoal
         if (!op.checkins || !op.checkins.faltaMotorista) custos += (Number(op.comissao)||0);
         if (op.ajudantes) {
              op.ajudantes.forEach(aj => {
@@ -1888,7 +1876,7 @@ window.exportarRelatorioPDF = function() {
 };
 // =============================================================================
 // ARQUIVO: script.js
-// PARTE 5: INICIALIZAÇÃO, PAINEL SUPER ADMIN (CORRIGIDO) E GESTÃO DE CRÉDITOS
+// PARTE 5: INICIALIZAÇÃO, PAINEL SUPER ADMIN E GESTÃO DE CRÉDITOS (SAAS)
 // =============================================================================
 
 // -----------------------------------------------------------------------------
@@ -1899,7 +1887,7 @@ window.initSystemByRole = async function(user) {
     window.USUARIO_ATUAL = user;
     console.log("Inicializando sistema para: " + user.role);
 
-    // Garante que todas as sections e menus comecem ocultos
+    // Oculta tudo primeiro
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById('menu-admin').style.display = 'none';
     document.getElementById('menu-employee').style.display = 'none';
@@ -1908,9 +1896,15 @@ window.initSystemByRole = async function(user) {
     // 1. SUPER ADMIN (Global)
     if (user.email === 'admin@logimaster.com') {
         document.getElementById('menu-super-admin').style.display = 'block';
-        // Força renderização imediata do painel
-        document.getElementById('super-admin').classList.add('active');
-        carregarPainelSuperAdmin(true); 
+        
+        // Ativa visualmente
+        const saPage = document.getElementById('super-admin');
+        if(saPage) saPage.classList.add('active');
+        const saMenu = document.querySelector('.nav-item[data-page="super-admin"]');
+        if(saMenu) saMenu.classList.add('active');
+        
+        // Carrega painel imediatamente
+        carregarPainelSuperAdmin(true);
         return;
     }
 
@@ -1938,7 +1932,6 @@ window.initSystemByRole = async function(user) {
         const homeSection = document.getElementById('home');
         if(homeSection) homeSection.classList.add('active');
         
-        // Ativa visualmente o menu
         const menuHome = document.querySelector('.nav-item[data-page="home"]');
         if(menuHome) menuHome.classList.add('active');
         
@@ -1948,12 +1941,11 @@ window.initSystemByRole = async function(user) {
     // 5. PERFIL MOTORISTA / AJUDANTE
     else {
         document.getElementById('menu-employee').style.display = 'block';
-        window.MODO_APENAS_LEITURA = true;
+        window.MODO_APENAS_LEITURA = true; 
         
-        // Abre Home do Motorista
         const empHome = document.getElementById('employee-home');
         if(empHome) empHome.classList.add('active');
-
+        
         const menuEmp = document.querySelector('.nav-item[data-page="employee-home"]');
         if(menuEmp) menuEmp.classList.add('active');
 
@@ -1986,35 +1978,42 @@ async function carregarDadosDoFirebase(companyId) {
             const snap = await getDoc(doc(db, 'companies', companyId, 'data', item.k));
             if (snap.exists()) {
                 const data = snap.data();
-                // Atualiza Cache Global
-                if (item.v === 'CACHE_MINHA_EMPRESA') window.CACHE_MINHA_EMPRESA = data.items || item.def;
-                else if (item.v === 'CACHE_FUNCIONARIOS') window.CACHE_FUNCIONARIOS = data.items || item.def;
-                else if (item.v === 'CACHE_VEICULOS') window.CACHE_VEICULOS = data.items || item.def;
-                else if (item.v === 'CACHE_CONTRATANTES') window.CACHE_CONTRATANTES = data.items || item.def;
-                else if (item.v === 'CACHE_OPERACOES') window.CACHE_OPERACOES = data.items || item.def;
-                else if (item.v === 'CACHE_DESPESAS') window.CACHE_DESPESAS = data.items || item.def;
-                else if (item.v === 'CACHE_ATIVIDADES') window.CACHE_ATIVIDADES = data.items || item.def;
-                else if (item.v === 'CACHE_PROFILE_REQUESTS') window.CACHE_PROFILE_REQUESTS = data.items || item.def;
-                else if (item.v === 'CACHE_RECIBOS') window.CACHE_RECIBOS = data.items || item.def;
                 
-                // Atualiza LocalStorage para redundância
-                localStorage.setItem(item.k, JSON.stringify(data.items));
+                // Suporte para estrutura antiga (array direto) e nova (objeto {items:[]})
+                let valorFinal = item.def;
+                if (data.items !== undefined) {
+                    valorFinal = data.items;
+                } else if (Array.isArray(data)) {
+                    valorFinal = data; // Legado
+                }
+
+                // Atualiza Variável Global e LocalStorage
+                window[item.v] = valorFinal;
+                localStorage.setItem(item.k, JSON.stringify(valorFinal));
             }
         } catch(err) {
-            console.warn(`Erro ao baixar ${item.k} (pode estar vazio):`, err);
+            console.warn(`Erro ao baixar ${item.k}:`, err);
         }
     }
     
-    console.log("Dados sincronizados.");
-    // Re-renderiza tabelas
+    console.log("Dados sincronizados. Renderizando...");
+    
+    // RENDERIZAÇÃO FORÇADA APÓS CARREGAMENTO (Corrige o sumiço dos dados)
     if(window.renderizarTabelaFuncionarios) window.renderizarTabelaFuncionarios();
     if(window.renderizarTabelaVeiculos) window.renderizarTabelaVeiculos();
+    if(window.renderizarTabelaContratantes) window.renderizarTabelaContratantes();
+    if(window.renderizarTabelaAtividades) window.renderizarTabelaAtividades();
+    if(window.renderizarTabelaDespesasGerais) window.renderizarTabelaDespesasGerais();
+    
+    // Crucial para o Admin Painel
+    if(window.renderizarTabelaOperacoes) window.renderizarTabelaOperacoes();
     if(window.renderizarTabelaCheckinsPendentes) window.renderizarTabelaCheckinsPendentes();
+    if(window.renderizarCalendario) window.renderizarCalendario();
     if(window.atualizarDashboard) window.atualizarDashboard();
 }
 
 // -----------------------------------------------------------------------------
-// 18. PAINEL DO SUPER ADMIN (GESTÃO DE CRÉDITOS E EMPRESAS)
+// 18. PAINEL DO SUPER ADMIN (CORRIGIDO E BLINDADO)
 // -----------------------------------------------------------------------------
 
 window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
@@ -2026,7 +2025,7 @@ window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
     const { db, collection, getDocs } = window.dbRef;
 
     try {
-        // Busca coleções completas (método mais robusto que queries complexas)
+        // Busca coleções
         const companiesSnap = await getDocs(collection(db, "companies"));
         const usersSnap = await getDocs(collection(db, "users"));
         
@@ -2040,100 +2039,109 @@ window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
             return;
         }
 
+        let empresasRenderizadas = 0;
+
         companiesSnap.forEach(docComp => {
-            const compData = docComp.data();
-            const compId = docComp.id;
-            
-            // Filtro de pesquisa visual (Frontend)
-            const termo = document.getElementById('superAdminSearch').value.toLowerCase();
-            const emailOwner = compData.ownerEmail ? compData.ownerEmail.toLowerCase() : '';
-            
-            // Se houver termo e não der match no ID nem no Email, pula
-            if (termo && !compId.toLowerCase().includes(termo) && !emailOwner.includes(termo)) {
-                return;
-            }
+            try {
+                const compData = docComp.data();
+                const compId = docComp.id;
+                
+                // Filtro (Search)
+                const termo = document.getElementById('superAdminSearch').value.toLowerCase();
+                const emailOwner = compData.ownerEmail ? compData.ownerEmail.toLowerCase() : 'sem-email';
+                
+                if (termo && !compId.toLowerCase().includes(termo) && !emailOwner.includes(termo)) {
+                    return; // Pula este item se não der match
+                }
 
-            // Análise da Licença
-            const isVitalicio = compData.vitalicio === true;
-            const validade = compData.validade ? new Date(compData.validade) : new Date(0);
-            const agora = new Date();
-            // Diferença em dias
-            const diasRestantes = Math.ceil((validade - agora) / (1000 * 60 * 60 * 24));
-            
-            let statusBadge = '';
-            let statusClass = '';
-            
-            if (isVitalicio) {
-                statusBadge = 'VITALÍCIO';
-                statusClass = 'credit-lifetime';
-            } else if (agora > validade) {
-                statusBadge = 'EXPIRADO / BLOQUEADO';
-                statusClass = 'credit-expired';
-            } else {
-                statusBadge = `ATIVO (${diasRestantes} DIAS)`;
-                statusClass = 'credit-active';
-            }
+                // Status Licença
+                const isVitalicio = compData.vitalicio === true;
+                const validade = compData.validade ? new Date(compData.validade) : new Date(0);
+                const agora = new Date();
+                const diasRestantes = Math.ceil((validade - agora) / (1000 * 60 * 60 * 24));
+                
+                let statusBadge = '';
+                let statusClass = '';
+                
+                if (isVitalicio) {
+                    statusBadge = 'VITALÍCIO';
+                    statusClass = 'credit-lifetime';
+                } else if (agora > validade) {
+                    statusBadge = 'EXPIRADO';
+                    statusClass = 'credit-expired';
+                } else {
+                    statusBadge = `ATIVO (${diasRestantes} DIAS)`;
+                    statusClass = 'credit-active';
+                }
 
-            // Encontra usuários desta empresa
-            const usersDaEmpresa = allUsers.filter(u => u.company === compId);
-            const admins = usersDaEmpresa.filter(u => u.role === 'admin');
-            const totalUsers = usersDaEmpresa.length;
+                // Usuários da empresa
+                const usersDaEmpresa = allUsers.filter(u => u.company === compId);
+                const admins = usersDaEmpresa.filter(u => u.role === 'admin');
+                const totalUsers = usersDaEmpresa.length;
 
-            const div = document.createElement('div');
-            div.className = 'company-block';
-            div.innerHTML = `
-                <div class="company-header" onclick="this.nextElementSibling.classList.toggle('expanded')">
-                    <div style="display:flex; align-items:center;">
-                        <i class="fas fa-building" style="margin-right:10px; color:var(--secondary-color);"></i>
+                const div = document.createElement('div');
+                div.className = 'company-block';
+                div.innerHTML = `
+                    <div class="company-header" onclick="this.nextElementSibling.classList.toggle('expanded')">
+                        <div style="display:flex; align-items:center;">
+                            <i class="fas fa-building" style="margin-right:10px; color:var(--secondary-color);"></i>
+                            <div>
+                                <div style="font-weight:bold; font-size:1rem;">${compId} <span class="credit-badge ${statusClass}">${statusBadge}</span></div>
+                                <small style="font-weight:normal; color:#666;">Resp: ${compData.ownerEmail || 'N/A'}</small>
+                            </div>
+                        </div>
                         <div>
-                            <div style="font-weight:bold; font-size:1rem;">${compId} <span class="credit-badge ${statusClass}">${statusBadge}</span></div>
-                            <small style="font-weight:normal; color:#666;">Responsável: ${compData.ownerEmail || '---'}</small>
+                            <span style="font-size:0.8rem; margin-right:10px;">${totalUsers} Users</span>
+                            <i class="fas fa-chevron-down"></i>
                         </div>
                     </div>
-                    <div>
-                        <span style="font-size:0.8rem; margin-right:10px;">${totalUsers} Usuários</span>
-                        <i class="fas fa-chevron-down"></i>
-                    </div>
-                </div>
-                <div class="company-content">
-                    <div style="display:flex; gap:20px; font-size:0.9rem; color:#555; margin-bottom:10px; flex-wrap:wrap;">
-                        <div><strong>Criado em:</strong> ${formatarDataParaBrasileiro(compData.createdAt)}</div>
-                        <div><strong>Admins:</strong> ${admins.map(a => a.name).join(', ') || 'Nenhum'}</div>
-                    </div>
-                    
-                    <div class="company-actions-bar">
-                        <div class="validade-info">
-                            Validade: ${isVitalicio ? 'ETERNA' : formatarDataParaBrasileiro(compData.validade ? compData.validade.split('T')[0] : '')}
+                    <div class="company-content">
+                        <div style="display:flex; gap:20px; font-size:0.9rem; color:#555; margin-bottom:10px; flex-wrap:wrap;">
+                            <div><strong>Criado:</strong> ${compData.createdAt ? formatarDataParaBrasileiro(compData.createdAt) : '-'}</div>
+                            <div><strong>Admins:</strong> ${admins.map(a => a.name).join(', ') || 'Nenhum'}</div>
                         </div>
                         
-                        <button class="btn-mini btn-success" onclick="abrirModalCreditos('${compId}', '${compData.ownerEmail}')">
-                            <i class="fas fa-calendar-plus"></i> GERENCIAR ACESSO
-                        </button>
-                        
-                        <button class="btn-mini btn-danger" onclick="excluirEmpresaGlobal('${compId}')">
-                            <i class="fas fa-trash"></i> EXCLUIR EMPRESA
-                        </button>
-                    </div>
+                        <div class="company-actions-bar">
+                            <div class="validade-info">
+                                Validade: ${isVitalicio ? 'ETERNA' : (compData.validade ? formatarDataParaBrasileiro(compData.validade.split('T')[0]) : '-')}
+                            </div>
+                            
+                            <button class="btn-mini btn-success" onclick="abrirModalCreditos('${compId}', '${compData.ownerEmail || ''}')">
+                                <i class="fas fa-calendar-plus"></i> GERENCIAR
+                            </button>
+                            
+                            <button class="btn-mini btn-danger" onclick="excluirEmpresaGlobal('${compId}')">
+                                <i class="fas fa-trash"></i> EXCLUIR
+                            </button>
+                        </div>
 
-                    <div style="margin-top:10px; background:#f5f5f5; padding:10px; border-radius:4px;">
-                        <strong style="font-size:0.85rem;">Lista de Usuários:</strong>
-                        <ul style="margin:5px 0 0 20px; font-size:0.8rem; color:#444;">
-                            ${usersDaEmpresa.length > 0 ? usersDaEmpresa.map(u => `<li>${u.name} <span style="color:#888;">(${u.email})</span> - <strong>${u.role}</strong></li>`).join('') : '<li>Sem usuários cadastrados</li>'}
-                        </ul>
+                        <div style="margin-top:10px; background:#f5f5f5; padding:10px; border-radius:4px;">
+                            <strong style="font-size:0.85rem;">Lista de Usuários:</strong>
+                            <ul style="margin:5px 0 0 20px; font-size:0.8rem; color:#444;">
+                                ${usersDaEmpresa.length > 0 ? usersDaEmpresa.map(u => `<li>${u.name} - ${u.role}</li>`).join('') : '<li>Sem usuários</li>'}
+                            </ul>
+                        </div>
                     </div>
-                </div>
-            `;
-            container.appendChild(div);
+                `;
+                container.appendChild(div);
+                empresasRenderizadas++;
+            } catch (errInner) {
+                console.error("Erro ao renderizar empresa específica:", docComp.id, errInner);
+                // Continua o loop para mostrar as outras
+            }
         });
 
+        if (empresasRenderizadas === 0 && !companiesSnap.empty) {
+             container.innerHTML = '<p style="text-align:center; color:orange;">Empresas encontradas, mas houve erro na exibição ou filtro aplicado ocultou todas.</p>';
+        }
+
     } catch (e) {
-        console.error("Erro Super Admin:", e);
-        container.innerHTML = '<p style="color:red; text-align:center;">Erro ao carregar dados. Verifique a conexão com o banco de dados.</p>';
+        console.error("Erro Crítico Super Admin:", e);
+        container.innerHTML = '<p style="color:red; text-align:center;">Erro ao carregar dados: ' + e.message + '</p>';
     }
 };
 
 window.filterGlobalUsers = function() {
-    // Apenas recarrega a visualização com o filtro aplicado na memória
     carregarPainelSuperAdmin(false);
 }
 
@@ -2146,7 +2154,6 @@ window.abrirModalCriarEmpresa = function() {
     document.getElementById('modalCreateCompany').style.display = 'flex';
 };
 
-// Listener para criação de nova empresa (Super Admin)
 document.getElementById('formCreateCompany').addEventListener('submit', async function(e) {
     e.preventDefault();
     
@@ -2161,18 +2168,18 @@ document.getElementById('formCreateCompany').addEventListener('submit', async fu
     btn.disabled = true;
 
     try {
-        // 1. Cria usuário no Auth (usando app secundário para não deslogar o admin)
+        // 1. Cria usuário no Auth
         const uid = await window.dbRef.criarAuthUsuario(email, senha);
         
-        // 2. Define ID da Empresa (Ex: emp_TIMESTAMP)
+        // 2. ID Empresa
         const companyId = 'emp_' + Date.now();
-        
         const { db, setDoc, doc } = window.dbRef;
 
-        // 3. Cria documento da Empresa
+        // 3. Validade Inicial (30 dias)
         const validadeInicial = new Date();
-        validadeInicial.setDate(validadeInicial.getDate() + 30); // 30 dias grátis inicial
+        validadeInicial.setDate(validadeInicial.getDate() + 30); 
 
+        // 4. Salva Docs
         await setDoc(doc(db, "companies", companyId), {
             createdAt: new Date().toISOString(),
             ownerEmail: email,
@@ -2180,7 +2187,6 @@ document.getElementById('formCreateCompany').addEventListener('submit', async fu
             validade: validadeInicial.toISOString()
         });
 
-        // 4. Cria documento do Usuário Admin
         await setDoc(doc(db, "users", uid), {
             uid: uid,
             name: nome,
@@ -2189,17 +2195,15 @@ document.getElementById('formCreateCompany').addEventListener('submit', async fu
             company: companyId,
             approved: true,
             createdAt: new Date().toISOString(),
-            senhaVisual: senha // Opcional, para facilitar suporte
+            senhaVisual: senha 
         });
 
-        alert(`EMPRESA CRIADA COM SUCESSO!\n\nID: ${companyId}\nAdmin: ${email}\nSenha: ${senha}`);
-        
+        alert(`SUCESSO!\nEmpresa: ${companyId}\nLogin: ${email}`);
         document.getElementById('modalCreateCompany').style.display = 'none';
         carregarPainelSuperAdmin(true);
 
     } catch (erro) {
-        console.error(erro);
-        alert("Erro ao criar empresa: " + erro.message);
+        alert("Erro: " + erro.message);
     } finally {
         btn.innerHTML = originalText;
         btn.disabled = false;
@@ -2211,16 +2215,15 @@ window.abrirModalCreditos = async function(companyId, ownerEmail) {
     const body = document.getElementById('manageCreditBody');
     if(!modal || !body) return;
 
-    body.innerHTML = 'Carregando status atual...';
+    body.innerHTML = 'Carregando...';
     modal.style.display = 'flex';
 
     try {
         const { db, doc, getDoc } = window.dbRef;
-        const ref = doc(db, "companies", companyId);
-        const snap = await getDoc(ref);
+        const snap = await getDoc(doc(db, "companies", companyId));
         
         if (!snap.exists()) {
-            body.innerHTML = 'Erro: Documento da empresa não encontrado.';
+            body.innerHTML = 'Empresa não encontrada.';
             return;
         }
 
@@ -2232,37 +2235,34 @@ window.abrirModalCreditos = async function(companyId, ownerEmail) {
             <div style="background:#f5f5f5; padding:15px; border-radius:4px; margin-bottom:15px;">
                 <p><strong>Empresa:</strong> ${companyId}</p>
                 <p><strong>Admin:</strong> ${ownerEmail}</p>
-                <p><strong>Status:</strong> ${isVitalicio ? '<span style="color:purple; font-weight:bold;">VITALÍCIO</span>' : 'Validade até ' + formatarDataParaBrasileiro(validade)}</p>
+                <p><strong>Status:</strong> ${isVitalicio ? 'VITALÍCIO' : 'Validade até ' + formatarDataParaBrasileiro(validade)}</p>
             </div>
 
             <h4 style="border-bottom:1px solid #ddd; padding-bottom:5px;">Adicionar Tempo</h4>
             <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
-                <button class="btn-primary" onclick="adicionarCreditos('${companyId}', 1)">+ 1 Mês</button>
-                <button class="btn-primary" onclick="adicionarCreditos('${companyId}', 3)">+ 3 Meses</button>
-                <button class="btn-primary" onclick="adicionarCreditos('${companyId}', 6)">+ 6 Meses</button>
-                <button class="btn-primary" onclick="adicionarCreditos('${companyId}', 12)">+ 1 Ano</button>
+                <button class="btn-primary" onclick="adicionarCreditos('${companyId}', 1)">+1 Mês</button>
+                <button class="btn-primary" onclick="adicionarCreditos('${companyId}', 3)">+3 Meses</button>
+                <button class="btn-primary" onclick="adicionarCreditos('${companyId}', 12)">+1 Ano</button>
             </div>
 
             <h4 style="border-bottom:1px solid #ddd; padding-bottom:5px;">Controle</h4>
             <div style="display:flex; flex-direction:column; gap:10px;">
                 <label style="display:flex; align-items:center; gap:10px; cursor:pointer; background:#fff3e0; padding:10px; border:1px solid #ffe0b2;">
                     <input type="checkbox" id="chkVitalicio" ${isVitalicio ? 'checked' : ''} onchange="toggleVitalicio('${companyId}', this.checked)">
-                    <strong>ACESSO VITALÍCIO (Nunca expira)</strong>
+                    <strong>VITALÍCIO</strong>
                 </label>
-
                 <button class="btn-danger" onclick="bloquearEmpresa('${companyId}')">
-                    <i class="fas fa-ban"></i> BLOQUEAR (Expirar agora)
+                    <i class="fas fa-ban"></i> BLOQUEAR
                 </button>
             </div>
         `;
-
     } catch (e) {
         body.innerHTML = 'Erro: ' + e.message;
     }
 };
 
 window.adicionarCreditos = async function(companyId, meses) {
-    if(!confirm(`Adicionar ${meses} mês(es) de acesso?`)) return;
+    if(!confirm(`Adicionar ${meses} mês(es)?`)) return;
 
     try {
         const { db, doc, getDoc, updateDoc } = window.dbRef;
@@ -2273,7 +2273,6 @@ window.adicionarCreditos = async function(companyId, meses) {
         let novaValidade = new Date();
         const validadeAtual = data.validade ? new Date(data.validade) : new Date(0);
         
-        // Se ainda for válida, soma a partir da data atual de validade. Se já venceu, soma a partir de hoje.
         if (validadeAtual > novaValidade) {
             novaValidade = validadeAtual;
         }
@@ -2282,30 +2281,22 @@ window.adicionarCreditos = async function(companyId, meses) {
 
         await updateDoc(ref, {
             validade: novaValidade.toISOString(),
-            vitalicio: false // Remove vitalício se adicionar manual
+            vitalicio: false
         });
 
-        alert("Créditos adicionados.");
+        alert("Atualizado!");
         abrirModalCreditos(companyId, data.ownerEmail);
         carregarPainelSuperAdmin(false);
-
     } catch (e) {
         alert("Erro: " + e.message);
     }
 };
 
 window.toggleVitalicio = async function(companyId, checked) {
-    if(!confirm(checked ? "Tornar VITALÍCIO?" : "Remover VITALÍCIO?")) {
-        document.getElementById('chkVitalicio').checked = !checked;
-        return;
-    }
-
     try {
         const { db, doc, updateDoc } = window.dbRef;
-        await updateDoc(doc(db, "companies", companyId), {
-            vitalicio: checked
-        });
-        alert("Alterado com sucesso.");
+        await updateDoc(doc(db, "companies", companyId), { vitalicio: checked });
+        alert("Status atualizado.");
         carregarPainelSuperAdmin(false);
     } catch (e) {
         alert("Erro: " + e.message);
@@ -2313,20 +2304,16 @@ window.toggleVitalicio = async function(companyId, checked) {
 };
 
 window.bloquearEmpresa = async function(companyId) {
-    if(!confirm("Bloquear empresa? A validade será definida para ontem.")) return;
-
+    if(!confirm("Bloquear acesso?")) return;
     try {
         const { db, doc, updateDoc } = window.dbRef;
         const ontem = new Date();
         ontem.setDate(ontem.getDate() - 1);
-
         await updateDoc(doc(db, "companies", companyId), {
             validade: ontem.toISOString(),
             vitalicio: false
         });
-
         alert("Empresa bloqueada.");
-        document.getElementById('modalManageCredits').style.display = 'none';
         carregarPainelSuperAdmin(false);
     } catch (e) {
         alert("Erro: " + e.message);
@@ -2334,27 +2321,24 @@ window.bloquearEmpresa = async function(companyId) {
 };
 
 window.excluirEmpresaGlobal = async function(companyId) {
-    const confirmacao = prompt(`DIGITE "DELETAR" PARA EXCLUIR A EMPRESA ${companyId} E TODOS OS DADOS.`);
-    if (confirmacao !== "DELETAR") return;
+    const c = prompt(`DIGITE "DELETAR" PARA EXCLUIR ${companyId}`);
+    if (c !== "DELETAR") return;
 
     try {
         const { db, doc, deleteDoc, collection, getDocs, query, where } = window.dbRef;
-
-        // 1. Deleta doc da empresa
+        
         await deleteDoc(doc(db, "companies", companyId));
 
-        // 2. Deleta usuários da empresa
         const q = query(collection(db, "users"), where("company", "==", companyId));
         const qs = await getDocs(q);
         const promises = [];
         qs.forEach((d) => promises.push(deleteDoc(doc(db, "users", d.id))));
         await Promise.all(promises);
 
-        alert("Empresa excluída.");
+        alert("Excluído.");
         carregarPainelSuperAdmin(true);
-
     } catch (e) {
-        alert("Erro ao excluir: " + e.message);
+        alert("Erro: " + e.message);
     }
 };
 
@@ -2362,26 +2346,21 @@ window.excluirEmpresaGlobal = async function(companyId) {
 // 20. CONTROLADORES DE NAVEGAÇÃO E EVENTOS FINAIS
 // -----------------------------------------------------------------------------
 
-// Navegação Sidebar
 document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', function() {
         const pageId = this.getAttribute('data-page');
         
-        // Remove active de todos
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
 
-        // Ativa atual
         this.classList.add('active');
         const target = document.getElementById(pageId);
         if (target) target.classList.add('active');
 
-        // Callbacks de carregamento
         if (pageId === 'home') atualizarDashboard();
         if (pageId === 'checkins-pendentes') renderizarTabelaCheckinsPendentes();
         if (pageId === 'super-admin') carregarPainelSuperAdmin();
 
-        // Mobile
         if (window.innerWidth <= 768) {
             document.getElementById('sidebar').classList.remove('active');
             document.getElementById('sidebarOverlay').classList.remove('active');
@@ -2389,7 +2368,6 @@ document.querySelectorAll('.nav-item').forEach(item => {
     });
 });
 
-// Mobile Toggle
 document.getElementById('mobileMenuBtn').addEventListener('click', () => {
     document.getElementById('sidebar').classList.add('active');
     document.getElementById('sidebarOverlay').classList.add('active');
@@ -2399,7 +2377,6 @@ document.getElementById('sidebarOverlay').addEventListener('click', () => {
     document.getElementById('sidebarOverlay').classList.remove('active');
 });
 
-// Tabs Internas
 document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
     btn.addEventListener('click', function() {
         document.querySelectorAll('.cadastro-tab-btn').forEach(b => b.classList.remove('active'));
@@ -2411,4 +2388,4 @@ document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
     });
 });
 
-console.log("Sistema LogiMaster v7.1 (Super Admin Fixed) carregado.");
+console.log("Sistema LogiMaster v7.1 (Final) carregado.");
