@@ -36,6 +36,10 @@
                 <span id="userEmailDisplay">CARREGANDO...</span>
             </p>
             <p id="userRoleDisplay">CARREGANDO FUNÇÃO...</p>
+            
+            <div id="systemValidityDisplay" style="display:none; margin-top:10px; font-size:0.75rem; background:rgba(255,255,255,0.1); padding:5px; border-radius:4px; border-left:3px solid var(--success-color);">
+                <i class="fas fa-calendar-check"></i> VENCE EM: <span id="valDataVencimento">...</span>
+            </div>
         </div>
 
         <nav>
@@ -884,7 +888,7 @@
         <section id="super-admin" class="page">
             <div style="background: linear-gradient(135deg, #1a237e 0%, #283593 100%); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h2 style="color:white; border:none; margin:0;"><i class="fas fa-globe"></i> PAINEL MASTER (GLOBAL)</h2>
-                <p style="font-size: 0.9rem; opacity: 0.8;">Gestão total de domínios e usuários do sistema.</p>
+                <p style="font-size: 0.9rem; opacity: 0.8;">Gestão total de domínios, créditos e usuários do sistema.</p>
             </div>
 
             <div class="card" style="border-left: 5px solid var(--success-color);">
@@ -1075,6 +1079,35 @@
             
             <div id="modalReciboActions" class="form-actions" style="padding:15px; border-top:1px solid #eee; background:#f9f9f9; display:flex; justify-content:flex-end; gap:10px;">
                 </div>
+        </div>
+    </div>
+
+    <div id="modalCreditos" class="modal">
+        <div class="modal-content" style="max-width:400px;">
+            <span class="close-btn" onclick="document.getElementById('modalCreditos').style.display='none'">&times;</span>
+            <h3 id="tituloModalCreditos">GERENCIAR CRÉDITOS</h3>
+            <input type="hidden" id="empresaIdCredito">
+            
+            <div style="background:#e3f2fd; padding:15px; border-radius:6px; margin-bottom:15px;">
+                <p><strong>EMPRESA:</strong> <span id="nomeEmpresaCredito"></span></p>
+                <p><strong>ATUAL:</strong> <span id="validadeAtualCredito"></span></p>
+            </div>
+
+            <div class="form-group" style="display:flex; gap:10px; align-items:center; margin-bottom:15px;">
+                <input type="checkbox" id="checkVitalicio" style="width:20px; height:20px;">
+                <label for="checkVitalicio" style="margin:0;">ACESSO VITALÍCIO (SEM VENCIMENTO)</label>
+            </div>
+
+            <div id="divAddCreditos" class="form-group">
+                <label>ADICIONAR CRÉDITOS (1 = 30 DIAS):</label>
+                <input type="number" id="qtdCreditosAdd" min="1" value="1" placeholder="Qtd. Meses">
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn-success" onclick="salvarCreditosEmpresa()">
+                    <i class="fas fa-save"></i> SALVAR ALTERAÇÕES
+                </button>
+            </div>
         </div>
     </div>
 

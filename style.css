@@ -1,5 +1,5 @@
 /* =============================================================================
-   LOGIMASTER - ESTILOS VISUAIS (VERSÃO COMPLETA)
+   LOGIMASTER - ESTILOS VISUAIS (VERSÃO 22.0 - COM SISTEMA DE CRÉDITOS)
    ============================================================================= */
 
 @import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@300;400;600;700;800&display=swap');
@@ -91,6 +91,16 @@ body {
 .user-profile-section p { font-size: 0.85rem; margin-bottom: 5px; }
 #userEmailDisplay { font-weight: bold; color: var(--primary-light); text-transform: lowercase; }
 #userRoleDisplay { font-size: 0.75rem; background: var(--primary-color); padding: 3px 8px; border-radius: 4px; display: inline-block; }
+
+/* Display de Validade */
+#systemValidityDisplay {
+    transition: all 0.3s;
+}
+#systemValidityDisplay.expired {
+    border-left-color: var(--danger-color) !important;
+    background: rgba(198, 40, 40, 0.2) !important;
+    color: #ffcdd2;
+}
 
 .sidebar nav { flex: 1; overflow-y: auto; padding-top: 20px; }
 
@@ -214,6 +224,11 @@ input, select, textarea {
 }
 
 input:focus, select:focus { border-color: var(--primary-color); outline: none; }
+
+/* Checkbox Personalizado para Vitalício */
+input[type="checkbox"] {
+    accent-color: var(--primary-color);
+}
 
 .form-actions { margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; }
 
@@ -410,6 +425,7 @@ button:hover { filter: brightness(90%); }
     
     .form-col { flex: 100%; }
 }
+
 /* =============================================================================
    ESTILOS DO SUPER ADMIN (HIERARQUIA GLOBAL)
    ============================================================================= */
@@ -462,6 +478,9 @@ button:hover { filter: brightness(90%); }
     color: #666;
     margin-right: auto;
     margin-left: 15px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
 }
 
 .company-content {
