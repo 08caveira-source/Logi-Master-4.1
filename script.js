@@ -1139,7 +1139,7 @@ window.closeAdicionarAjudanteModal = function() { document.getElementById('modal
 function renderizarInformacoesEmpresa() { var div = document.getElementById('viewMinhaEmpresaContent'); if (CACHE_MINHA_EMPRESA.razaoSocial) { div.innerHTML = `<strong>${CACHE_MINHA_EMPRESA.razaoSocial}</strong><br>CNPJ: ${CACHE_MINHA_EMPRESA.cnpj}<br>Tel: ${formatarTelefoneBrasil(CACHE_MINHA_EMPRESA.telefone)}`; } else { div.innerHTML = "Nenhum dado cadastrado."; } }
 // =============================================================================
 // ARQUIVO: script.js
-// PARTE 4: MONITORAMENTO, RELATÓRIOS INTELIGENTES E MÓDULO DE RECIBOS
+// PARTE 4: MONITORAMENTO, RELATÓRIOS INTELIGENTES, RECIBOS E GESTÃO DE EQUIPE
 // =============================================================================
 
 // -----------------------------------------------------------------------------
@@ -1151,7 +1151,7 @@ window.renderizarTabelaMonitoramento = function() {
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    // Filtra: Ativas e SEM Falta do MOTORISTA (Falta mot cancela a visualização aqui)
+    // Filtra: Ativas e SEM Falta do MOTORISTA
     var ativas = CACHE_OPERACOES.filter(op => 
         (op.status === 'AGENDADA' || op.status === 'EM_ANDAMENTO') && 
         op.status !== 'CANCELADA' &&
@@ -1368,7 +1368,6 @@ window.gerarRelatorioGeral = function() {
     if (opsFiltradas.length === 0) { divConteudo.innerHTML = html + "<p style='text-align:center'>Nenhum registro encontrado para os filtros selecionados.</p>"; return; }
 
     // --- CARD ESTATÍSTICO DE VEÍCULO (SE FILTRADO) ---
-    // Exibe: KM Total, Média Global e Custo Total vinculado ao veículo no período
     if (filtroVeiculo) {
         var kmTotalVeiculo = 0;
         var despesasVeiculo = 0;
@@ -1380,13 +1379,11 @@ window.gerarRelatorioGeral = function() {
             faturamentoVeiculo += (Number(op.faturamento) || 0);
             despesasVeiculo += (Number(op.combustivel) || 0) + (Number(op.despesas) || 0);
             
-            // Soma Litros para média
             var preco = Number(op.precoLitro) || 0;
             var valorAbast = Number(op.combustivel) || 0;
             if (preco > 0 && valorAbast > 0) litrosTotal += (valorAbast / preco);
         });
 
-        // Adiciona despesas gerais lançadas para este veículo
         CACHE_DESPESAS.forEach(d => {
             if (d.veiculoPlaca === filtroVeiculo && d.data >= dataIni && d.data <= dataFim) {
                 despesasVeiculo += (Number(d.valor) || 0);
@@ -1414,7 +1411,6 @@ window.gerarRelatorioGeral = function() {
     }
 
     if (filtroFuncionario) {
-        // ... (Lógica de Relatório Individual - Mantida) ...
         var totalReceber = 0;
         var qtdFaltas = 0;
         html += `<table class="data-table"><thead><tr><th>DATA</th><th>FUNÇÃO</th><th>CLIENTE / ROTA</th><th>STATUS</th><th>VALOR A RECEBER</th></tr></thead><tbody>`;
@@ -1444,7 +1440,6 @@ window.gerarRelatorioGeral = function() {
         html += `</tbody></table><div style="text-align:right; margin-top:15px; font-size:1.2rem;"><p>Total a Pagar: <strong>${formatarValorMoeda(totalReceber)}</strong></p></div>`;
 
     } else {
-        // ... (Lógica de Relatório Geral da Empresa - Mantida) ...
         html += `<table class="data-table"><thead><tr><th>DATA</th><th>CLIENTE</th><th>VEÍCULO</th><th>FATURAMENTO</th><th>CUSTOS</th><th>LUCRO</th></tr></thead><tbody>`;
         var totFat=0, totCustos=0, totLucro=0;
         opsFiltradas.forEach(op => {
@@ -1486,7 +1481,7 @@ window.gerarRelatorioCobranca = function() {
 };
 
 // -----------------------------------------------------------------------------
-// 4. MÓDULO DE RECIBOS COMPLETO (NOVO)
+// 4. MÓDULO DE RECIBOS COMPLETO
 // -----------------------------------------------------------------------------
 
 window.gerarReciboPagamento = function() {
@@ -1500,7 +1495,6 @@ window.gerarReciboPagamento = function() {
     var itensRecibo = [];
     var valorTotal = 0;
 
-    // Calcula ganhos no período
     CACHE_OPERACOES.forEach(op => {
         if (op.status === 'CANCELADA' || op.data < dataIni || op.data > dataFim) return;
 
@@ -1535,7 +1529,6 @@ window.gerarReciboPagamento = function() {
 
     if (valorTotal === 0) return alert("Nenhum valor a receber encontrado neste período.");
 
-    // Cria Objeto Recibo Temporário (para visualização antes de salvar)
     var reciboTemp = {
         id: 'TEMP_' + Date.now(),
         dataEmissao: new Date().toISOString(),
@@ -1548,7 +1541,7 @@ window.gerarReciboPagamento = function() {
         enviado: false
     };
 
-    visualizarReciboModal(reciboTemp, true); // true = modo rascunho
+    visualizarReciboModal(reciboTemp, true);
 };
 
 window.visualizarReciboModal = function(recibo, isRascunho) {
@@ -1594,15 +1587,12 @@ window.visualizarReciboModal = function(recibo, isRascunho) {
 
     modalContent.innerHTML = html;
 
-    // Botões de Ação
     if (isRascunho) {
-        // Botão Salvar
         modalActions.innerHTML = `
             <button class="btn-secondary" onclick="document.getElementById('modalRecibo').style.display='none'">CANCELAR</button>
             <button class="btn-success" onclick='salvarReciboGerado(${JSON.stringify(recibo)})'><i class="fas fa-save"></i> SALVAR E GERAR</button>
         `;
     } else {
-        // Botão Imprimir e Enviar
         var btnEnviar = (!recibo.enviado && window.USUARIO_ATUAL.role === 'admin') 
             ? `<button class="btn-primary" onclick="enviarReciboFuncionario('${recibo.id}')"><i class="fas fa-paper-plane"></i> ENVIAR P/ FUNCIONÁRIO</button>`
             : '';
@@ -1618,12 +1608,10 @@ window.visualizarReciboModal = function(recibo, isRascunho) {
 
 window.salvarReciboGerado = async function(reciboObj) {
     if (reciboObj.id.startsWith('TEMP_')) {
-        reciboObj.id = Date.now().toString(); // ID Definitivo
+        reciboObj.id = Date.now().toString(); 
     }
-    
     CACHE_RECIBOS.push(reciboObj);
     await salvarListaRecibos(CACHE_RECIBOS);
-    
     alert("Recibo Gerado e Salvo!");
     document.getElementById('modalRecibo').style.display = 'none';
     renderizarTabelasRecibos();
@@ -1632,9 +1620,7 @@ window.salvarReciboGerado = async function(reciboObj) {
 window.enviarReciboFuncionario = async function(reciboId) {
     var rec = buscarReciboPorId(reciboId);
     if (!rec) return;
-
     if (!confirm("Ao enviar, o recibo ficará visível no painel do funcionário. Confirmar?")) return;
-
     rec.enviado = true;
     await salvarListaRecibos(CACHE_RECIBOS);
     alert("Recibo enviado com sucesso!");
@@ -1643,49 +1629,30 @@ window.enviarReciboFuncionario = async function(reciboId) {
 };
 
 window.renderizarTabelasRecibos = function() {
-    // 1. Tabela Admin (Histórico)
     var tbodyAdmin = document.querySelector('#tabelaHistoricoRecibos tbody');
     if (tbodyAdmin) {
         tbodyAdmin.innerHTML = '';
         CACHE_RECIBOS.slice().reverse().forEach(r => {
             var enviadoLabel = r.enviado ? '<span style="color:green; font-weight:bold;">SIM</span>' : '<span style="color:red;">NÃO</span>';
             var tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${formatarDataParaBrasileiro(r.dataEmissao.split('T')[0])}</td>
-                <td>${r.funcionarioNome}</td>
-                <td>${r.periodo}</td>
-                <td>${formatarValorMoeda(r.valorTotal)}</td>
-                <td>${enviadoLabel}</td>
-                <td>
-                    <button class="btn-mini btn-primary" onclick="visualizarReciboSalvo('${r.id}')"><i class="fas fa-eye"></i></button>
-                    <button class="btn-mini delete-btn" onclick="excluirRecibo('${r.id}')"><i class="fas fa-trash"></i></button>
-                </td>
-            `;
+            tr.innerHTML = `<td>${formatarDataParaBrasileiro(r.dataEmissao.split('T')[0])}</td><td>${r.funcionarioNome}</td><td>${r.periodo}</td><td>${formatarValorMoeda(r.valorTotal)}</td><td>${enviadoLabel}</td><td><button class="btn-mini btn-primary" onclick="visualizarReciboSalvo('${r.id}')"><i class="fas fa-eye"></i></button><button class="btn-mini delete-btn" onclick="excluirRecibo('${r.id}')"><i class="fas fa-trash"></i></button></td>`;
             tbodyAdmin.appendChild(tr);
         });
     }
 
-    // 2. Tabela Funcionário (Meus Recibos)
     var tbodyEmp = document.querySelector('#tabelaMeusRecibos tbody');
     if (tbodyEmp && window.USUARIO_ATUAL) {
         var emailLogado = window.USUARIO_ATUAL.email;
         var func = CACHE_FUNCIONARIOS.find(f => f.email === emailLogado);
-        
         if (func) {
             tbodyEmp.innerHTML = '';
             var meusRecibos = CACHE_RECIBOS.filter(r => r.funcionarioId === func.id && r.enviado === true);
-            
             if (meusRecibos.length === 0) {
                 tbodyEmp.innerHTML = '<tr><td colspan="4" style="text-align:center;">Nenhum recibo disponível.</td></tr>';
             } else {
                 meusRecibos.slice().reverse().forEach(r => {
                     var tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${formatarDataParaBrasileiro(r.dataEmissao.split('T')[0])}</td>
-                        <td>${r.periodo}</td>
-                        <td style="color:green; font-weight:bold;">${formatarValorMoeda(r.valorTotal)}</td>
-                        <td><button class="btn-mini btn-primary" onclick="visualizarReciboSalvo('${r.id}')"><i class="fas fa-eye"></i></button></td>
-                    `;
+                    tr.innerHTML = `<td>${formatarDataParaBrasileiro(r.dataEmissao.split('T')[0])}</td><td>${r.periodo}</td><td style="color:green; font-weight:bold;">${formatarValorMoeda(r.valorTotal)}</td><td><button class="btn-mini btn-primary" onclick="visualizarReciboSalvo('${r.id}')"><i class="fas fa-eye"></i></button></td>`;
                     tbodyEmp.appendChild(tr);
                 });
             }
@@ -1693,97 +1660,118 @@ window.renderizarTabelasRecibos = function() {
     }
 };
 
-window.visualizarReciboSalvo = function(id) {
-    var r = buscarReciboPorId(id);
-    if(r) visualizarReciboModal(r, false);
-};
-
-window.excluirRecibo = async function(id) {
-    if(!confirm("Excluir este recibo permanentemente?")) return;
-    CACHE_RECIBOS = CACHE_RECIBOS.filter(r => r.id !== String(id));
-    await salvarListaRecibos(CACHE_RECIBOS);
-    renderizarTabelasRecibos();
-};
-
-window.imprimirReciboDiv = function() {
-    var conteudo = document.getElementById('modalReciboContent').innerHTML;
-    var janela = window.open('', '', 'width=800,height=600');
-    janela.document.write('<html><head><title>Imprimir Recibo</title></head><body>');
-    janela.document.write(conteudo);
-    janela.document.write('</body></html>');
-    janela.document.close();
-    janela.print();
-};
-
-// -----------------------------------------------------------------------------
-// 5. EXPORTAÇÃO E OUTROS (Mantido)
-// -----------------------------------------------------------------------------
-
-window.exportarRelatorioPDF = function() { 
-    var element = document.getElementById('reportContent'); 
-    if(!element || element.innerHTML.trim() === "") return alert("Gere um relatório primeiro.");
-    var opt = { margin: 10, filename: 'Relatorio_LogiMaster.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } };
-    html2pdf().set(opt).from(element).save(); 
-};
-
-window.exportDataBackup = function() {
-    var dataFull = { funcionarios: CACHE_FUNCIONARIOS, veiculos: CACHE_VEICULOS, contratantes: CACHE_CONTRATANTES, operacoes: CACHE_OPERACOES, minhaEmpresa: CACHE_MINHA_EMPRESA, despesas: CACHE_DESPESAS, atividades: CACHE_ATIVIDADES, profileRequests: CACHE_PROFILE_REQUESTS, recibos: CACHE_RECIBOS };
-    var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataFull));
-    var downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", "backup_logimaster_" + new Date().toISOString().slice(0,10) + ".json");
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
-};
-
-window.importDataBackup = function(event) {
-    var reader = new FileReader();
-    reader.onload = function(event) {
-        try {
-            var jsonObj = JSON.parse(event.target.result);
-            if (confirm("Isso substituirá TODOS os dados atuais. Confirmar?")) {
-                CACHE_FUNCIONARIOS = jsonObj.funcionarios || []; CACHE_VEICULOS = jsonObj.veiculos || []; CACHE_CONTRATANTES = jsonObj.contratantes || []; CACHE_OPERACOES = jsonObj.operacoes || []; CACHE_MINHA_EMPRESA = jsonObj.minhaEmpresa || {}; CACHE_DESPESAS = jsonObj.despesas || []; CACHE_ATIVIDADES = jsonObj.atividades || []; CACHE_PROFILE_REQUESTS = jsonObj.profileRequests || []; CACHE_RECIBOS = jsonObj.recibos || [];
-                salvarListaFuncionarios(CACHE_FUNCIONARIOS); salvarListaVeiculos(CACHE_VEICULOS); salvarListaContratantes(CACHE_CONTRATANTES); salvarListaOperacoes(CACHE_OPERACOES); salvarDadosMinhaEmpresa(CACHE_MINHA_EMPRESA); salvarListaDespesas(CACHE_DESPESAS); salvarListaAtividades(CACHE_ATIVIDADES); salvarProfileRequests(CACHE_PROFILE_REQUESTS); salvarListaRecibos(CACHE_RECIBOS);
-                alert("Importação Concluída!"); window.location.reload();
-            }
-        } catch (e) { alert("Erro ao ler arquivo: " + e); }
-    };
-    reader.readAsText(event.target.files[0]);
-};
-
-window.resetSystemData = async function() {
-    if (!window.USUARIO_ATUAL) return;
-    var senhaConfirmacao = prompt("ATENÇÃO: ISSO APAGARÁ TUDO!\n\nPara confirmar, digite sua SENHA DE LOGIN:");
-    if (!senhaConfirmacao) return;
-    try {
-        const { auth } = window.dbRef;
-        const { signInWithEmailAndPassword } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js");
-        await signInWithEmailAndPassword(auth, window.USUARIO_ATUAL.email, senhaConfirmacao);
-        if (confirm("Senha correta. TEM CERTEZA ABSOLUTA? Esta ação é irreversível.")) {
-            localStorage.clear();
-            alert("Sistema zerado com sucesso.");
-            window.location.reload();
-        }
-    } catch (error) { alert("SENHA INCORRETA. Ação cancelada."); console.error(error); }
-};
-
-document.addEventListener('submit', function(e) {
-    if (e.target.id === 'formDespesaGeral') {
-        e.preventDefault();
-        var novo = { id: Date.now().toString(), data: document.getElementById('despesaGeralData').value, veiculoPlaca: document.getElementById('selectVeiculoDespesaGeral').value, descricao: document.getElementById('despesaGeralDescricao').value.toUpperCase(), valor: document.getElementById('despesaGeralValor').value, formaPagamento: document.getElementById('despesaFormaPagamento').value, modoPagamento: document.getElementById('despesaModoPagamento').value, parcelas: document.getElementById('despesaParcelas').value, parcelasPagas: document.getElementById('despesaParcelasPagas').value };
-        CACHE_DESPESAS.push(novo);
-        salvarListaDespesas(CACHE_DESPESAS).then(() => { alert("Despesa Lançada!"); e.target.reset(); renderizarTabelaDespesasGerais(); atualizarDashboard(); });
-    }
-});
-function renderizarTabelaDespesasGerais() {
-    var tbody = document.querySelector('#tabelaDespesasGerais tbody'); if(!tbody) return; tbody.innerHTML = ''; CACHE_DESPESAS.sort((a,b) => new Date(b.data) - new Date(a.data)).forEach(d => { var tr = document.createElement('tr'); tr.innerHTML = `<td>${formatarDataParaBrasileiro(d.data)}</td><td>${d.veiculoPlaca || 'GERAL'}</td><td>${d.descricao}</td><td style="color:red;">${formatarValorMoeda(d.valor)}</td><td>${d.modoPagamento}</td><td><button class="btn-mini delete-btn" onclick="excluirDespesa('${d.id}')">X</button></td>`; tbody.appendChild(tr); });
-}
+window.visualizarReciboSalvo = function(id) { var r = buscarReciboPorId(id); if(r) visualizarReciboModal(r, false); };
+window.excluirRecibo = async function(id) { if(!confirm("Excluir este recibo permanentemente?")) return; CACHE_RECIBOS = CACHE_RECIBOS.filter(r => r.id !== String(id)); await salvarListaRecibos(CACHE_RECIBOS); renderizarTabelasRecibos(); };
+window.imprimirReciboDiv = function() { var conteudo = document.getElementById('modalReciboContent').innerHTML; var janela = window.open('', '', 'width=800,height=600'); janela.document.write('<html><head><title>Imprimir Recibo</title></head><body>'); janela.document.write(conteudo); janela.document.write('</body></html>'); janela.document.close(); janela.print(); };
+window.exportarRelatorioPDF = function() { var element = document.getElementById('reportContent'); if(!element || element.innerHTML.trim() === "") return alert("Gere um relatório primeiro."); var opt = { margin: 10, filename: 'Relatorio_LogiMaster.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } }; html2pdf().set(opt).from(element).save(); };
+window.exportDataBackup = function() { var dataFull = { funcionarios: CACHE_FUNCIONARIOS, veiculos: CACHE_VEICULOS, contratantes: CACHE_CONTRATANTES, operacoes: CACHE_OPERACOES, minhaEmpresa: CACHE_MINHA_EMPRESA, despesas: CACHE_DESPESAS, atividades: CACHE_ATIVIDADES, profileRequests: CACHE_PROFILE_REQUESTS, recibos: CACHE_RECIBOS }; var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataFull)); var downloadAnchorNode = document.createElement('a'); downloadAnchorNode.setAttribute("href", dataStr); downloadAnchorNode.setAttribute("download", "backup_logimaster_" + new Date().toISOString().slice(0,10) + ".json"); document.body.appendChild(downloadAnchorNode); downloadAnchorNode.click(); downloadAnchorNode.remove(); };
+window.importDataBackup = function(event) { var reader = new FileReader(); reader.onload = function(event) { try { var jsonObj = JSON.parse(event.target.result); if (confirm("Isso substituirá TODOS os dados atuais. Confirmar?")) { CACHE_FUNCIONARIOS = jsonObj.funcionarios || []; CACHE_VEICULOS = jsonObj.veiculos || []; CACHE_CONTRATANTES = jsonObj.contratantes || []; CACHE_OPERACOES = jsonObj.operacoes || []; CACHE_MINHA_EMPRESA = jsonObj.minhaEmpresa || {}; CACHE_DESPESAS = jsonObj.despesas || []; CACHE_ATIVIDADES = jsonObj.atividades || []; CACHE_PROFILE_REQUESTS = jsonObj.profileRequests || []; CACHE_RECIBOS = jsonObj.recibos || []; salvarListaFuncionarios(CACHE_FUNCIONARIOS); salvarListaVeiculos(CACHE_VEICULOS); salvarListaContratantes(CACHE_CONTRATANTES); salvarListaOperacoes(CACHE_OPERACOES); salvarDadosMinhaEmpresa(CACHE_MINHA_EMPRESA); salvarListaDespesas(CACHE_DESPESAS); salvarListaAtividades(CACHE_ATIVIDADES); salvarProfileRequests(CACHE_PROFILE_REQUESTS); salvarListaRecibos(CACHE_RECIBOS); alert("Importação Concluída!"); window.location.reload(); } } catch (e) { alert("Erro ao ler arquivo: " + e); } }; reader.readAsText(event.target.files[0]); };
+document.addEventListener('submit', function(e) { if (e.target.id === 'formDespesaGeral') { e.preventDefault(); var novo = { id: Date.now().toString(), data: document.getElementById('despesaGeralData').value, veiculoPlaca: document.getElementById('selectVeiculoDespesaGeral').value, descricao: document.getElementById('despesaGeralDescricao').value.toUpperCase(), valor: document.getElementById('despesaGeralValor').value, formaPagamento: document.getElementById('despesaFormaPagamento').value, modoPagamento: document.getElementById('despesaModoPagamento').value, parcelas: document.getElementById('despesaParcelas').value, parcelasPagas: document.getElementById('despesaParcelasPagas').value }; CACHE_DESPESAS.push(novo); salvarListaDespesas(CACHE_DESPESAS).then(() => { alert("Despesa Lançada!"); e.target.reset(); renderizarTabelaDespesasGerais(); atualizarDashboard(); }); } });
+function renderizarTabelaDespesasGerais() { var tbody = document.querySelector('#tabelaDespesasGerais tbody'); if(!tbody) return; tbody.innerHTML = ''; CACHE_DESPESAS.sort((a,b) => new Date(b.data) - new Date(a.data)).forEach(d => { var tr = document.createElement('tr'); tr.innerHTML = `<td>${formatarDataParaBrasileiro(d.data)}</td><td>${d.veiculoPlaca || 'GERAL'}</td><td>${d.descricao}</td><td style="color:red;">${formatarValorMoeda(d.valor)}</td><td>${d.modoPagamento}</td><td><button class="btn-mini delete-btn" onclick="excluirDespesa('${d.id}')">X</button></td>`; tbody.appendChild(tr); }); }
 window.excluirDespesa = function(id) { if(!confirm("Excluir?")) return; CACHE_DESPESAS = CACHE_DESPESAS.filter(d => d.id !== String(id)); salvarListaDespesas(CACHE_DESPESAS).then(() => renderizarTabelaDespesasGerais()); };
 
-window.renderizarPainelEquipe = async function() { if (!window.dbRef || !window.USUARIO_ATUAL) return; const { db, collection, query, where, getDocs } = window.dbRef; const empresa = window.USUARIO_ATUAL.company; const tbodyAtivos = document.querySelector('#tabelaCompanyAtivos tbody'); if(tbodyAtivos) { tbodyAtivos.innerHTML = ''; const q = query(collection(db, "users"), where("company", "==", empresa), where("approved", "==", true)); const snap = await getDocs(q); snap.forEach(docSnap => { const u = docSnap.data(); const tr = document.createElement('tr'); tr.innerHTML = `<td>${u.name}</td><td>${u.email}</td><td>${u.role}</td><td>ATIVO</td><td><button class="btn-mini delete-btn" onclick="bloquearAcessoUsuario('${docSnap.id}')">Bloquear</button></td>`; tbodyAtivos.appendChild(tr); }); } const tbodyPendentes = document.querySelector('#tabelaCompanyPendentes tbody'); if(tbodyPendentes) { tbodyPendentes.innerHTML = ''; const q2 = query(collection(db, "users"), where("company", "==", empresa), where("approved", "==", false)); const snap2 = await getDocs(q2); snap2.forEach(docSnap => { const u = docSnap.data(); const tr = document.createElement('tr'); tr.innerHTML = `<td>${u.name}</td><td>${u.email}</td><td>${u.role}</td><td>PENDENTE</td><td><button class="btn-mini btn-success" onclick="aprovarUsuario('${docSnap.id}')">V</button> <button class="btn-mini btn-danger" onclick="excluirUsuarioPendente('${docSnap.id}')">X</button></td>`; tbodyPendentes.appendChild(tr); }); var badge = document.getElementById('badgeAccess'); if(badge) { badge.style.display = snap2.size > 0 ? 'inline-block' : 'none'; badge.textContent = snap2.size; } } };
-window.aprovarUsuario = async function(uid) { if(confirm("Aprovar?")) { const { db, doc, updateDoc } = window.dbRef; await updateDoc(doc(db,"users",uid), {approved:true}); renderizarPainelEquipe(); }};
-window.bloquearAcessoUsuario = async function(uid) { if(confirm("Bloquear?")) { const { db, doc, updateDoc } = window.dbRef; await updateDoc(doc(db,"users",uid), {approved:false}); renderizarPainelEquipe(); }};
+// -----------------------------------------------------------------------------
+// GESTÃO DE EQUIPE (APROVAÇÃO COM VÍNCULO AUTOMÁTICO)
+// -----------------------------------------------------------------------------
+window.renderizarPainelEquipe = async function() { 
+    if (!window.dbRef || !window.USUARIO_ATUAL) return; 
+    const { db, collection, query, where, getDocs } = window.dbRef; 
+    const empresa = window.USUARIO_ATUAL.company; 
+    
+    // Ativos
+    const tbodyAtivos = document.querySelector('#tabelaCompanyAtivos tbody'); 
+    if(tbodyAtivos) { 
+        tbodyAtivos.innerHTML = ''; 
+        const q = query(collection(db, "users"), where("company", "==", empresa), where("approved", "==", true)); 
+        const snap = await getDocs(q); 
+        snap.forEach(docSnap => { 
+            const u = docSnap.data(); 
+            // Verifica se está vinculado na lista interna
+            const vinculado = CACHE_FUNCIONARIOS.find(f => f.email === u.email) ? 'VINCULADO' : '<span style="color:red;">FALTA DADOS</span>';
+            const tr = document.createElement('tr'); 
+            tr.innerHTML = `<td>${u.name}</td><td>${u.email}</td><td>${u.role}</td><td><small>${vinculado}</small></td><td><button class="btn-mini delete-btn" onclick="bloquearAcessoUsuario('${docSnap.id}')">Bloquear</button></td>`; 
+            tbodyAtivos.appendChild(tr); 
+        }); 
+    } 
+    
+    // Pendentes
+    const tbodyPendentes = document.querySelector('#tabelaCompanyPendentes tbody'); 
+    if(tbodyPendentes) { 
+        tbodyPendentes.innerHTML = ''; 
+        const q2 = query(collection(db, "users"), where("company", "==", empresa), where("approved", "==", false)); 
+        const snap2 = await getDocs(q2); 
+        snap2.forEach(docSnap => { 
+            const u = docSnap.data(); 
+            const tr = document.createElement('tr'); 
+            tr.innerHTML = `<td>${u.name}</td><td>${u.email}</td><td>${u.role}</td><td>PENDENTE</td><td><button class="btn-mini btn-success" onclick="aprovarUsuario('${docSnap.id}')">APROVAR E VINCULAR</button> <button class="btn-mini btn-danger" onclick="excluirUsuarioPendente('${docSnap.id}')">X</button></td>`; 
+            tbodyPendentes.appendChild(tr); 
+        }); 
+        var badge = document.getElementById('badgeAccess'); 
+        if(badge) { 
+            badge.style.display = snap2.size > 0 ? 'inline-block' : 'none'; 
+            badge.textContent = snap2.size; 
+        } 
+    } 
+};
+
+window.aprovarUsuario = async function(uid) {
+    if(!confirm("Ao aprovar, o funcionário será adicionado à sua lista e poderá fazer login. Confirmar?")) return;
+    
+    const { db, doc, getDoc, updateDoc } = window.dbRef;
+    
+    try {
+        // 1. Busca dados do usuário (Login)
+        const userRef = doc(db, "users", uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (!userSnap.exists()) return alert("Erro: Usuário não encontrado no banco.");
+        const userData = userSnap.data();
+
+        // 2. Verifica se já existe na lista local (para evitar duplicidade)
+        const jaExiste = CACHE_FUNCIONARIOS.find(f => f.email === userData.email);
+
+        if (!jaExiste) {
+            // 3. CRIA AUTOMATICAMENTE O PERFIL NA LISTA DE FUNCIONÁRIOS
+            console.log("Criando vínculo automático para:", userData.email);
+            const novoFunc = {
+                id: userData.uid, // Usa UID do auth
+                nome: userData.name.toUpperCase(),
+                email: userData.email,
+                funcao: userData.role, 
+                telefone: "", // Campos em branco para preenchimento posterior
+                documento: "",
+                endereco: "",
+                pix: "",
+                cnh: "", validadeCNH: "", categoriaCNH: "", cursoDescricao: "",
+                senhaVisual: userData.senhaVisual || "******"
+            };
+            CACHE_FUNCIONARIOS.push(novoFunc);
+            await salvarListaFuncionarios(CACHE_FUNCIONARIOS);
+        }
+
+        // 4. Libera o acesso no Auth
+        await updateDoc(userRef, { approved: true });
+        
+        // 5. Feedback e Opção de Completar Cadastro
+        renderizarPainelEquipe();
+        
+        if (confirm("Usuário Aprovado e Vinculado!\n\nDeseja completar os dados deste funcionário (CPF, Telefone, CNH) agora?")) {
+            preencherFormularioFuncionario(userData.uid);
+        }
+
+    } catch(e) {
+        console.error(e);
+        alert("Erro ao aprovar: " + e.message);
+    }
+};
+
+window.bloquearAcessoUsuario = async function(uid) { 
+    if(confirm("Bloquear acesso deste usuário ao sistema?")) { 
+        const { db, doc, updateDoc } = window.dbRef; 
+        await updateDoc(doc(db,"users",uid), {approved:false}); 
+        renderizarPainelEquipe(); 
+    }
+};
 // =============================================================================
 // ARQUIVO: script.js
 // PARTE 5: NAVEGAÇÃO, INICIALIZAÇÃO, SINCRONIZAÇÃO E SUPER ADMIN
@@ -1809,12 +1797,11 @@ function configurarNavegacao() {
                 sincronizarDadosDaNuvem().then(() => preencherTodosSelects());
             }
             if (pageId === 'access-management') { 
-                // Renderiza painel de equipe garantindo lista atualizada
                 renderizarPainelEquipe(); 
                 renderizarTabelaProfileRequests(); 
             }
             
-            // Lógica específica para Funcionários vs Admin (Recibos)
+            // Lógica específica para Funcionários vs Admin
             if (window.USUARIO_ATUAL && window.USUARIO_ATUAL.role !== 'admin') {
                 if (pageId === 'employee-home') { 
                     verificarNovasMensagens();
@@ -1934,20 +1921,17 @@ window.renderizarPainelCheckinFuncionario = function() {
 
     var emailLogado = window.USUARIO_ATUAL.email.trim().toLowerCase();
     
-    // Tenta encontrar o funcionário na lista local (baixada da nuvem)
+    // Busca o funcionário. Graças à correção da Parte 4, ele DEVE existir se o login foi aprovado.
     var funcionario = CACHE_FUNCIONARIOS.find(f => f.email && f.email.trim().toLowerCase() === emailLogado);
     
-    // CORREÇÃO: Se não encontrar (usuário novo ainda não vinculado pelo Admin), mostra aviso ao invés de travar
+    // Fallback caso algo tenha falhado na sincronização
     if (!funcionario) { 
         container.innerHTML = `
             <div style="text-align:center; padding:30px; background:#fff3e0; border:1px solid #ffe0b2; border-radius:8px;">
-                <i class="fas fa-exclamation-circle" style="font-size:3rem; color:#f57c00;"></i>
-                <h3 style="margin-top:15px; color:#ef6c00;">PERFIL NÃO VINCULADO</h3>
-                <p style="color:#666;">Seu cadastro foi criado, mas o Administrador ainda não adicionou seus dados na lista de funcionários da empresa.</p>
-                <p><strong>Aguarde a aprovação ou entre em contato com o suporte.</strong></p>
-                <button class="btn-secondary btn-mini" onclick="sincronizarDadosDaNuvem(true)" style="margin-top:15px; padding:10px 20px;">
-                    <i class="fas fa-sync"></i> TENTAR ATUALIZAR AGORA
-                </button>
+                <i class="fas fa-sync fa-spin" style="font-size:2rem; color:#f57c00;"></i>
+                <h3 style="margin-top:10px;">Sincronizando Perfil...</h3>
+                <p>Aguarde um momento. Se persistir, clique abaixo.</p>
+                <button class="btn-primary btn-mini" onclick="sincronizarDadosDaNuvem(true)">FORÇAR ATUALIZAÇÃO</button>
             </div>`; 
         return; 
     }
@@ -2069,7 +2053,7 @@ window.confirmarPresencaAjudante = function(opId) {
 };
 
 // -----------------------------------------------------------------------------
-// SINCRONIZAÇÃO E RESET TOTAL (DEEP WIPE)
+// SINCRONIZAÇÃO E RESET TOTAL
 // -----------------------------------------------------------------------------
 
 window.filtrarHistoricoFuncionario = function() {
@@ -2147,7 +2131,7 @@ function iniciarAutoSync() {
 }
 
 // -----------------------------------------------------------------------------
-// FUNÇÃO SUPER ADMIN (CORREÇÃO IMPLEMENTADA)
+// FUNÇÃO SUPER ADMIN
 // -----------------------------------------------------------------------------
 window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
     const container = document.getElementById('superAdminContainer');
@@ -2157,10 +2141,8 @@ window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
 
     try {
         const { db, collection, getDocs } = window.dbRef;
-        // 1. Busca TODOS os usuários do sistema
         const usersSnap = await getDocs(collection(db, "users"));
         
-        // 2. Agrupa usuários por 'company' (Domínio)
         const empresas = {};
         
         usersSnap.forEach(docSnap => {
@@ -2174,147 +2156,68 @@ window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
                     funcionarios: []
                 };
             }
-            
-            if (u.role === 'admin') {
-                empresas[dominio].admins.push(u);
-            } else {
-                empresas[dominio].funcionarios.push(u);
-            }
+            if (u.role === 'admin') { empresas[dominio].admins.push(u); } 
+            else { empresas[dominio].funcionarios.push(u); }
         });
         
-        // 3. Renderiza a Árvore
         container.innerHTML = '';
-        
-        if (Object.keys(empresas).length === 0) {
-            container.innerHTML = '<p>Nenhuma empresa encontrada.</p>';
-            return;
-        }
+        if (Object.keys(empresas).length === 0) { container.innerHTML = '<p>Nenhuma empresa encontrada.</p>'; return; }
 
         for (const [dominio, dados] of Object.entries(empresas)) {
             const divEmpresa = document.createElement('div');
             divEmpresa.className = 'company-block';
             
-            // Lista Admins
-            const adminsHtml = dados.admins.map(a => 
-                `<span style="background:#e0f2f1; padding:2px 6px; border-radius:4px; font-size:0.8rem; margin-right:5px;">
-                    <i class="fas fa-user-shield"></i> ${a.email}
-                </span>`
-            ).join('');
+            const adminsHtml = dados.admins.map(a => `<span style="background:#e0f2f1; padding:2px 6px; border-radius:4px; font-size:0.8rem; margin-right:5px;"><i class="fas fa-user-shield"></i> ${a.email}</span>`).join('');
+            const funcionariosHtml = dados.funcionarios.map(f => `<div style="padding:5px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between;"><span>${f.name || f.email} <small>(${f.role})</small></span><small>${f.email}</small></div>`).join('') || '<p style="color:#999; font-style:italic;">Nenhum funcionário.</p>';
 
-            // Detalhes (inicialmente ocultos)
-            const funcionariosHtml = dados.funcionarios.map(f => 
-                `<div style="padding:5px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between;">
-                    <span>${f.name || f.email} <small>(${f.role})</small></span>
-                    <small>${f.email}</small>
-                 </div>`
-            ).join('') || '<p style="color:#999; font-style:italic;">Nenhum funcionário.</p>';
-
-            divEmpresa.innerHTML = `
-                <div class="company-header" onclick="this.nextElementSibling.classList.toggle('expanded')">
-                    <div style="display:flex; align-items:center;">
-                        <i class="fas fa-building" style="margin-right:10px; color:#546e7a;"></i>
-                        <h4>${dados.nome}</h4>
-                    </div>
-                    <div class="company-meta">
-                        ${dados.admins.length} Admins | ${dados.funcionarios.length} Func.
-                    </div>
-                    <i class="fas fa-chevron-down"></i>
-                </div>
-                <div class="company-content">
-                    <p><strong>ADMINISTRADORES:</strong></p>
-                    <div style="margin-bottom:15px;">${adminsHtml}</div>
-                    <p><strong>EQUIPE:</strong></p>
-                    <div>${funcionariosHtml}</div>
-                    <div style="margin-top:15px; text-align:right;">
-                        <button class="btn-danger btn-mini" onclick="alert('Funcionalidade de exclusão global restrita.')">EXCLUIR EMPRESA</button>
-                    </div>
-                </div>
-            `;
+            divEmpresa.innerHTML = `<div class="company-header" onclick="this.nextElementSibling.classList.toggle('expanded')"><div style="display:flex; align-items:center;"><i class="fas fa-building" style="margin-right:10px; color:#546e7a;"></i><h4>${dados.nome}</h4></div><div class="company-meta">${dados.admins.length} Admins | ${dados.funcionarios.length} Func.</div><i class="fas fa-chevron-down"></i></div><div class="company-content"><p><strong>ADMINISTRADORES:</strong></p><div style="margin-bottom:15px;">${adminsHtml}</div><p><strong>EQUIPE:</strong></p><div>${funcionariosHtml}</div></div>`;
             container.appendChild(divEmpresa);
         }
 
-    } catch (e) {
-        console.error("Erro SuperAdmin:", e);
-        container.innerHTML = `<p style="color:red;">Erro ao carregar dados globais: ${e.message}</p>`;
-    }
+    } catch (e) { console.error("Erro SuperAdmin:", e); container.innerHTML = `<p style="color:red;">Erro ao carregar: ${e.message}</p>`; }
 };
 
 window.filterGlobalUsers = function() {
     var termo = document.getElementById('superAdminSearch').value.toLowerCase();
     var blocos = document.querySelectorAll('.company-block');
-    
     blocos.forEach(bloco => {
         var texto = bloco.innerText.toLowerCase();
         bloco.style.display = texto.includes(termo) ? 'block' : 'none';
     });
 };
 
-// -----------------------------------------------------------------------------
-// FUNÇÃO ZERAR SISTEMA (DEEP WIPE - DOMÍNIO COMPLETO)
-// -----------------------------------------------------------------------------
 window.resetSystemData = async function() {
     if (!window.USUARIO_ATUAL) return;
-    var senhaConfirmacao = prompt("ATENÇÃO PERIGO!\n\nEsta ação APAGARÁ PERMANENTEMENTE todos os dados (funcionários, veículos, histórico, recibos) desta empresa.\n\nPara confirmar, digite sua SENHA DE LOGIN:");
+    var senhaConfirmacao = prompt("ATENÇÃO: ISSO APAGARÁ TUDO (DOMÍNIO COMPLETO)!\nConfirme sua SENHA:");
     if (!senhaConfirmacao) return;
 
     try {
-        const { auth, db, doc, deleteDoc, collection, query, where, getDocs, writeBatch } = window.dbRef;
+        const { auth, db, doc, collection, query, where, getDocs, writeBatch } = window.dbRef;
         const { signInWithEmailAndPassword } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js");
-        
-        // 1. Reautenticação para segurança
         await signInWithEmailAndPassword(auth, window.USUARIO_ATUAL.email, senhaConfirmacao);
         
-        if (confirm("Senha verificada. ÚLTIMA CHANCE: Confirmar exclusão total?")) {
+        if (confirm("TEM CERTEZA? Essa ação não pode ser desfeita.")) {
             const companyId = window.USUARIO_ATUAL.company;
             const myUid = window.USUARIO_ATUAL.uid;
-            
-            // 2. Apagar Documentos de Dados da Empresa (Subcoleção 'data')
-            // Lista de chaves que usamos no sistema
-            const keysToDelete = [
-                CHAVE_DB_FUNCIONARIOS, CHAVE_DB_VEICULOS, CHAVE_DB_CONTRATANTES, 
-                CHAVE_DB_OPERACOES, CHAVE_DB_MINHA_EMPRESA, CHAVE_DB_DESPESAS, 
-                CHAVE_DB_ATIVIDADES, CHAVE_DB_PROFILE_REQUESTS, CHAVE_DB_RECIBOS
-            ];
-
             const batch = writeBatch(db);
-            
-            // Adiciona deleção dos docs de dados ao batch
-            keysToDelete.forEach(key => {
-                const docRef = doc(db, 'companies', companyId, 'data', key);
-                batch.delete(docRef);
-            });
+            const keys = [CHAVE_DB_FUNCIONARIOS, CHAVE_DB_VEICULOS, CHAVE_DB_CONTRATANTES, CHAVE_DB_OPERACOES, CHAVE_DB_MINHA_EMPRESA, CHAVE_DB_DESPESAS, CHAVE_DB_ATIVIDADES, CHAVE_DB_PROFILE_REQUESTS, CHAVE_DB_RECIBOS];
 
-            // 3. Apagar Usuários Vinculados (Funcionários)
-            // Preserva o Admin atual para não "crashar" o sistema, mas apaga os outros
+            keys.forEach(key => { batch.delete(doc(db, 'companies', companyId, 'data', key)); });
+
             const qUsers = query(collection(db, "users"), where("company", "==", companyId));
-            const querySnapshot = await getDocs(qUsers);
-            
-            querySnapshot.forEach((userDoc) => {
-                if (userDoc.id !== myUid) { // Não apaga o admin logado
-                    batch.delete(userDoc.ref);
-                }
-            });
+            const snap = await getDocs(qUsers);
+            snap.forEach((userDoc) => { if (userDoc.id !== myUid) batch.delete(userDoc.ref); });
 
-            // Apagar Mensagens da Empresa
             const qMsgs = query(collection(db, "messages"), where("company", "==", companyId));
             const msgSnap = await getDocs(qMsgs);
-            msgSnap.forEach((msgDoc) => {
-                batch.delete(msgDoc.ref);
-            });
+            msgSnap.forEach((m) => batch.delete(m.ref));
 
-            // Executa o Batch na Nuvem
             await batch.commit();
-
-            // 4. Limpeza Local
             localStorage.clear();
-            
-            alert("SISTEMA ZERADO COM SUCESSO.\n\nTodos os dados da empresa foram excluídos.\nVocê é o único usuário restante.");
+            alert("SISTEMA ZERADO.");
             window.location.reload();
         }
-    } catch (error) { 
-        alert("ERRO OU SENHA INCORRETA: " + error.message); 
-        console.error(error); 
-    }
+    } catch (error) { alert("Erro: " + error.message); }
 };
 
 window.initSystemByRole = async function(user) {
@@ -2333,10 +2236,10 @@ window.initSystemByRole = async function(user) {
     
     carregarTodosDadosLocais();
     
-    // CORREÇÃO LOGIN: Força sincronização antes de decidir o que mostrar
-    // Se não tiver funcionarios locais ou se o usuario atual nao for admin
-    if (CACHE_FUNCIONARIOS.length === 0 || user.role !== 'admin') { 
-        await sincronizarDadosDaNuvem(); 
+    // LOGIN CORRIGIDO: Se não for admin, força sync para garantir que o cadastro criado apareça
+    if (user.role !== 'admin') {
+        console.log("Usuário comum logado. Sincronizando perfil...");
+        await sincronizarDadosDaNuvem();
     }
     
     if (user.role === 'admin') { 
@@ -2348,7 +2251,6 @@ window.initSystemByRole = async function(user) {
         document.getElementById('menu-employee').style.display = 'block'; 
         window.MODO_APENAS_LEITURA = true; 
         setTimeout(() => { verificarNovasMensagens(); }, 2000); 
-        // Aqui o renderizarPainelCheckinFuncionario vai lidar se o usuário não existir no CACHE
         renderizarPainelCheckinFuncionario(); 
         setTimeout(() => { var b = document.querySelector('[data-page="employee-home"]'); if(b) b.click(); }, 100); 
     }
@@ -2356,7 +2258,18 @@ window.initSystemByRole = async function(user) {
 
 document.getElementById('mobileMenuBtn').onclick = function() { document.getElementById('sidebar').classList.add('active'); document.getElementById('sidebarOverlay').classList.add('active'); };
 document.getElementById('sidebarOverlay').onclick = function() { document.getElementById('sidebar').classList.remove('active'); this.classList.remove('active'); };
-function carregarDadosMeuPerfil(email) { var f = CACHE_FUNCIONARIOS.find(x => x.email && x.email.trim().toLowerCase() === email.trim().toLowerCase()); var div = document.getElementById('meus-dados'); if (f) { div.innerHTML = `<h2>MEUS DADOS</h2><div class="card"><h3>${f.nome}</h3><p>CPF: ${f.documento}</p><p>Tel: ${formatarTelefoneBrasil(f.telefone)}</p><button class="btn-warning" onclick="document.getElementById('modalRequestProfileChange').style.display='block'" style="margin-top:10px;">SOLICITAR ALTERAÇÃO</button></div>`; } else { div.innerHTML = '<p>Dados não encontrados.</p>'; } }
+
+function carregarDadosMeuPerfil(email) { 
+    var f = CACHE_FUNCIONARIOS.find(x => x.email && x.email.trim().toLowerCase() === email.trim().toLowerCase()); 
+    var div = document.getElementById('meus-dados'); 
+    if (f) { 
+        var avisoIncompleto = (f.documento === "") ? '<div style="background:#fff3e0; color:#e65100; padding:10px; margin-bottom:10px; border-radius:4px;"><small>Seu cadastro está incompleto. Solicite a atualização abaixo.</small></div>' : '';
+        div.innerHTML = `<h2>MEUS DADOS</h2>${avisoIncompleto}<div class=\"card\"><h3>${f.nome}</h3><p>CPF: ${f.documento || '---'}</p><p>Tel: ${formatarTelefoneBrasil(f.telefone) || '---'}</p><button class=\"btn-warning\" onclick=\"document.getElementById('modalRequestProfileChange').style.display='block'\" style=\"margin-top:10px;\">SOLICITAR ALTERAÇÃO</button></div>`; 
+    } else { 
+        div.innerHTML = '<p>Dados não encontrados.</p>'; 
+    } 
+}
+
 window.excluirUsuarioPendente = async function(uid) { if(!confirm("Excluir?")) return; try { const { db, doc, deleteDoc } = window.dbRef; await deleteDoc(doc(db, "users", uid)); alert("Removido."); renderizarPainelEquipe(); } catch(e) { alert("Erro: " + e.message); } };
 document.addEventListener('submit', async function(e) { if (e.target.id === 'formCreateCompany') { /* Super Admin */ } });
 document.addEventListener('submit', async function(e) { if (e.target.id === 'formRequestProfileChange') { e.preventDefault(); var tipo = document.getElementById('reqFieldType').value; var val = document.getElementById('reqNewValue').value; if (!window.USUARIO_ATUAL) return; var req = { id: Date.now().toString(), data: new Date().toISOString(), funcionarioEmail: window.USUARIO_ATUAL.email, campo: tipo, valorNovo: val, status: 'PENDENTE' }; CACHE_PROFILE_REQUESTS.push(req); salvarProfileRequests(CACHE_PROFILE_REQUESTS).then(() => { alert("Solicitado!"); document.getElementById('modalRequestProfileChange').style.display='none'; e.target.reset(); }); } });
