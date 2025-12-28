@@ -8,15 +8,16 @@
     
     <link rel="stylesheet" href="style.css">
     
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 
-<body style="display:none;"> 
-    
-    <div class="mobile-nav">
+<body style="display:none;"> <div class="mobile-nav">
         <button id="mobileMenuBtn">
             <i class="fas fa-bars"></i>
         </button>
@@ -28,1138 +29,948 @@
     <header class="sidebar" id="sidebar">
         <div class="logo">
             LOGI<span style="color:var(--primary-color);">MASTER</span>
-        </div>
-        
-        <div class="user-profile-section">
-            <p>
-                <i class="fas fa-user-circle"></i> 
-                <span id="userEmailDisplay">CARREGANDO...</span>
-            </p>
-            <p id="userRoleDisplay">CARREGANDO FUNÇÃO...</p>
+            <div style="font-size:0.4em; color:#78909c; letter-spacing:1px; margin-top:5px;">FROTA & LOGÍSTICA v8.0</div>
         </div>
 
-        <nav>
-            <ul id="menu-admin" style="display:none;">
-                <li class="nav-item active" data-page="home">
-                    <i class="fas fa-chart-line"></i> DASHBOARD
-                </li>
-                <li class="nav-item" data-page="operacoes">
-                    <i class="fas fa-shipping-fast"></i> LANÇAR OPERAÇÃO
-                </li> 
-                <li class="nav-item" data-page="checkins-pendentes">
-                    <i class="fas fa-tasks"></i> MONITORAMENTO & CHECK-INS 
-                    <span id="badgeCheckins" class="notification-badge" style="display:none;">0</span>
-                </li>
-                <li class="nav-item" data-page="access-management">
-                    <i class="fas fa-users-cog"></i> EQUIPE & AVISOS 
-                    <span id="badgeAccess" style="display:none; background:orange; color:white; padding:2px 6px; border-radius:4px; font-size:0.7rem; margin-left:5px;">!</span>
-                </li>
-                <li class="nav-item" data-page="despesas">
-                    <i class="fas fa-file-invoice-dollar"></i> DESPESAS GERAIS
-                </li> 
-                <li class="nav-item" data-page="cadastros">
-                    <i class="fas fa-database"></i> CADASTROS
-                </li>
-                <li class="nav-item" data-page="relatorios">
-                    <i class="fas fa-file-alt"></i> RELATÓRIOS
-                </li>
-                <li class="nav-item" data-page="graficos">
-                    <i class="fas fa-chart-pie"></i> GRÁFICOS DETALHADOS
-                </li>
-                <li class="nav-item" data-page="recibos">
-                    <i class="fas fa-receipt"></i> RECIBOS
-                </li>
-                <li class="nav-item" data-page="config">
-                    <i class="fas fa-cogs"></i> CONFIGURAÇÕES
-                </li>
-            </ul>
-
-            <ul id="menu-super-admin" style="display:none;">
-                <li class="nav-item active" data-page="super-admin">
-                    <i class="fas fa-globe-americas"></i> PAINEL MASTER
-                </li>
-            </ul>
-
-            <ul id="menu-employee" style="display:none;">
-                <li class="nav-item active" data-page="employee-home">
-                    <i class="fas fa-map-marker-alt"></i> MEU CHECK-IN
-                </li>
-                <li class="nav-item" data-page="employee-history">
-                    <i class="fas fa-history"></i> MEUS SERVIÇOS
-                </li>
-                <li class="nav-item" data-page="recibos">
-                    <i class="fas fa-receipt"></i> MEUS RECIBOS
-                </li>
-                <li class="nav-item" data-page="meus-dados">
-                    <i class="fas fa-id-card"></i> MEUS DADOS
-                </li>
-            </ul>
-        </nav>
-        
-        <div class="sidebar-footer">
-            <button onclick="logoutSystem()" class="btn-danger" style="width: 100%;">
-                <i class="fas fa-sign-out-alt"></i> SAIR DO SISTEMA
+        <div class="user-profile-summary" id="userProfileSidebar">
+            <div class="avatar-circle"><i class="fas fa-user"></i></div>
+            <div class="user-info">
+                <span id="userEmailDisplay">carregando...</span>
+                <small id="userRoleDisplay">...</small>
+            </div>
+            <button onclick="logoutSystem()" class="btn-logout-icon" title="Sair do Sistema">
+                <i class="fas fa-sign-out-alt"></i>
             </button>
-            <p style="text-align:center; font-size:0.7rem; color:#888; margin-top:10px;">&copy; LOGIMASTER 22.0</p>
         </div>
+
+        <nav id="menu-admin" style="display:none;">
+            <div class="nav-label">GESTÃO</div>
+            <div class="nav-item active" data-page="home">
+                <i class="fas fa-chart-pie"></i> DASHBOARD
+            </div>
+            <div class="nav-item" data-page="operacoes">
+                <i class="fas fa-shipping-fast"></i> NOVA VIAGEM
+            </div>
+            <div class="nav-item" data-page="checkins-pendentes">
+                <i class="fas fa-map-marked-alt"></i> MONITORAMENTO
+            </div>
+            
+            <div class="nav-label">CADASTROS</div>
+            <div class="nav-item" data-page="cadastros">
+                <i class="fas fa-database"></i> CADASTROS GERAIS
+            </div>
+            
+            <div class="nav-label">FINANCEIRO</div>
+            <div class="nav-item" data-page="despesas">
+                <i class="fas fa-money-bill-wave"></i> DESPESAS GERAIS
+            </div>
+            <div class="nav-item" data-page="recibos">
+                <i class="fas fa-file-invoice-dollar"></i> RECIBOS & HOLERITE
+            </div>
+            <div class="nav-item" data-page="relatorios">
+                <i class="fas fa-print"></i> RELATÓRIOS
+            </div>
+            
+            <div class="nav-label">ADMINISTRAÇÃO</div>
+            <div class="nav-item" data-page="access-management">
+                <i class="fas fa-users-cog"></i> EQUIPE & AVISOS 
+                <span id="badgeAccess" class="notification-badge" style="display:none">0</span>
+            </div>
+            <div class="nav-item" data-page="configuracoes">
+                <i class="fas fa-cogs"></i> SISTEMA & BACKUP
+            </div>
+        </nav>
+
+        <nav id="menu-employee" style="display:none;">
+            <div class="nav-label">ÁREA DO COLABORADOR</div>
+            <div class="nav-item active" data-page="employee-home">
+                <i class="fas fa-tasks"></i> MEUS SERVIÇOS
+            </div>
+            <div class="nav-item" data-page="recibos">
+                <i class="fas fa-file-invoice"></i> MEUS RECIBOS
+            </div>
+            <div class="nav-item" data-page="meus-dados">
+                <i class="fas fa-id-card"></i> MEUS DADOS
+            </div>
+        </nav>
+
+        <nav id="menu-super-admin" style="display:none;">
+            <div class="nav-label">SUPER ADMIN</div>
+            <div class="nav-item active" data-page="super-admin">
+                <i class="fas fa-globe"></i> VISÃO GLOBAL
+            </div>
+        </nav>
     </header>
 
-    <div class="overlay" id="sidebarOverlay"></div>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
     <main class="content">
         
-        <section id="home" class="page">
-            <h2>DASHBOARD GERENCIAL</h2>
+        <div id="home" class="page active">
+            <div class="header-page">
+                <div>
+                    <h2><i class="fas fa-chart-line"></i> Painel Financeiro</h2>
+                    <p>Visão geral de desempenho e custos</p>
+                </div>
+                <span class="date-display" id="currentDateDisplay"></span>
+            </div>
             
-            <div class="card-grid">
-                <div class="card stat-card success">
-                    <p>FATURAMENTO (MÊS)</p>
-                    <h3 id="faturamentoMes">R$ 0,00</h3>
+            <div class="dashboard-cards">
+                <div class="card-metric">
+                    <div class="icon-metric" style="background: var(--primary-light); color: var(--primary-dark);">
+                        <i class="fas fa-coins"></i>
+                    </div>
+                    <div>
+                        <h3>FATURAMENTO (MÊS)</h3>
+                        <p class="value" id="faturamentoMes">R$ 0,00</p>
+                    </div>
                 </div>
-                <div class="card stat-card danger">
-                    <p>TOTAL DE CUSTOS (MÊS)</p>
-                    <h3 id="despesasMes">R$ 0,00</h3>
+                <div class="card-metric">
+                    <div class="icon-metric" style="background: #ffcdd2; color: #c62828;">
+                        <i class="fas fa-arrow-down"></i>
+                    </div>
+                    <div>
+                        <h3>CUSTOS TOTAIS</h3>
+                        <p class="value" id="despesasMes" style="color:var(--danger-color);">R$ 0,00</p>
+                    </div>
                 </div>
-                <div class="card stat-card primary">
-                    <p>LUCRO LÍQUIDO (MÊS)</p>
-                    <h3 id="receitaMes">R$ 0,00</h3>
+                <div class="card-metric">
+                    <div class="icon-metric" style="background: #c8e6c9; color: #2e7d32;">
+                        <i class="fas fa-wallet"></i>
+                    </div>
+                    <div>
+                        <h3>LUCRO LÍQUIDO</h3>
+                        <p class="value" id="receitaMes">R$ 0,00</p>
+                    </div>
+                </div>
+                <div class="card-metric highlight">
+                    <div class="icon-metric" style="background: #fff9c4; color: #fbc02d;">
+                        <i class="fas fa-percent"></i>
+                    </div>
+                    <div>
+                        <h3>MARGEM MÉDIA</h3>
+                        <p class="value" id="margemLucroMedia">0%</p>
+                    </div>
                 </div>
             </div>
 
-            <div class="calendar-section card">
-                <h3><i class="far fa-calendar-alt"></i> CALENDÁRIO DE OPERAÇÕES</h3>
-                <div class="calendar-controls">
-                    <button class="btn-secondary" onclick="changeMonth(-1)">
-                        <i class="fas fa-chevron-left"></i> MÊS ANTERIOR
-                    </button>
-                    <h4 id="currentMonthYear">CARREGANDO...</h4>
-                    <button class="btn-secondary" onclick="changeMonth(1)">
-                        PRÓXIMO MÊS <i class="fas fa-chevron-right"></i>
-                    </button>
-                </div>
-                <div id="calendarGrid" class="calendar-grid"></div>
-            </div>
-        </section>
-
-        <section id="graficos" class="page">
-            <h2>ANÁLISE GRÁFICA FINANCEIRA</h2>
-            
-            <div class="card-grid">
-                 <div class="card stat-card success">
-                    <p>RECEITA TOTAL ACUMULADA (ANO)</p>
-                    <h3 id="receitaTotalHistorico">R$ 0,00</h3>
-                </div>
-                 <div class="card stat-card info"> <p>PERFORMANCE MÉDIA DA FROTA</p>
-                    <h3 id="margemLucroMedia">0.0 KM/L</h3>
-                </div>
-            </div>
-            
-            <div class="card">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
-                    <h3>PERFORMANCE FINANCEIRA</h3>
-                    
-                    <div style="display:flex; gap:10px; align-items:center;">
-                        <label for="filtroVeiculoGrafico" style="font-weight:bold; color:#555;">Filtrar Veículo:</label>
-                        <select id="filtroVeiculoGrafico" onchange="atualizarDashboard()" style="padding:8px; border-radius:4px; border:1px solid #ccc; min-width:200px;">
-                            <option value="">TODOS OS VEÍCULOS</option>
+            <div class="charts-row">
+                <div class="chart-container">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
+                        <h3>Performance Financeira</h3>
+                        <select id="filtroVeiculoGrafico" onchange="atualizarDashboard()" style="padding:5px; border-radius:4px; border:1px solid #ccc;">
+                            <option value="">Todos os Veículos</option>
                         </select>
                     </div>
+                    <div style="height: 300px; position: relative;">
+                        <canvas id="mainChart"></canvas>
+                    </div>
                 </div>
-
-                <div class="chart-container" style="position: relative; height:450px; width:100%;">
-                    <canvas id="mainChart"></canvas>
+                
+                <div class="calendar-container">
+                    <div class="calendar-header">
+                        <button class="btn-mini" onclick="changeMonth(-1)"><i class="fas fa-chevron-left"></i></button>
+                        <h3 id="currentMonthYear">JANEIRO 2024</h3>
+                        <button class="btn-mini" onclick="changeMonth(1)"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                    <div class="calendar-labels">
+                        <div>D</div><div>S</div><div>T</div><div>Q</div><div>Q</div><div>S</div><div>S</div>
+                    </div>
+                    <div class="calendar-grid" id="calendarGrid">
+                        </div>
                 </div>
             </div>
-        </section>
-        
-        <section id="operacoes" class="page">
-            <h2>LANÇAMENTO DE OPERAÇÕES</h2>
-            
-            <div class="card">
-                <form id="formOperacao">
+        </div>
+
+        <div id="operacoes" class="page" style="display:none;">
+            <div class="header-page">
+                <h2><i class="fas fa-shipping-fast"></i> Gestão de Viagens</h2>
+            </div>
+
+             <div class="card">
+                <div style="background: #e3f2fd; padding:15px; border-radius:6px; margin-bottom:20px; border-left:4px solid #2196f3;">
+                    <h3 style="margin:0 0 10px 0; color:#1565c0;"><i class="fas fa-plus-circle"></i> Registrar / Agendar Operação</h3>
+                    <p style="margin:0; font-size:0.9rem;">Preencha os dados abaixo para lançar uma nova viagem ou agendar para a equipe.</p>
+                </div>
+
+                <form id="formOperacao" class="form-grid">
                     <input type="hidden" id="operacaoId">
                     
-                    <div style="background: #e3f2fd; padding: 20px; border-radius: 6px; margin-bottom: 30px; border: 1px solid #90caf9; display:flex; align-items:flex-start; gap:15px;">
-                        <input type="checkbox" id="operacaoIsAgendamento" style="width: 25px; height: 25px; margin-top: 2px; cursor:pointer;"> 
-                        <div>
-                            <label for="operacaoIsAgendamento" style="font-weight:bold; color:var(--primary-color); font-size:1.1rem; cursor:pointer;">
-                                AGENDAR OPERAÇÃO (DISPONIBILIZAR PARA CHECK-IN)
-                            </label>
-                            <div style="font-size:0.9rem; color:#546e7a; margin-top: 5px;">
-                                Se marcado, a viagem aparecerá no celular do motorista para ele iniciar e finalizar.
-                                <br>Se desmarcado, a operação será salva como <strong>CONFIRMADA</strong> imediatamente.
-                            </div>
-                        </div>
+                    <div class="form-col full">
+                        <label class="checkbox-container-custom">
+                            <input type="checkbox" id="operacaoIsAgendamento">
+                            <span class="checkmark"></span>
+                            <strong>AGENDAMENTO FUTURO (Criar rota para motorista fazer check-in)</strong>
+                        </label>
                     </div>
 
-                    <div class="form-row">
-                        <div class="form-col col-sm">
-                            <div class="form-group">
-                                <label>DATA DA VIAGEM:</label>
-                                <input type="date" id="operacaoData" required>
-                            </div>
-                        </div>
-                         <div class="form-col col-lg">
-                            <div class="form-group">
-                                <label>FUNCIONARIO (MOTORISTA):</label>
-                                <select id="selectMotoristaOperacao" required>
-                                    <option value="">AGUARDE, CARREGANDO...</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-col col-md">
-                            <div class="form-group">
-                                <label>VEÍCULO (PLACA):</label>
-                                <select id="selectVeiculoOperacao" required>
-                                    <option value="">AGUARDE...</option>
-                                </select>
-                            </div>
-                        </div>
+                    <div class="form-col">
+                        <label>Data da Viagem</label>
+                        <input type="date" id="operacaoData" required>
                     </div>
-
-                    <div class="form-row">
-                        <div class="form-col col-lg">
-                            <div class="form-group">
-                                <label>CLIENTE / CONTRATANTE:</label>
-                                <select id="selectContratanteOperacao" required>
-                                    <option value="">AGUARDE...</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-col col-md">
-                            <div class="form-group">
-                                <label>TIPO DE ATIVIDADE:</label>
-                                <select id="selectAtividadeOperacao" required>
-                                    <option value="">AGUARDE...</option>
-                                </select>
-                            </div>
-                        </div>
+                    <div class="form-col">
+                        <label>Motorista Responsável</label>
+                        <select id="selectMotoristaOperacao" required></select>
                     </div>
-
-                    <hr style="margin: 30px 0; border:0; border-top:2px solid #eee;">
-                    
-                    <h4 style="margin-bottom: 20px; color: var(--secondary-color); font-weight: 700;">
-                        <i class="fas fa-coins"></i> DADOS FINANCEIROS & CUSTOS
-                    </h4>
-
-                    <div class="form-row">
-                        <div class="form-col col-sm">
-                            <div class="form-group">
-                                <label style="color: var(--success-color);">FATURAMENTO (R$):</label>
-                                <input type="number" id="operacaoFaturamento" step="0.01" min="0" placeholder="0,00">
-                            </div>
-                        </div>
-                        <div class="form-col col-sm">
-                            <div class="form-group">
-                                <label>ADIANTAMENTO (R$):</label>
-                                <input type="number" id="operacaoAdiantamento" step="0.01" min="0" placeholder="0,00">
-                            </div>
-                        </div>
-                        <div class="form-col col-sm">
-                            <div class="form-group">
-                                <label>COMISSÃO MOT. (R$):</label>
-                                <input type="number" id="operacaoComissao" step="0.01" min="0" placeholder="0,00">
-                            </div>
-                        </div>
-                         <div class="form-col col-sm">
-                            <div class="form-group">
-                                <label>PEDÁGIOS/OUTROS (R$):</label>
-                                <input type="number" id="operacaoDespesas" step="0.01" min="0" placeholder="0,00">
-                            </div>
-                        </div>
+                    <div class="form-col">
+                        <label>Veículo Utilizado</label>
+                        <select id="selectVeiculoOperacao" required></select>
+                    </div>
+                    <div class="form-col">
+                        <label>Cliente / Contratante</label>
+                        <select id="selectContratanteOperacao" required></select>
+                    </div>
+                    <div class="form-col">
+                        <label>Atividade / Tipo de Serviço</label>
+                        <select id="selectAtividadeOperacao" required></select>
                     </div>
                     
-                    <div class="form-row">
-                        <div class="form-col col-sm">
-                            <div class="form-group">
-                                <label style="color: var(--danger-color);">ABASTECIMENTO (R$):</label>
-                                <input type="number" id="operacaoCombustivel" step="0.01" min="0" placeholder="0,00">
-                            </div>
+                    <div class="form-col full"><hr></div>
+
+                    <div class="form-col">
+                        <label>Faturamento Total (R$)</label>
+                        <input type="number" step="0.01" id="operacaoFaturamento" required placeholder="0,00">
+                    </div>
+                    <div class="form-col">
+                        <label>Adiantamento (R$)</label>
+                        <input type="number" step="0.01" id="operacaoAdiantamento" value="0">
+                    </div>
+                    <div class="form-col">
+                        <label>Comissão Motorista (R$)</label>
+                        <input type="number" step="0.01" id="operacaoComissao" value="0">
+                    </div>
+                    <div class="form-col">
+                        <label>Despesas Extras/Pedágio (R$)</label>
+                        <input type="number" step="0.01" id="operacaoDespesas" value="0">
+                    </div>
+                    
+                    <div class="form-col full"><hr></div>
+
+                    <div class="form-col">
+                        <label>Abastecimento (R$)</label>
+                        <input type="number" step="0.01" id="operacaoCombustivel" value="0">
+                    </div>
+                    <div class="form-col">
+                        <label>Preço Litro (Opcional)</label>
+                        <input type="number" step="0.01" id="operacaoPrecoLitro" value="0" placeholder="Ex: 5.89">
+                    </div>
+                    <div class="form-col">
+                        <label>KM Rodado (Total)</label>
+                        <input type="number" step="0.1" id="operacaoKmRodado" value="0">
+                    </div>
+                    
+                    <div class="form-col full" style="background:#f9f9f9; padding:15px; border-radius:6px; border:1px solid #eee;">
+                        <label style="color:#00796b; font-weight:bold;">Adicionar Ajudantes / Chapas</label>
+                        <div style="display:flex; gap:10px; margin-top:5px;">
+                            <select id="selectAjudantesOperacao" style="flex:1;"></select>
+                            <button type="button" class="btn-primary" id="btnManualAddAjudante"><i class="fas fa-user-plus"></i> ADD</button>
                         </div>
-                        <div class="form-col col-sm">
-                            <div class="form-group">
-                                <label>PREÇO LITRO (R$):</label>
-                                <input type="number" id="operacaoPrecoLitro" step="0.001" min="0" placeholder="0,000">
-                            </div>
-                        </div>
-                        <div class="form-col col-sm">
-                            <div class="form-group">
-                                <label>KM RODADO TOTAL:</label>
-                                <input type="number" id="operacaoKmRodado" min="0" step="any" placeholder="0">
-                            </div>
-                        </div>
+                        <ul id="listaAjudantesAdicionados" style="margin-top:10px; list-style:none; padding:0;">
+                            </ul>
                     </div>
 
-                    <div class="form-row" style="align-items: flex-end;">
-                        <div class="form-col col-lg">
-                            <div class="form-group">
-                                <label>SELECIONAR AJUDANTE DA LISTA:</label>
-                                <div style="display: flex; gap: 10px;">
-                                    <select id="selectAjudantesOperacao" style="flex-grow: 1;">
-                                        <option value="">AGUARDE...</option>
-                                    </select>
-                                    <button type="button" id="btnManualAddAjudante" class="btn-primary" style="height: 48px; width: 60px; display: flex; justify-content: center; align-items: center;" title="Adicionar Ajudante Manualmente">
-                                        <i class="fas fa-plus"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="form-col col-lg">
-                            <div class="form-group">
-                                <label>EQUIPE ESCALADA:</label>
-                                <ul id="listaAjudantesAdicionados" class="simple-list" style="margin-top:0; min-height: 48px; border: 1px solid #ddd;">
-                                    </ul>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-actions">
-                         <button type="submit" class="btn-primary">
-                             <i class="fas fa-save"></i> SALVAR OPERAÇÃO
-                         </button>
-                         <button type="reset" class="btn-secondary">
-                             <i class="fas fa-undo"></i> LIMPAR
-                         </button>
+                    <div class="form-col full" style="margin-top:20px;">
+                        <button type="submit" class="btn-success" style="width:100%; padding:15px; font-size:1.1rem; font-weight:bold;">
+                            <i class="fas fa-save"></i> SALVAR OPERAÇÃO
+                        </button>
                     </div>
                 </form>
+            </div>
 
-                <div class="card" style="margin-top: 30px;">
-                    <h3><i class="fas fa-history"></i> HISTÓRICO DE OPERAÇÕES RECENTES</h3>
-                    <div class="table-responsive">
-                        <table id="tabelaOperacoes" class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>DATA</th>
-                                    <th>MOTORISTA</th>
-                                    <th>STATUS</th>
-                                    <th>FATURAMENTO</th>
-                                    <th>AÇÕES</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                </tbody>
-                        </table>
-                    </div>
+            <div class="card" style="margin-top:30px;">
+                <div class="card-header-flex">
+                    <h3>Histórico Recente de Viagens</h3>
+                    <input type="text" placeholder="Filtrar..." style="padding:5px; border:1px solid #ccc; border-radius:4px;">
+                </div>
+                <div class="table-responsive">
+                    <table id="tabelaOperacoes" class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Motorista / Veículo</th>
+                                <th>Status</th>
+                                <th>Faturamento</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
             </div>
-        </section>
+        </div>
 
-        <section id="checkins-pendentes" class="page">
-            <h2>STATUS E MONITORAMENTO DE ROTAS</h2>
+        <div id="checkins-pendentes" class="page" style="display:none;">
+            <div class="header-page">
+                <h2><i class="fas fa-map-marked-alt"></i> Monitoramento em Tempo Real</h2>
+            </div>
             
             <div class="card">
-                <h3 style="color:var(--info-color);"><i class="fas fa-satellite-dish"></i> ROTAS ATIVAS E PENDENTES</h3>
+                <h3>Status da Frota e Equipe</h3>
+                <p>Acompanhe o check-in dos motoristas e ajudantes nas rotas agendadas.</p>
                 <div class="table-responsive">
                     <table id="tabelaCheckinsPendentes" class="data-table">
-                        <thead></thead>
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Veículo</th>
+                                <th>Equipe (Check-in)</th>
+                                <th>Status Operacional</th>
+                                <th>Mapa</th>
+                            </tr>
+                        </thead>
                         <tbody></tbody>
                     </table>
                 </div>
             </div>
 
-            <div class="card" style="border-top: 5px solid var(--danger-color); margin-top: 30px; background: #fff5f5;">
-                <h3 style="color:var(--danger-color);"><i class="fas fa-exclamation-triangle"></i> REGISTRO DE FALTAS E OCORRÊNCIAS</h3>
+            <div class="card" style="margin-top:30px; border-top: 4px solid #c62828;">
+                <h3 style="color:#c62828;"><i class="fas fa-exclamation-triangle"></i> Registro de Faltas</h3>
+                <p>Funcionários que não compareceram às operações agendadas.</p>
                 <div class="table-responsive">
                     <table id="tabelaFaltas" class="data-table">
                         <thead>
                             <tr>
-                                <th>DATA</th>
-                                <th>FUNCIONÁRIO</th>
-                                <th>FUNÇÃO</th>
-                                <th>MOTIVO/STATUS</th>
-                                <th>AÇÃO</th>
+                                <th>Data</th>
+                                <th>Funcionário</th>
+                                <th>Função</th>
+                                <th>Status</th>
+                                <th>Ação</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
                     </table>
                 </div>
             </div>
-        </section>
+        </div>
 
-        <section id="access-management" class="page">
-            <h2>GESTÃO DE EQUIPE E COMUNICAÇÃO</h2>
-            
-            <div class="card" style="border: 1px solid var(--primary-color);">
-                <h3 style="color:var(--primary-color);"><i class="fas fa-paper-plane"></i> ENVIAR AVISO PARA A EQUIPE</h3>
-                <form id="formAdminMessage">
-                    <div class="form-row">
-                        <div class="form-col col-lg">
-                            <label>DESTINATÁRIO (SELECIONE):</label>
-                            <select id="msgRecipientSelect">
-                                <option value="all">TODOS OS FUNCIONÁRIOS</option>
-                                </select>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-col col-full">
-                            <label>MENSAGEM:</label>
-                            <textarea id="msgTextAdmin" rows="4" required placeholder="Escreva o aviso aqui..."></textarea>
-                        </div>
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn-primary">
-                            <i class="fas fa-paper-plane"></i> ENVIAR MENSAGEM
-                        </button>
-                    </div>
-                </form>
+        <div id="cadastros" class="page" style="display:none;">
+            <div class="header-page">
+                <h2><i class="fas fa-database"></i> Cadastros Gerais</h2>
             </div>
 
-            <div class="card" id="cardSolicitacoesPerfil" style="margin-top:20px;">
-                <h3>SOLICITAÇÕES DE ALTERAÇÃO CADASTRAL</h3>
-                <div class="table-responsive">
-                    <table class="data-table" id="tabelaProfileRequests">
-                        <thead>
-                            <tr>
-                                <th>DATA</th>
-                                <th>FUNCIONÁRIO</th>
-                                <th>DADO ALTERADO</th>
-                                <th>NOVO VALOR</th>
-                                <th>AÇÃO</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
+            <div class="tabs-container">
+                <button class="cadastro-tab-btn active" data-tab="funcionarios"><i class="fas fa-users"></i> Funcionários</button>
+                <button class="cadastro-tab-btn" data-tab="veiculos"><i class="fas fa-truck"></i> Veículos</button>
+                <button class="cadastro-tab-btn" data-tab="contratantes"><i class="fas fa-building"></i> Clientes</button>
+                <button class="cadastro-tab-btn" data-tab="atividades"><i class="fas fa-box"></i> Atividades</button>
+                <button class="cadastro-tab-btn" data-tab="minha-empresa"><i class="fas fa-id-badge"></i> Minha Empresa</button>
             </div>
 
-            <div class="card" style="margin-top:20px;">
-                <h3 style="color:var(--warning-color);"><i class="fas fa-user-clock"></i> PENDENTES DE APROVAÇÃO (LOGIN)</h3>
-                <div class="table-responsive">
-                    <table class="data-table" id="tabelaCompanyPendentes">
-                        <thead>
-                            <tr>
-                                <th>NOME</th>
-                                <th>EMAIL</th>
-                                <th>FUNÇÃO</th>
-                                <th>DATA CADASTRO</th>
-                                <th>AÇÃO</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
-            
-            <div class="card" style="margin-top:20px;">
-                <h3><i class="fas fa-users"></i> LISTA DE FUNCIONÁRIOS ATIVOS</h3>
-                <div class="table-responsive">
-                    <table class="data-table" id="tabelaCompanyAtivos">
-                        <thead>
-                            <tr>
-                                <th>NOME</th>
-                                <th>EMAIL</th>
-                                <th>FUNÇÃO</th>
-                                <th>STATUS</th>
-                                <th>AÇÃO</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-
-        <section id="despesas" class="page">
-            <h2>LANÇAR DESPESA GERAL</h2>
-            <div class="card">
-                <form id="formDespesaGeral">
-                    <input type="hidden" id="despesaGeralId">
-                    
-                    <div class="form-row">
-                        <div class="form-col col-sm">
-                            <div class="form-group">
-                                <label>DATA:</label>
-                                <input type="date" id="despesaGeralData" required>
-                            </div>
-                        </div>
-                        <div class="form-col col-md">
-                            <div class="form-group">
-                                <label>VINCULAR PLACA (OPCIONAL):</label>
-                                <select id="selectVeiculoDespesaGeral">
-                                    <option value="">CARREGANDO...</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-col col-xl">
-                            <div class="form-group">
-                                <label>DESCRIÇÃO DA DESPESA:</label>
-                                <input type="text" id="despesaGeralDescricao" required placeholder="Ex: Manutenção Freios, Aluguel, Luz">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-col col-sm">
-                            <div class="form-group">
-                                <label>VALOR TOTAL (R$):</label>
-                                <input type="number" id="despesaGeralValor" step="0.01" min="0" required>
-                            </div>
-                        </div>
-                        <div class="form-col col-md">
-                            <div class="form-group">
-                                <label>FORMA DE PAGAMENTO:</label>
-                                <select id="despesaFormaPagamento">
-                                    <option value="dinheiro">DINHEIRO</option>
-                                    <option value="pix">PIX</option>
-                                    <option value="cartao_credito">CARTÃO DE CRÉDITO</option>
-                                    <option value="boleto">BOLETO BANCÁRIO</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-col col-sm">
-                            <div class="form-group">
-                                <label>CONDIÇÃO:</label>
-                                <select id="despesaModoPagamento" onchange="toggleDespesaParcelas()">
-                                    <option value="avista">À VISTA</option>
-                                    <option value="parcelado">PARCELADO</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="divDespesaParcelas" class="form-row" style="display:none; background:#eee; padding:15px; border-radius: 6px;">
-                        <div class="form-col col-sm">
-                            <div class="form-group">
-                                <label>QTD PARCELAS:</label>
-                                <input type="number" id="despesaParcelas" min="2" value="2">
-                            </div>
-                        </div>
-                        <div class="form-col col-sm">
-                            <div class="form-group">
-                                <label>INTERVALO (DIAS):</label>
-                                <input type="number" id="despesaIntervaloDias" value="30" min="1">
-                            </div>
-                        </div>
-                        <div class="form-col col-sm">
-                            <div class="form-group">
-                                <label>JÁ PAGAS:</label>
-                                <input type="number" id="despesaParcelasPagas" min="0" value="0">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-actions">
-                        <button type="submit" class="btn-primary">
-                            <i class="fas fa-save"></i> SALVAR DESPESA
-                        </button>
-                    </div>
-                </form>
-
-                <div class="card" style="margin-top: 30px;">
-                    <h3>HISTÓRICO DE DESPESAS</h3>
-                    <div class="table-responsive">
-                        <table id="tabelaDespesasGerais" class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>DATA</th>
-                                    <th>REF / PLACA</th>
-                                    <th>DESCRIÇÃO</th>
-                                    <th>VALOR</th>
-                                    <th>STATUS</th>
-                                    <th>AÇÕES</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section id="cadastros" class="page">
-            <h2>GESTÃO DE CADASTROS</h2>
-            
-            <div class="tab-controls">
-                <button class="cadastro-tab-btn active" data-tab="funcionarios">FUNCIONÁRIOS</button>
-                <button class="cadastro-tab-btn" data-tab="veiculos">VEÍCULOS</button>
-                <button class="cadastro-tab-btn" data-tab="contratantes">CONTRATANTES</button>
-                <button class="cadastro-tab-btn" data-tab="minhaEmpresa">MINHA EMPRESA</button>
-                <button class="cadastro-tab-btn" data-tab="atividades">ATIVIDADES</button>
-            </div>
-
-            <div id="funcionarios" class="cadastro-form card active">
-                <h3>CADASTRO DE FUNCIONÁRIOS</h3>
-                <form id="formFuncionario">
-                    <input type="hidden" id="funcionarioId">
-                    
-                    <div class="form-row">
-                        <div class="form-col col-lg">
-                            <div class="form-group">
-                                <label>NOME COMPLETO:</label>
-                                <input type="text" id="funcNome" required>
-                            </div>
-                        </div>
-                        <div class="form-col col-md">
-                            <div class="form-group">
-                                <label>FUNÇÃO:</label>
-                                <select id="funcFuncao" required onchange="toggleDriverFields()">
-                                    <option value="">SELECIONE...</option>
-                                    <option value="motorista">MOTORISTA</option>
-                                    <option value="ajudante">AJUDANTE</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-col col-md">
-                            <div class="form-group">
-                                <label>DOCUMENTO (CPF/RG):</label>
-                                <input type="text" id="funcDocumento" required>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-row" style="background: #e3f2fd; padding: 15px; border-radius: 6px; border: 1px solid #90caf9;">
-                        <div class="form-col col-lg">
-                            <div class="form-group">
-                                <label style="color:var(--primary-color); font-weight:bold;">E-MAIL DE ACESSO (LOGIN):</label>
-                                <input type="email" id="funcEmail" required placeholder="ex: joao.silva@empresa.com">
-                            </div>
-                        </div>
-                        <div class="form-col col-md">
-                            <div class="form-group">
-                                <label style="color:var(--primary-color); font-weight:bold;">SENHA PROVISÓRIA (Mín 6 Díg.):</label>
-                                <input type="password" id="funcSenha" placeholder="Digite apenas se for criar/alterar">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-col col-md">
-                            <div class="form-group">
-                                <label>TELEFONE:</label>
-                                <input type="text" id="funcTelefone">
-                            </div>
-                        </div>
-                        <div class="form-col col-md">
-                            <div class="form-group">
-                                <label>CHAVE PIX:</label>
-                                <input type="text" id="funcPix">
-                            </div>
-                        </div>
-                        <div class="form-col col-lg">
-                            <div class="form-group">
-                                <label>ENDEREÇO:</label>
-                                <input type="text" id="funcEndereco">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="driverSpecificFields" style="display:none; background:#f1f8e9; padding:20px; border-radius:6px; border:1px solid #a5d6a7; margin-bottom:20px;">
-                        <h4 style="color:#33691e; margin-bottom:15px; font-size:1rem;">DADOS DE HABILITAÇÃO (MOTORISTA)</h4>
-                        <div class="form-row">
-                            <div class="form-col col-md">
-                                <div class="form-group">
-                                    <label>Nº REGISTRO CNH:</label>
-                                    <input type="text" id="funcCNH">
-                                </div>
-                            </div>
-                            <div class="form-col col-sm">
-                                <div class="form-group">
-                                    <label>VALIDADE CNH:</label>
-                                    <input type="date" id="funcValidadeCNH">
-                                </div>
-                            </div>
-                            <div class="form-col col-sm">
-                                <div class="form-group">
-                                    <label>CATEGORIA:</label>
-                                    <select id="funcCategoriaCNH">
-                                        <option value="">-</option>
-                                        <option value="B">B</option>
-                                        <option value="C">C</option>
-                                        <option value="D">D</option>
-                                        <option value="E">E</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="form-col col-lg">
-                                <div class="form-group">
-                                    <label>CURSO MOPP / OUTROS:</label>
-                                    <input type="text" id="funcCursoDescricao" placeholder="Ex: MOPP, Cargas Indivisíveis">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-actions">
-                        <button type="submit" class="btn-primary">SALVAR E CRIAR ACESSO</button>
-                        <button type="reset" class="btn-secondary">LIMPAR</button>
-                    </div>
-                </form>
-                <div class="table-responsive" style="margin-top:20px;">
-                    <table id="tabelaFuncionarios" class="data-table">
-                        <thead>
-                            <tr>
-                                <th>NOME</th>
-                                <th>FUNÇÃO</th>
-                                <th>EMAIL / LOGIN</th>
-                                <th>AÇÕES</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div id="veiculos" class="cadastro-form card">
-                <h3>CADASTRO DE VEÍCULOS</h3>
-                <form id="formVeiculo">
-                    <input type="hidden" id="veiculoId">
-                    <div class="form-row">
-                        <div class="form-col col-md"><div class="form-group"><label>PLACA:</label><input type="text" id="veiculoPlaca" required></div></div>
-                        <div class="form-col col-lg"><div class="form-group"><label>MODELO:</label><input type="text" id="veiculoModelo" required></div></div>
-                        <div class="form-col col-sm"><div class="form-group"><label>ANO:</label><input type="number" id="veiculoAno"></div></div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-col"><div class="form-group"><label>RENAVAM:</label><input type="text" id="veiculoRenavam"></div></div>
-                        <div class="form-col"><div class="form-group"><label>CHASSI:</label><input type="text" id="veiculoChassi"></div></div>
-                    </div>
-                    <div class="form-actions"><button type="submit" class="btn-primary">SALVAR VEÍCULO</button></div>
-                </form>
-                <div class="table-responsive" style="margin-top:20px;">
-                    <table id="tabelaVeiculos" class="data-table">
-                        <thead><tr><th>PLACA</th><th>MODELO</th><th>ANO</th><th>AÇÕES</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div id="contratantes" class="cadastro-form card">
-                <h3>CADASTRO DE CONTRATANTES</h3>
-                <form id="formContratante">
-                    <input type="hidden" id="contratanteId">
-                    <div class="form-row">
-                        <div class="form-col col-lg"><div class="form-group"><label>RAZÃO SOCIAL:</label><input type="text" id="contratanteRazaoSocial" required></div></div>
-                        <div class="form-col col-md"><div class="form-group"><label>CNPJ:</label><input type="text" id="contratanteCNPJ" required></div></div>
-                        <div class="form-col col-md"><div class="form-group"><label>TELEFONE:</label><input type="text" id="contratanteTelefone"></div></div>
-                    </div>
-                    <div class="form-actions"><button type="submit" class="btn-primary">SALVAR CONTRATANTE</button></div>
-                </form>
-                <div class="table-responsive" style="margin-top:20px;">
-                    <table id="tabelaContratantes" class="data-table">
-                        <thead><tr><th>NOME</th><th>CNPJ</th><th>TELEFONE</th><th>AÇÕES</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div id="minhaEmpresa" class="cadastro-form card">
-                <h3>DADOS DA MINHA EMPRESA</h3>
-                <form id="formMinhaEmpresa">
-                    <div class="form-row">
-                        <div class="form-col col-lg"><div class="form-group"><label>RAZÃO SOCIAL:</label><input type="text" id="minhaEmpresaRazaoSocial"></div></div>
-                        <div class="form-col col-md"><div class="form-group"><label>CNPJ:</label><input type="text" id="minhaEmpresaCNPJ"></div></div>
-                        <div class="form-col col-md"><div class="form-group"><label>TELEFONE:</label><input type="text" id="minhaEmpresaTelefone"></div></div>
-                    </div>
-                    <div class="form-actions"><button type="submit" class="btn-primary">SALVAR DADOS</button></div>
-                </form>
-                <div class="card" style="margin-top:20px; border:1px solid var(--primary-color);">
-                    <div id="viewMinhaEmpresaContent" style="font-size:0.95rem; color:#555;">Carregando dados...</div>
-                </div>
-            </div>
-
-            <div id="atividades" class="cadastro-form card">
-                <h3>CADASTRO DE ATIVIDADES</h3>
-                <form id="formAtividade">
-                    <input type="hidden" id="atividadeId">
-                    <div class="form-row">
-                        <div class="form-col col-full">
-                            <div class="form-group">
-                                <label>NOME DA ATIVIDADE:</label>
-                                <input type="text" id="atividadeNome" required placeholder="Ex: ENTREGA URBANA, VIAGEM LONGA, COLETA">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-actions"><button type="submit" class="btn-primary">SALVAR ATIVIDADE</button></div>
-                </form>
-                <div class="table-responsive" style="margin-top:20px;">
-                    <table id="tabelaAtividades" class="data-table">
-                        <thead><tr><th>ID</th><th>NOME</th><th>AÇÕES</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-
-        <section id="relatorios" class="page">
-            <h2>RELATÓRIOS GERENCIAIS</h2>
-            <div class="card no-print">
-                <h3>FILTROS DE BUSCA</h3>
-                <form id="formRelatorio">
-                    <div class="form-row">
-                        <div class="form-col col-sm"><div class="form-group"><label>DATA INICIAL:</label><input type="date" id="dataInicioRelatorio" required></div></div>
-                        <div class="form-col col-sm"><div class="form-group"><label>DATA FINAL:</label><input type="date" id="dataFimRelatorio" required></div></div>
-                        <div class="form-col"><div class="form-group"><label>MOTORISTA/AJUDANTE:</label><select id="selectMotoristaRelatorio"><option value="">TODOS</option></select></div></div>
-                        <div class="form-col"><div class="form-group"><label>VEÍCULO:</label><select id="selectVeiculoRelatorio"><option value="">TODOS</option></select></div></div>
-                        <div class="form-col"><div class="form-group"><label>CONTRATANTE:</label><select id="selectContratanteRelatorio"><option value="">TODOS</option></select></div></div>
-                        
-                        <div class="form-col"><div class="form-group"><label>TIPO DE SERVIÇO:</label><select id="selectAtividadeRelatorio"><option value="">TODOS</option></select></div></div>
-                    </div>
-                    <div class="form-actions">
-                        <button type="button" class="btn-primary" onclick="gerarRelatorioGeral()">
-                            <i class="fas fa-file-alt"></i> RELATÓRIO GERAL
-                        </button>
-                        <button type="button" class="btn-warning" onclick="gerarRelatorioCobranca()">
-                            <i class="fas fa-file-invoice-dollar"></i> RELATÓRIO DE COBRANÇA
-                        </button>
-                        <button type="button" class="btn-secondary" onclick="exportarRelatorioPDF()">
-                            <i class="fas fa-file-pdf"></i> PDF
-                        </button>
-                    </div>
-                </form>
-            </div>
-            <div id="reportResults" class="card" style="margin-top: 20px; display:none;">
-                <div id="reportContent"></div>
-            </div>
-        </section>
-
-        <section id="recibos" class="page">
-            <h2>EMISSÃO E CONSULTA DE RECIBOS</h2>
-            
-            <div id="adminRecibosPanel">
+            <div id="funcionarios" class="cadastro-form active">
                 <div class="card">
-                    <h3>NOVO RECIBO DE PAGAMENTO</h3>
-                    <form id="formRecibo">
-                        <div class="form-row">
-                            <div class="form-col col-lg">
-                                <div class="form-group">
-                                    <label>SELECIONE O MOTORISTA OU AJUDANTE:</label>
-                                    <select id="selectMotoristaRecibo"><option value="">CARREGANDO...</option></select>
-                                </div>
+                    <h3>Novo Funcionário</h3>
+                    <form id="formFuncionario" class="form-grid">
+                        <input type="hidden" id="funcionarioId">
+                        
+                        <div class="form-col">
+                            <label>Nome Completo</label>
+                            <input type="text" id="funcNome" required style="text-transform:uppercase;">
+                        </div>
+                        <div class="form-col">
+                            <label>Função</label>
+                            <select id="funcFuncao" required onchange="toggleDriverFields()">
+                                <option value="motorista">Motorista</option>
+                                <option value="ajudante">Ajudante</option>
+                                <option value="operacional">Operacional</option>
+                                <option value="admin">Administrador</option>
+                            </select>
+                        </div>
+                        <div class="form-col">
+                            <label>CPF/RG</label>
+                            <input type="text" id="funcDocumento" required>
+                        </div>
+                        <div class="form-col">
+                            <label>Email (Login)</label>
+                            <input type="email" id="funcEmail" required placeholder="email@exemplo.com">
+                        </div>
+                        <div class="form-col">
+                            <label>Senha (Acesso)</label>
+                            <input type="text" id="funcSenha" placeholder="Deixe vazio para manter atual">
+                        </div>
+                        <div class="form-col">
+                            <label>Telefone/WhatsApp</label>
+                            <input type="text" id="funcTelefone">
+                        </div>
+                        <div class="form-col">
+                            <label>Chave PIX</label>
+                            <input type="text" id="funcPix">
+                        </div>
+                        <div class="form-col full">
+                            <label>Endereço Completo</label>
+                            <input type="text" id="funcEndereco">
+                        </div>
+                        
+                        <div id="driverSpecificFields" class="form-col full" style="background:#f1f8e9; padding:15px; border-radius:6px; border:1px dashed #aed581; margin-top:10px;">
+                            <h4 style="margin-top:0; color:#33691e;"><i class="fas fa-id-card"></i> Dados da CNH (Motorista)</h4>
+                            <div class="form-grid">
+                                <div class="form-col"><label>Nº Registro CNH</label><input type="text" id="funcCNH"></div>
+                                <div class="form-col"><label>Validade</label><input type="date" id="funcValidadeCNH"></div>
+                                <div class="form-col"><label>Categoria</label><input type="text" id="funcCategoriaCNH" placeholder="Ex: AD, AE"></div>
+                                <div class="form-col full"><label>Cursos (MOPP, Cargas Indivisíveis...)</label><input type="text" id="funcCursoDescricao"></div>
                             </div>
                         </div>
-                        <div class="form-row">
-                            <div class="form-col col-sm"><div class="form-group"><label>DATA INICIAL (PERÍODO):</label><input type="date" id="dataInicioRecibo"></div></div>
-                            <div class="form-col col-sm"><div class="form-group"><label>DATA FINAL (PERÍODO):</label><input type="date" id="dataFimRecibo"></div></div>
-                        </div>
-                        <div class="form-actions">
-                            <button type="button" id="btnGerarRecibo" class="btn-primary" onclick="gerarReciboPagamento()">
-                                <i class="fas fa-file-invoice"></i> GERAR RECIBO (PRÉ-VISUALIZAR)
-                            </button>
+
+                        <div class="form-col full" style="margin-top:15px;">
+                            <button type="submit" class="btn-success" style="width:100%;"><i class="fas fa-save"></i> SALVAR FUNCIONÁRIO</button>
                         </div>
                     </form>
                 </div>
                 
-                <div class="card" style="margin-top:20px;">
-                    <h3>HISTÓRICO DE RECIBOS GERADOS</h3>
-                    <div class="table-responsive">
-                        <table id="tabelaHistoricoRecibos" class="data-table">
-                            <thead><tr><th>DATA EMISSÃO</th><th>FUNCIONÁRIO</th><th>PERÍODO</th><th>VALOR TOTAL</th><th>ENVIADO?</th><th>AÇÕES</th></tr></thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <div id="employeeRecibosPanel" style="display:none;">
                 <div class="card">
-                    <h3>MEUS RECIBOS DE PAGAMENTO</h3>
-                    <div class="table-responsive">
-                        <table id="tabelaMeusRecibos" class="data-table">
-                            <thead><tr><th>DATA EMISSÃO</th><th>PERÍODO REFERÊNCIA</th><th>VALOR TOTAL</th><th>VISUALIZAR</th></tr></thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
+                    <h3>Lista de Colaboradores</h3>
+                    <table id="tabelaFuncionarios" class="data-table">
+                        <thead><tr><th>Nome</th><th>Função</th><th>Email</th><th>Ações</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
             </div>
-        </section>
+            
+            <div id="veiculos" class="cadastro-form">
+                <div class="card">
+                    <form id="formVeiculo" class="form-grid">
+                        <div class="form-col"><label>Placa</label><input type="text" id="veiculoPlaca" required></div>
+                        <div class="form-col"><label>Modelo</label><input type="text" id="veiculoModelo" required></div>
+                        <div class="form-col"><label>Ano</label><input type="number" id="veiculoAno"></div>
+                        <div class="form-col"><label>Renavam</label><input type="text" id="veiculoRenavam"></div>
+                        <div class="form-col"><label>Chassi</label><input type="text" id="veiculoChassi"></div>
+                        <div class="form-col full"><button type="submit" class="btn-success">SALVAR VEÍCULO</button></div>
+                    </form>
+                </div>
+                <div class="card">
+                    <table id="tabelaVeiculos" class="data-table">
+                        <thead><tr><th>Placa</th><th>Modelo</th><th>Ano</th><th>Ações</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
 
-        <section id="config" class="page">
-            <h2>CONFIGURAÇÕES DO SISTEMA</h2>
-            <div class="card">
-                <h3>MANUTENÇÃO E DADOS</h3>
-                <p>Gerencie os backups e a integridade dos dados da empresa.</p>
-                <div class="form-actions">
-                    <button class="btn-primary" onclick="exportDataBackup()"><i class="fas fa-download"></i> EXPORTAR DADOS</button>
-                    <label class="btn-secondary" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer;">
-                        <i class="fas fa-upload"></i> IMPORTAR DADOS
-                        <input id="inputImportBackup" type="file" accept="application/json" style="display:none" onchange="importDataBackup(event)">
-                    </label>
+            <div id="contratantes" class="cadastro-form">
+                <div class="card">
+                    <form id="formContratante" class="form-grid">
+                        <div class="form-col"><label>CNPJ</label><input type="text" id="contratanteCNPJ" required></div>
+                        <div class="form-col"><label>Razão Social</label><input type="text" id="contratanteRazaoSocial" required></div>
+                        <div class="form-col"><label>Telefone</label><input type="text" id="contratanteTelefone"></div>
+                        <div class="form-col full"><button type="submit" class="btn-success">SALVAR CLIENTE</button></div>
+                    </form>
+                </div>
+                <div class="card">
+                    <table id="tabelaContratantes" class="data-table">
+                        <thead><tr><th>Razão Social</th><th>CNPJ</th><th>Tel</th><th>Ações</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="atividades" class="cadastro-form">
+                <div class="card">
+                    <form id="formAtividade" class="form-grid">
+                        <input type="hidden" id="atividadeId">
+                        <div class="form-col full"><label>Nome do Serviço / Rota</label><input type="text" id="atividadeNome" required></div>
+                        <div class="form-col full"><button type="submit" class="btn-success">SALVAR ATIVIDADE</button></div>
+                    </form>
+                </div>
+                <div class="card">
+                    <table id="tabelaAtividades" class="data-table">
+                        <thead><tr><th>ID</th><th>Nome</th><th>Ações</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="minha-empresa" class="cadastro-form">
+                <div class="card">
+                    <h3>Dados da Transportadora</h3>
+                    <form id="formMinhaEmpresa" class="form-grid">
+                        <div class="form-col"><label>Razão Social</label><input type="text" id="minhaEmpresaRazaoSocial"></div>
+                        <div class="form-col"><label>CNPJ</label><input type="text" id="minhaEmpresaCNPJ"></div>
+                        <div class="form-col"><label>Telefone</label><input type="text" id="minhaEmpresaTelefone"></div>
+                        <div class="form-col full"><button type="submit" class="btn-primary">ATUALIZAR DADOS DA EMPRESA</button></div>
+                    </form>
                     
-                    <button class="btn-danger" onclick="resetSystemData()" style="margin-left: auto;">
-                        <i class="fas fa-trash-alt"></i> ZERAR SISTEMA
-                    </button>
+                    <div id="viewMinhaEmpresaContent" style="margin-top:20px; padding:15px; background:#eee; border-radius:6px;">
+                        </div>
+
+                    <div style="margin-top:50px; border-top:2px solid #ffcdd2; padding-top:20px;">
+                        <h4 style="color:red;"><i class="fas fa-skull-crossbones"></i> ZONA DE PERIGO</h4>
+                        <p>Ações irreversíveis de gerenciamento de dados.</p>
+                        <button onclick="resetSystemData()" class="btn-danger" style="width:100%; padding:15px;">
+                            ZERAR TODO O SISTEMA (DEEP WIPE)
+                        </button>
+                    </div>
                 </div>
             </div>
-        </section>
+        </div>
 
-        <section id="super-admin" class="page">
-            <div style="background: linear-gradient(135deg, #1a237e 0%, #283593 100%); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                <h2 style="color:white; border:none; margin:0;"><i class="fas fa-globe"></i> PAINEL MASTER (GLOBAL)</h2>
-                <p style="font-size: 0.9rem; opacity: 0.8;">Gestão total de domínios e usuários do sistema.</p>
+        <div id="despesas" class="page" style="display:none;">
+            <div class="header-page">
+                <h2><i class="fas fa-money-bill-wave"></i> Controle de Despesas Gerais</h2>
             </div>
-
-            <div class="card" style="border-left: 5px solid var(--success-color);">
-                <h3><i class="fas fa-building"></i> CRIAR NOVA EMPRESA (DOMÍNIO)</h3>
-                <form id="formCreateCompany">
-                    <div class="form-row">
-                        <div class="form-col col-lg">
-                            <div class="form-group">
-                                <label>DOMÍNIO DA EMPRESA (ID ÚNICO):</label>
-                                <input type="text" id="newCompanyDomain" placeholder="ex: transportesilva.com" required onkeyup="this.value = this.value.toLowerCase().replace(/\s/g, '')">
-                            </div>
-                        </div>
-                        <div class="form-col col-lg">
-                            <div class="form-group">
-                                <label>EMAIL DO ADMINISTRADOR LOCAL:</label>
-                                <input type="email" id="newAdminEmail" required placeholder="admin@transportesilva.com">
-                            </div>
-                        </div>
-                        <div class="form-col col-md">
-                            <div class="form-group">
-                                <label>SENHA INICIAL:</label>
-                                <input type="text" id="newAdminPassword" required placeholder="Mínimo 6 dígitos">
-                            </div>
+            
+            <div class="card">
+                <h3>Lançamento de Despesa</h3>
+                <form id="formDespesaGeral" class="form-grid">
+                    <div class="form-col">
+                        <label>Data</label>
+                        <input type="date" id="despesaGeralData" required>
+                    </div>
+                    <div class="form-col">
+                        <label>Veículo (Opcional)</label>
+                        <select id="selectVeiculoDespesaGeral"></select>
+                    </div>
+                    <div class="form-col full">
+                        <label>Descrição da Despesa</label>
+                        <input type="text" id="despesaGeralDescricao" required placeholder="Ex: Compra de Peças, Aluguel do Pátio...">
+                    </div>
+                    <div class="form-col">
+                        <label>Valor (R$)</label>
+                        <input type="number" step="0.01" id="despesaGeralValor" required>
+                    </div>
+                    <div class="form-col">
+                        <label>Forma Pagamento</label>
+                        <select id="despesaFormaPagamento">
+                            <option>Dinheiro</option>
+                            <option>PIX</option>
+                            <option>Cartão Crédito</option>
+                            <option>Cartão Débito</option>
+                            <option>Boleto</option>
+                        </select>
+                    </div>
+                    <div class="form-col">
+                        <label>Modo</label>
+                        <select id="despesaModoPagamento" onchange="toggleDespesaParcelas()">
+                            <option value="avista">À Vista</option>
+                            <option value="parcelado">Parcelado</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-col" id="divDespesaParcelas" style="display:none;">
+                        <label>Parcelas (Ex: 1/10)</label>
+                        <div style="display:flex; gap:5px;">
+                            <input type="number" id="despesaParcelasPagas" value="1" placeholder="Paga">
+                            <span style="align-self:center;">de</span>
+                            <input type="number" id="despesaParcelas" value="1" placeholder="Total">
                         </div>
                     </div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn-success">
-                            <i class="fas fa-plus-circle"></i> CRIAR AMBIENTE E ADMIN
-                        </button>
+                    
+                    <div class="form-col full">
+                        <button type="submit" class="btn-success" style="width:100%;">LANÇAR DESPESA</button>
                     </div>
                 </form>
             </div>
-
+            
             <div class="card">
-                <div class="super-search-box">
-                    <i class="fas fa-search" style="color:var(--secondary-color); font-size: 1.2rem;"></i>
-                    <input type="text" id="superAdminSearch" placeholder="Pesquisar por nome, email ou empresa..." onkeyup="filterGlobalUsers()" style="border:none; width:100%; margin-left:15px; outline:none; font-size:1.1rem; background:transparent;">
+                <h3>Histórico de Despesas</h3>
+                <table id="tabelaDespesasGerais" class="data-table">
+                    <thead><tr><th>Data</th><th>Ref.</th><th>Descrição</th><th>Valor</th><th>Pagto</th><th>Ação</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="recibos" class="page" style="display:none;">
+            <div class="header-page">
+                <h2><i class="fas fa-file-invoice-dollar"></i> Recibos e Holerites</h2>
+            </div>
+
+            <div id="adminRecibosPanel">
+                <div class="card">
+                    <h3>Gerar Novo Recibo</h3>
+                    <div class="form-grid">
+                        <div class="form-col">
+                            <label>Funcionário</label>
+                            <select id="selectMotoristaRecibo"></select>
+                        </div>
+                        <div class="form-col">
+                            <label>Início Período</label>
+                            <input type="date" id="dataInicioRecibo">
+                        </div>
+                        <div class="form-col">
+                            <label>Fim Período</label>
+                            <input type="date" id="dataFimRecibo">
+                        </div>
+                        <div class="form-col">
+                            <button class="btn-primary" onclick="gerarReciboPagamento()" style="margin-top:22px; width:100%;">
+                                <i class="fas fa-magic"></i> GERAR PRÉVIA
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                
-                <div class="form-actions" style="margin-bottom: 15px;">
-                    <button class="btn-secondary btn-mini" onclick="carregarPainelSuperAdmin(true)">
-                        <i class="fas fa-sync"></i> ATUALIZAR LISTA GLOBAL
+                <div class="card">
+                    <h3>Histórico de Recibos Gerados</h3>
+                    <table id="tabelaHistoricoRecibos" class="data-table">
+                        <thead><tr><th>Emissão</th><th>Funcionário</th><th>Período</th><th>Valor</th><th>Enviado?</th><th>Ações</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div id="employeeRecibosPanel" style="display:none;">
+                <div class="card">
+                    <h3>Meus Demonstrativos de Pagamento</h3>
+                    <p>Aqui ficam armazenados seus recibos aprovados.</p>
+                    <table id="tabelaMeusRecibos" class="data-table">
+                        <thead><tr><th>Data</th><th>Referência</th><th>Valor Líquido</th><th>Ver</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="relatorios" class="page" style="display:none;">
+            <div class="header-page">
+                <h2><i class="fas fa-print"></i> Relatórios Gerenciais</h2>
+            </div>
+            
+            <div class="card no-print">
+                <h3>Filtros de Pesquisa</h3>
+                <div class="form-grid">
+                    <div class="form-col">
+                        <label>Data Início</label>
+                        <input type="date" id="dataInicioRelatorio">
+                    </div>
+                    <div class="form-col">
+                        <label>Data Fim</label>
+                        <input type="date" id="dataFimRelatorio">
+                    </div>
+                    <div class="form-col">
+                        <label>Motorista/Ajudante (Opcional)</label>
+                        <select id="selectMotoristaRelatorio"></select>
+                    </div>
+                    <div class="form-col">
+                        <label>Veículo (Opcional)</label>
+                        <select id="selectVeiculoRelatorio"></select>
+                    </div>
+                    <div class="form-col">
+                        <label>Cliente (Opcional)</label>
+                        <select id="selectContratanteRelatorio"></select>
+                    </div>
+                    <div class="form-col">
+                        <label>Atividade (Opcional)</label>
+                        <select id="selectAtividadeRelatorio"></select>
+                    </div>
+                    <div class="form-col full" style="display:flex; gap:10px; margin-top:10px;">
+                        <button class="btn-primary" onclick="gerarRelatorioGeral()" style="flex:1;">
+                            <i class="fas fa-table"></i> RELATÓRIO GERAL / PAGAMENTOS
+                        </button>
+                        <button class="btn-warning" onclick="gerarRelatorioCobranca()" style="flex:1;">
+                            <i class="fas fa-file-invoice"></i> FATURA CLIENTE (COBRANÇA)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="reportResults" class="card" style="display:none;">
+                <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+                    <button class="btn-mini no-print" onclick="exportarRelatorioPDF()">
+                        <i class="fas fa-file-pdf"></i> SALVAR EM PDF
                     </button>
                 </div>
-
-                <div id="superAdminContainer" class="hierarchy-container">
-                    <p style="text-align:center; padding:20px;">Carregando dados globais...</p>
-                </div>
+                <div id="reportContent">
+                    </div>
             </div>
-        </section>
+        </div>
 
-        <section id="employee-home" class="page">
-            <h2>PAINEL DE CHECK-IN</h2>
-            <div id="listaServicosAgendados" class="card">
-                <p style="text-align:center; color:#666;">Buscando suas viagens...</p>
+        <div id="access-management" class="page" style="display:none;">
+            <div class="header-page">
+                <h2><i class="fas fa-users-cog"></i> Gestão de Acesso & Equipe</h2>
             </div>
-        </section>
-
-        <section id="employee-history" class="page">
-            <h2>MEUS SERVIÇOS E FINANCEIRO</h2>
+            
             <div class="card">
-                <div class="form-row">
-                    <div class="form-col"><div class="form-group"><label>INÍCIO:</label><input type="date" id="empDataInicio"></div></div>
-                    <div class="form-col"><div class="form-group"><label>FIM:</label><input type="date" id="empDataFim"></div></div>
-                </div>
-                <div class="form-actions">
-                    <button class="btn-primary" onclick="filtrarHistoricoFuncionario()">BUSCAR SERVIÇOS</button>
-                    <button class="btn-secondary" onclick="exportEmployeeHistoryToPDF()">BAIXAR PDF</button>
-                </div>
-                <h3 id="empTotalReceber" style="text-align:center; margin-top:30px; color:var(--success-color); font-size:2rem;">R$ 0,00</h3>
-                <div class="table-responsive" style="margin-top:20px;">
-                    <table id="tabelaHistoricoCompleto" class="data-table"><thead><tr><th>DATA</th><th>VEÍCULO</th><th>CONTRATANTE</th><th>VALOR</th><th>STATUS</th></tr></thead><tbody></tbody></table>
+                <h3 style="color:#f57f17;"><i class="fas fa-user-clock"></i> Solicitações de Cadastro (Login)</h3>
+                <p>Usuários que criaram conta na tela de login e aguardam sua aprovação.</p>
+                <div class="table-responsive">
+                    <table id="tabelaCompanyPendentes" class="data-table">
+                        <thead><tr><th>Nome</th><th>Email</th><th>Função Solicitada</th><th>Status</th><th>Ações</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
             </div>
-        </section>
+            
+            <div class="card">
+                <h3><i class="fas fa-user-check"></i> Usuários Ativos (Vinculados)</h3>
+                <p>Membros da equipe com acesso liberado ao sistema.</p>
+                <div class="table-responsive">
+                    <table id="tabelaCompanyAtivos" class="data-table">
+                        <thead><tr><th>Nome</th><th>Email</th><th>Função</th><th>Vínculo</th><th>Ações</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3><i class="fas fa-sync"></i> Solicitações de Alteração de Dados</h3>
+                <p>Pedidos de atualização de telefone, endereço ou documentos.</p>
+                <div class="table-responsive">
+                    <table id="tabelaProfileRequests" class="data-table">
+                        <thead><tr><th>Data</th><th>Funcionário</th><th>Campo</th><th>Novo Valor</th><th>Ações</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div id="configuracoes" class="page" style="display:none;">
+            <div class="header-page">
+                <h2><i class="fas fa-cogs"></i> Sistema e Segurança</h2>
+            </div>
+            <div class="card">
+                <h3>Backup Manual dos Dados</h3>
+                <p>Gere um arquivo JSON com todos os dados locais do seu navegador para segurança.</p>
+                <button class="btn-primary" onclick="exportDataBackup()">
+                    <i class="fas fa-download"></i> BAIXAR BACKUP (JSON)
+                </button>
+                
+                <hr style="margin:20px 0;">
+                
+                <h3>Restaurar Dados</h3>
+                <label>Selecione o arquivo de backup (.json):</label>
+                <br>
+                <input type="file" onchange="importDataBackup(event)">
+            </div>
+        </div>
 
-        <section id="meus-dados" class="page">
-            <h2>MEUS DADOS PESSOAIS</h2>
-            <div class="card" id="meusDadosContainer">
-                <p style="text-align:center;">Carregando dados...</p>
+        <div id="employee-home" class="page" style="display:none;">
+            <div class="header-page">
+                <h2><i class="fas fa-tasks"></i> Minhas Viagens e Tarefas</h2>
             </div>
-        </section>
+            
+            <div id="listaServicosAgendados"></div>
+            
+            <div class="card" style="margin-top:30px;">
+                <h3>Meu Histórico</h3>
+                <div class="form-grid">
+                    <div class="form-col"><label>Início</label><input type="date" id="empDataInicio"></div>
+                    <div class="form-col"><label>Fim</label><input type="date" id="empDataFim"></div>
+                    <div class="form-col">
+                        <button class="btn-primary" style="margin-top:22px; width:100%;" onclick="filtrarHistoricoFuncionario()">FILTRAR</button>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table id="tabelaHistoricoCompleto" class="data-table">
+                        <thead><tr><th>Data</th><th>Veículo</th><th>Cliente</th><th>Valor</th><th>Status</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div style="text-align:right; font-size:1.2rem; font-weight:bold; margin-top:10px; padding:10px; background:#e8f5e9; border-radius:6px;">
+                    Total no Período: <span id="empTotalReceber" style="color:green;">R$ 0,00</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="meus-dados" class="page" style="display:none;">
+            </div>
+
+        <div id="super-admin" class="page" style="display:none;">
+            <div class="header-page">
+                <h2><i class="fas fa-globe"></i> Painel Super Admin</h2>
+            </div>
+            
+            <div class="super-search-box">
+                <i class="fas fa-search" style="color:#aaa; margin-right:10px;"></i>
+                <input type="text" id="superAdminSearch" placeholder="Buscar empresa, domínio ou email..." onkeyup="filterGlobalUsers()" style="border:none; outline:none; width:100%;">
+                <button class="btn-mini btn-primary" onclick="carregarPainelSuperAdmin(true)">ATUALIZAR</button>
+            </div>
+            
+            <div id="superAdminContainer" class="hierarchy-container">
+                </div>
+        </div>
 
     </main>
 
-    <div id="operationDetailsModal" class="modal"><div class="modal-content"><span onclick="closeModal()" class="close-btn">&times;</span><h3 id="modalTitle">DETALHES</h3><div id="modalBodyContent"></div></div></div>
+    <div id="modalNotification" class="modal">
+        <div class="modal-content" style="text-align:center;">
+            <div style="font-size:3rem; color:var(--primary-color); margin-bottom:10px;">
+                <i class="fas fa-bell"></i>
+            </div>
+            <h3>Nova Mensagem</h3>
+            <p id="notificationSender" style="font-weight:bold; color:#555;"></p>
+            <p id="notificationMessageText" style="font-size:1.1rem; margin:15px 0; background:#f5f5f5; padding:10px; border-radius:6px;"></p>
+            <div class="modal-actions">
+                <button class="btn-primary" onclick="confirmarLeituraMensagem()">ENTENDIDO</button>
+            </div>
+        </div>
+    </div>
     
-    <div id="viewItemModal" class="modal"><div class="modal-content"><span onclick="closeViewModal()" class="close-btn">&times;</span><h3 id="viewItemTitle">VISUALIZAR</h3><div id="viewItemBody"></div></div></div>
-    
+    <div id="viewItemModal" class="modal">
+        <div class="modal-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:15px;">
+                <h3 id="viewItemTitle" style="margin:0;">Detalhes</h3>
+                <button class="btn-mini delete-btn" onclick="closeViewModal()">X</button>
+            </div>
+            <div id="viewItemBody"></div>
+        </div>
+    </div>
+
+    <div id="modalRecibo" class="modal" style="z-index:9999;">
+        <div class="modal-content" style="max-width:850px;">
+            <div id="modalReciboContent"></div>
+            <div id="modalReciboActions" class="modal-actions" style="margin-top:15px; border-top:1px solid #eee; padding-top:10px; text-align:right;"></div>
+        </div>
+    </div>
+
     <div id="modalDayOperations" class="modal">
-        <div class="modal-content">
-            <span onclick="document.getElementById('modalDayOperations').style.display='none'" class="close-btn">&times;</span>
-            <h3 id="modalDayTitle">OPERAÇÕES DO DIA</h3>
-            <div id="modalDaySummary" class="daily-finance-summary"></div>
-            <div id="modalDayBody" class="table-responsive"></div>
+        <div class="modal-content" style="max-width:900px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h3 id="modalDayTitle"></h3>
+                <button class="btn-mini delete-btn" onclick="document.getElementById('modalDayOperations').style.display='none'">X</button>
+            </div>
+            <div id="modalDaySummary"></div>
+            <div id="modalDayBody"></div>
         </div>
     </div>
-
-    <div id="modalCheckinConfirm" class="modal">
-        <div class="modal-content">
-            <h3 id="checkinModalTitle">CHECK-IN</h3>
-            <span class="close-btn" onclick="closeCheckinConfirmModal()">&times;</span>
-            <form id="formCheckinConfirm">
-                <input type="hidden" id="checkinOpId"><input type="hidden" id="checkinStep">
-                <div style="background:#f0f4f8; padding:15px; border-radius:6px; margin-bottom:20px;">
-                    <p><strong>DATA:</strong> <span id="checkinDisplayData"></span></p>
-                    <p><strong>CONTRATANTE:</strong> <span id="checkinDisplayContratante"></span></p>
-                    <p><strong>VEÍCULO:</strong> <span id="checkinDisplayVeiculo"></span></p>
-                </div>
-                <div id="checkinDriverFields" style="display:none; border-top:1px dashed #ccc; padding-top:15px;">
-                    <div id="divKmInicial"><div class="form-group"><label style="color:var(--primary-color);">KM INICIAL:</label><input type="number" id="checkinKmInicial"></div></div>
-                    <div id="divKmFinal" style="display:none;">
-                        <div class="form-group"><label>KM REGISTRADO:</label><input type="number" id="checkinKmInicialReadonly" readonly style="background:#eee;"></div>
-                        <div class="form-group"><label style="color:var(--danger-color);">KM FINAL:</label><input type="number" id="checkinKmFinal"></div>
-                        <div class="form-group"><label>VALOR ABASTECIDO (R$):</label><input type="number" id="checkinValorAbastecido" step="0.01"></div>
-                        <div class="form-group"><label>PREÇO LITRO (R$):</label><input type="number" id="checkinPrecoLitroConfirm" step="0.001"></div>
-                    </div>
-                </div>
-                <div class="form-actions"><button type="submit" id="btnConfirmCheckin" class="btn-primary" style="width:100%;">CONFIRMAR</button></div>
-            </form>
-        </div>
-    </div>
-
-    <div id="modalAdicionarAjudante" class="modal">
-        <div class="modal-content" style="max-width:400px;">
-            <span class="close-btn" onclick="closeAdicionarAjudanteModal()">&times;</span>
-            <h3>ADICIONAR AJUDANTE</h3>
-            <p id="modalAjudanteNome" style="font-weight:bold; margin-bottom:15px; font-size:1.1rem; text-align:center;"></p>
-            <div class="form-group"><label>VALOR DA DIÁRIA (R$):</label><input id="modalDiariaInput" type="number" step="0.01"></div>
-            <div class="form-actions"><button id="modalAjudanteAddBtn" class="btn-primary" style="width:100%;">CONFIRMAR</button></div>
-        </div>
-    </div>
-
+    
     <div id="modalRequestProfileChange" class="modal">
         <div class="modal-content">
-            <span class="close-btn" onclick="document.getElementById('modalRequestProfileChange').style.display='none'">&times;</span>
-            <h3>SOLICITAR ALTERAÇÃO DE DADOS</h3>
-            <p style="margin-bottom:20px; color:#666;">Selecione o dado que deseja alterar e informe o novo valor. A alteração será enviada para aprovação.</p>
+            <h3>Solicitar Alteração Cadastral</h3>
+            <p>O administrador precisará aprovar esta mudança.</p>
             <form id="formRequestProfileChange">
-                <div class="form-row">
-                    <div class="form-col col-lg">
-                        <div class="form-group">
-                            <label>DADO A ALTERAR:</label>
-                            <select id="reqFieldType" required>
-                                <option value="">SELECIONE...</option>
-                                <option value="TELEFONE">TELEFONE</option>
-                                <option value="ENDERECO">ENDEREÇO</option>
-                                <option value="PIX">CHAVE PIX</option>
-                                <option value="CNH">NÚMERO DA CNH</option>
-                                <option value="VALIDADE_CNH">VALIDADE DA CNH</option>
-                                <option value="EMAIL">EMAIL DE CONTATO</option>
-                                <option value="OUTRO">OUTRO (Descreva)</option>
-                            </select>
-                        </div>
+                <div class="form-grid">
+                    <div class="form-col full">
+                        <label>O que deseja alterar?</label>
+                        <select id="reqFieldType" required>
+                            <option value="TELEFONE">Telefone</option>
+                            <option value="ENDERECO">Endereço</option>
+                            <option value="PIX">Chave PIX</option>
+                            <option value="CNH">Número da CNH</option>
+                            <option value="VALIDADE_CNH">Validade CNH</option>
+                            <option value="EMAIL">Email de Acesso</option>
+                        </select>
                     </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-col col-full">
-                        <div class="form-group">
-                            <label>NOVO VALOR:</label>
-                            <input type="text" id="reqNewValue" required placeholder="Digite o novo valor correto">
-                        </div>
+                    <div class="form-col full">
+                        <label>Novo Valor</label>
+                        <input type="text" id="reqNewValue" required>
                     </div>
-                </div>
-                <div class="form-actions"><button type="submit" class="btn-primary">ENVIAR SOLICITAÇÃO</button></div>
-            </form>
-        </div>
-    </div>
-
-    <div id="modalUpdateCNH" class="modal" style="z-index: 3100;">
-        <div class="modal-content" style="max-width: 450px; text-align: center;">
-            <h3 style="color:#c62828;"><i class="fas fa-id-card"></i> CNH VENCIDA</h3>
-            <p style="margin: 20px 0;">
-                Sua Carteira Nacional de Habilitação venceu ou vence hoje.<br>
-                Por favor, informe a <strong>nova data de validade</strong> para continuar utilizando o sistema.
-            </p>
-            <form id="formUpdateCNH">
-                <div class="form-group" style="text-align: left;">
-                    <label>NOVA DATA DE VALIDADE:</label>
-                    <input type="date" id="newCNHDate" required style="font-size: 1.1rem;">
-                </div>
-                <div class="form-actions" style="justify-content: center;">
-                    <button type="submit" class="btn-primary" style="width: 100%;">
-                        ATUALIZAR CADASTRO
-                    </button>
+                    <div class="form-col full" style="display:flex; gap:10px; margin-top:15px;">
+                        <button type="submit" class="btn-success" style="flex:1;">ENVIAR SOLICITAÇÃO</button>
+                        <button type="button" class="btn-secondary" onclick="document.getElementById('modalRequestProfileChange').style.display='none'">CANCELAR</button>
+                    </div>
                 </div>
             </form>
         </div>
     </div>
     
-    <div id="modalNotification" class="modal" style="z-index: 3000;">
-        <div class="modal-content notification-box">
-            <h3 style="color:#e65100; border-bottom: none;"><i class="fas fa-bell"></i> NOVA MENSAGEM</h3>
-            <p id="notificationMessageText" class="notification-text" style="font-size:1.2rem; margin:20px 0; font-weight:bold;"></p>
-            <small id="notificationSender" style="color:#666; display:block; margin-bottom:20px; font-weight:bold;"></small>
-            <button onclick="document.getElementById('modalNotification').style.display='none'" class="btn-primary" style="width:100%; justify-content:center; padding: 15px;">ENTENDIDO</button>
-        </div>
+    <div id="modalAdicionarAjudante" class="modal">
+        <div class="modal-content">
+             <h3>Adicionar Ajudante</h3>
+             </div>
     </div>
-
-    <div id="modalRecibo" class="modal">
-        <div class="modal-content" style="max-width: 800px; padding:0;">
-            <div style="background:#263238; color:white; padding:15px; display:flex; justify-content:space-between; align-items:center;">
-                <h3 style="margin:0; border:none; color:white;">RECIBO DE PAGAMENTO</h3>
-                <span onclick="document.getElementById('modalRecibo').style.display='none'" style="cursor:pointer; font-size:1.5rem;">&times;</span>
-            </div>
-            
-            <div id="modalReciboContent" style="padding:20px;">
-                </div>
-            
-            <div id="modalReciboActions" class="form-actions" style="padding:15px; border-top:1px solid #eee; background:#f9f9f9; display:flex; justify-content:flex-end; gap:10px;">
-                </div>
+    
+    <div id="modalCheckinConfirm" class="modal">
+        <div class="modal-content">
+             <h3>Confirmar Check-in</h3>
+             <p>Deseja confirmar sua presença nesta viagem?</p>
+             <div class="modal-actions">
+                 <button class="btn-success" id="btnConfirmCheckinAction">CONFIRMAR</button>
+                 <button class="btn-secondary" onclick="closeCheckinConfirmModal()">CANCELAR</button>
+             </div>
         </div>
     </div>
 
     <script type="module">
-      import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-      import { getFirestore, collection, setDoc, doc, onSnapshot, getDoc, updateDoc, query, where, deleteDoc, getDocs, addDoc, arrayUnion, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
       import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+      import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+      // ----------------------------------------------------------------------------------
+      // IMPORTANTE: COLE SUAS CHAVES DO FIREBASE AQUI
+      // (As mesmas usadas no login.html)
+      // ----------------------------------------------------------------------------------
+      const firebaseConfig = {
+  apiKey: "AIzaSyBZjVdcyjbEoR_-X6_lZuTRDMeN2wIntZI",
+  authDomain: "logi-master-dd4cd.firebaseapp.com",
+  projectId: "logi-master-dd4cd",
+  storageBucket: "logi-master-dd4cd.firebasestorage.app",
+  messagingSenderId: "673000154258",
+  appId: "1:673000154258:web:fc9d6fced43e557076324b"
+};
+
+      // Inicializa Firebase
+      let app, auth, db;
       
-      const firebaseConfig = { apiKey: "AIzaSyBZjVdcyjbEoR_-X6_lZuTRDMeN2wIntZI", authDomain: "logi-master-dd4cd.firebaseapp.com", projectId: "logi-master-dd4cd", storageBucket: "logi-master-dd4cd.firebasestorage.app", messagingSenderId: "673000154258", appId: "1:673000154258:web:fc9d6fced43e557076324b" };
-      
-      const app = initializeApp(firebaseConfig);
-      const db = getFirestore(app);
-      const auth = getAuth(app);
-      
-      // Função para criar usuário usando App Secundário (Sem deslogar Admin)
-      async function criarUsuarioSecundario(email, senha) {
-          const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
-          const secondaryAuth = getAuth(secondaryApp);
-          try {
-              const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, senha);
-              await deleteApp(secondaryApp); // Limpa a app secundária
-              return userCredential.user.uid;
-          } catch (error) {
-              await deleteApp(secondaryApp);
-              throw error;
+      // Fallback para recuperar config se não estiver hardcoded
+      if (Object.keys(firebaseConfig).length === 0) {
+          const cached = localStorage.getItem('firebase_config_cache');
+          if (cached) {
+              try {
+                  const parsedConfig = JSON.parse(cached);
+                  app = initializeApp(parsedConfig);
+              } catch(e) { console.error("Erro config cache", e); }
           }
+      } else {
+          app = initializeApp(firebaseConfig);
+          localStorage.setItem('firebase_config_cache', JSON.stringify(firebaseConfig));
       }
 
-      // Expondo para o Script Global
-      window.dbRef = { 
-          db, doc, setDoc, getDoc, onSnapshot, collection, auth, signOut, 
-          updateDoc, query, where, deleteDoc, getDocs, addDoc, arrayUnion, writeBatch,
-          sendReset: (email) => sendPasswordResetEmail(auth, email),
-          criarAuthUsuario: criarUsuarioSecundario // Nova função exposta
-      };
+      if (app) {
+          auth = getAuth(app);
+          db = getFirestore(app);
 
-      onAuthStateChanged(auth, async (user) => {
-          if (user) {
-              const userSnap = await getDoc(doc(db, "users", user.uid));
-              if (userSnap.exists()) {
-                  const userData = userSnap.data();
-                  window.currentUser = userData; 
-                  document.body.style.display = 'flex';
-                  
-                  const emailElem = document.getElementById('userEmailDisplay');
-                  const roleElem = document.getElementById('userRoleDisplay');
-                  if(emailElem) emailElem.textContent = userData.email.toUpperCase();
-                  if(roleElem) roleElem.textContent = userData.role.toUpperCase();
-                  
-                  setTimeout(() => { 
-                      if (window.initSystemByRole) window.initSystemByRole(userData); 
-                  }, 500);
+          // Expõe referências globais para o script.js usar
+          window.dbRef = { 
+              app, auth, db, 
+              doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc, deleteDoc, writeBatch,
+              createUserWithEmailAndPassword // Exposto para funções antigas se necessário
+          };
+
+          // Monitor de Autenticação
+          onAuthStateChanged(auth, async (user) => {
+              if (user) {
+                  try {
+                      // Busca dados do Firestore
+                      const userSnap = await getDoc(doc(db, "users", user.uid));
+                      
+                      if (userSnap.exists()) {
+                          const userData = userSnap.data();
+                          
+                          // Verifica aprovação
+                          if (userData.approved === false) {
+                             alert("Seu cadastro foi criado, mas aguarda aprovação do administrador.\n\nPor favor, contate seu gerente.");
+                             await signOut(auth);
+                             window.location.replace("login.html");
+                             return;
+                          }
+
+                          window.USUARIO_ATUAL = userData; // Define globalmente
+                          document.body.style.display = 'flex'; // Mostra o corpo
+                          
+                          const emailElem = document.getElementById('userEmailDisplay');
+                          const roleElem = document.getElementById('userRoleDisplay');
+                          if(emailElem) emailElem.textContent = userData.email.toUpperCase();
+                          if(roleElem) roleElem.textContent = userData.role.toUpperCase();
+                          
+                          // Inicializa o sistema principal (Função definida no script.js)
+                          setTimeout(() => { 
+                              if (window.initSystemByRole) window.initSystemByRole(userData); 
+                          }, 500);
+
+                      } else {
+                          // Usuário autenticado mas sem registro no Firestore
+                          alert("Erro de consistência: Usuário sem perfil. Entre em contato com o suporte.");
+                          await signOut(auth);
+                          window.location.replace("login.html");
+                      }
+                  } catch (err) {
+                      console.error("Erro auth state:", err);
+                      // Opcional: não redirecionar imediatamente em caso de erro de rede
+                  }
+              } else { 
+                  // Não logado
+                  if(!window.location.href.includes('login.html')) {
+                      window.location.replace("login.html");
+                  }
               }
-          } else { 
-              // Permite acesso à pagina de login se não estiver logado
-              if(!window.location.href.includes('login.html')) window.location.replace("login.html"); 
-          }
-      });
+          });
+      } else {
+          console.error("Firebase não configurado. Adicione as chaves no código.");
+          alert("ERRO CRÍTICO: Configuração do Firebase não encontrada.");
+      }
       
       window.logoutSystem = async function() {
-          await signOut(auth);
+          if(auth) await signOut(auth);
           window.location.href = "login.html";
       }
     </script>
+    
     <script src="script.js" defer></script>
 </body>
 </html>
