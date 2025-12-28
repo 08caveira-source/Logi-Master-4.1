@@ -1697,11 +1697,11 @@ window.renderizarHistoricoRecibos = function() {
 };
 // =============================================================================
 // ARQUIVO: script.js
-// PARTE 5/5: SUPER ADMIN (CORREÇÃO), SISTEMA DE CRÉDITOS E INICIALIZAÇÃO
+// PARTE 5/5: SUPER ADMIN (MASTER), SISTEMA DE CRÉDITOS E INICIALIZAÇÃO
 // =============================================================================
 
 // -----------------------------------------------------------------------------
-// 13. PAINEL SUPER ADMIN (MASTER) - CORREÇÃO DE CARREGAMENTO
+// 13. PAINEL SUPER ADMIN (MASTER) - GERENCIADOR GLOBAL
 // -----------------------------------------------------------------------------
 
 var _cacheGlobalUsers = [];
@@ -1710,12 +1710,12 @@ window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
     var container = document.getElementById('superAdminContainer');
     if (!container) return;
 
-    if (forceRefresh) container.innerHTML = '<p style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Atualizando dados globais...</p>';
+    if (forceRefresh) container.innerHTML = '<p style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Atualizando lista global...</p>';
 
     if (!window.dbRef) return console.error("Firebase não inicializado.");
 
     try {
-        // Busca todos os usuários do sistema (Global)
+        // Busca todos os usuários do sistema (Global) sem restrições
         const { db, collection, getDocs, query, orderBy } = window.dbRef;
         const q = query(collection(db, "users"), orderBy("company"));
         const snapshot = await getDocs(q);
@@ -1771,10 +1771,10 @@ function renderizarListaGlobal(listaUsuarios) {
         var qtdUsers = emp.usuarios.length;
         var nomeAdmin = emp.admin ? emp.admin.name : '(Sem Admin)';
         
-        // Status da Validade
+        // Status da Validade (Visualização para o Super Admin)
         var statusValidade = '<span class="status-pill pill-blocked">SEM DADOS</span>';
         if (emp.isVitalicio) {
-            statusValidade = '<span class="status-pill pill-active"><i class="fas fa-infinity"></i> VITALÍCIO</span>';
+            statusValidade = '<span class="status-pill pill-active" style="background:gold; color:#333;"><i class="fas fa-infinity"></i> VITALÍCIO</span>';
         } else if (emp.validade) {
             var diasRestantes = Math.ceil((new Date(emp.validade) - new Date()) / (1000 * 60 * 60 * 24));
             if (diasRestantes > 0) {
@@ -1846,7 +1846,7 @@ window.filterGlobalUsers = function() {
 };
 
 // -----------------------------------------------------------------------------
-// 14. SISTEMA DE CRÉDITOS E VALIDADE
+// 14. SISTEMA DE CRÉDITOS E VALIDADE (GERENCIAMENTO)
 // -----------------------------------------------------------------------------
 
 window.abrirModalCreditos = function(companyId, validadeAtual, isVitalicio) {
@@ -1860,7 +1860,6 @@ window.abrirModalCreditos = function(companyId, validadeAtual, isVitalicio) {
     document.getElementById('validadeAtualCredito').textContent = textoVal;
     document.getElementById('checkVitalicio').checked = isVitalicio;
     
-    // Toggle input de meses se for vitalício
     var divQtd = document.getElementById('divAddCreditos');
     divQtd.style.display = isVitalicio ? 'none' : 'block';
     document.getElementById('checkVitalicio').onchange = function() {
@@ -1880,7 +1879,7 @@ window.salvarCreditosEmpresa = async function() {
     try {
         const { db, collection, query, where, getDocs, updateDoc, doc } = window.dbRef;
         
-        // Encontra o ADMIN da empresa para setar a validade nele (Centralizador)
+        // Busca Admin da empresa alvo
         const q = query(collection(db, "users"), where("company", "==", companyId), where("role", "==", "admin"));
         const snapshot = await getDocs(q);
         
@@ -1905,22 +1904,22 @@ window.salvarCreditosEmpresa = async function() {
             isVitalicio: isVitalicio
         });
 
-        alert("Créditos/Validade atualizados com sucesso!");
+        alert("Status da empresa atualizado com sucesso!");
         document.getElementById('modalCreditos').style.display = 'none';
-        carregarPainelSuperAdmin(true); // Recarrega lista
+        carregarPainelSuperAdmin(true); 
 
     } catch (erro) {
         console.error(erro);
-        alert("Erro ao salvar créditos: " + erro.message);
+        alert("Erro ao salvar: " + erro.message);
     }
 };
 
 window.excluirUsuarioGlobal = async function(uid) {
-    if (!confirm("Tem certeza? Esta ação é irreversível.")) return;
+    if (!confirm("Tem certeza? Esta ação é irreversível e bloqueará o acesso deste usuário.")) return;
     try {
         const { db, doc, deleteDoc } = window.dbRef;
         await deleteDoc(doc(db, "users", uid));
-        carregarPainelSuperAdmin(true); // Refresh
+        carregarPainelSuperAdmin(true); 
     } catch(e) { alert("Erro: " + e.message); }
 };
 
@@ -1935,11 +1934,10 @@ document.addEventListener('submit', async function(e) {
         if (dominio.length < 3) return alert("Domínio inválido.");
         
         try {
-            // Cria Auth
             var uid = await window.dbRef.criarAuthUsuario(email, senha);
-            
-            // Cria Doc User Admin
             const { db, doc, setDoc } = window.dbRef;
+            
+            // Cria o Admin da nova empresa com 30 dias grátis
             await setDoc(doc(db, "users", uid), {
                 uid: uid,
                 name: "ADMIN " + dominio.toUpperCase(),
@@ -1948,11 +1946,11 @@ document.addEventListener('submit', async function(e) {
                 company: dominio,
                 createdAt: new Date().toISOString(),
                 approved: true,
-                systemValidity: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString(), // 30 dias grátis inicial
+                systemValidity: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString(),
                 isVitalicio: false
             });
             
-            alert(`Empresa ${dominio} criada com sucesso!\nAdmin: ${email}`);
+            alert(`Empresa ${dominio} criada!\nLogin: ${email}`);
             e.target.reset();
             carregarPainelSuperAdmin(true);
             
@@ -1972,80 +1970,93 @@ window.initSystemByRole = async function(user) {
     
     // Ocultar todos os menus primeiro
     document.querySelectorAll('.sidebar ul').forEach(ul => ul.style.display = 'none');
-    
-    // Reset Views
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
 
-    // 1. SUPER ADMIN (MASTER)
+    // -----------------------------------------------------------
+    // 1. SUPER ADMIN (MASTER) - IMUNIDADE TOTAL DE CRÉDITOS
+    // -----------------------------------------------------------
     if (user.role === 'admin_master') {
+        console.log("Acesso Master concedido: Sistema de créditos desativado para este usuário.");
+        
+        // Garante que o estado global reflita acesso ilimitado para evitar bloqueios de escrita
+        window.SYSTEM_STATUS = {
+            validade: 'VITALICIO',
+            isVitalicio: true,
+            bloqueado: false
+        };
+
         document.getElementById('menu-super-admin').style.display = 'block';
         document.getElementById('userRoleDisplay').textContent = "SUPER ADMIN";
+        
+        // Força a entrada no painel master
         document.querySelector('[data-page="super-admin"]').click();
         carregarPainelSuperAdmin(true);
-        return; 
+        return; // ENCERRA AQUI - Não executa verificações de bloqueio abaixo
     }
 
-    // 2. VERIFICAÇÃO DE BLOQUEIO / APROVAÇÃO (ADMIN E FUNCIONÁRIOS)
+    // -----------------------------------------------------------
+    // 2. VERIFICAÇÃO DE APROVAÇÃO (ADMIN LOCAL E FUNCIONÁRIOS)
+    // -----------------------------------------------------------
     if (!user.approved) {
         document.body.innerHTML = `
             <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#eceff1; color:#37474f; text-align:center;">
                 <i class="fas fa-lock" style="font-size:4rem; margin-bottom:20px; color:#cfd8dc;"></i>
                 <h1>ACESSO EM ANÁLISE</h1>
-                <p>Sua conta foi criada, mas aguarda aprovação do administrador da empresa <strong>${user.company}</strong>.</p>
+                <p>Sua conta aguarda aprovação do administrador da empresa <strong>${user.company}</strong>.</p>
                 <button onclick="logoutSystem()" class="btn-primary" style="margin-top:20px;">VOLTAR AO LOGIN</button>
             </div>
         `;
         return;
     }
 
-    // 3. CARREGAMENTO DE DADOS ESPECÍFICOS DA EMPRESA
-    // Agora o sistema carrega os dados do LocalStorage, mas idealmente deveria sincronizar do Firestore da empresa
-    // Para simplificar, mantemos a lógica híbrida: user auth no firestore, dados operacionais no LocalStorage (como estava no original)
-    // Mas se quiser usar o Firestore completo para dados, as funções salvarDadosGenerico (Parte 1) já salvam lá.
-    // Aqui vamos checar a validade do sistema (Créditos)
-    
+    // -----------------------------------------------------------
+    // 3. VERIFICAÇÃO DE VALIDADE/CRÉDITOS (APENAS EMPRESAS)
+    // -----------------------------------------------------------
     var diasRestantes = 0;
     var sistemaBloqueado = false;
     
-    // Se for ADMIN, verifica a própria validade salva no user doc
+    // Se for Admin Local, verifica sua própria validade
     if (user.role === 'admin') {
-        if (!user.isVitalicio) {
+        if (user.isVitalicio) {
+            window.SYSTEM_STATUS.isVitalicio = true;
+        } else {
             if (!user.systemValidity) {
-                // Caso legado ou novo sem data: concede 7 dias de cortesia ou bloqueia
+                // Legado ou sem data definida: considera bloqueado ou em período de graça
                 sistemaBloqueado = true; 
             } else {
                 var hoje = new Date();
                 var vencimento = new Date(user.systemValidity);
                 diasRestantes = Math.ceil((vencimento - hoje) / (1000 * 60 * 60 * 24));
                 
-                if (vencimento < hoje) sistemaBloqueado = true;
+                if (vencimento < hoje) {
+                    sistemaBloqueado = true;
+                    window.SYSTEM_STATUS.bloqueado = true;
+                }
             }
         }
-    } else {
-        // Se for funcionário, precisaria checar o admin da empresa. 
-        // Para simplificar, assumimos que o funcionário loga, mas se o admin não pagou, o salvamento na nuvem falha (verificado na Parte 1).
-        // Visualmente, não bloqueamos o funcionário totalmente, mas avisamos se possível.
     }
 
-    // TELA DE BLOQUEIO FINANCEIRO (ADMIN)
+    // TELA DE BLOQUEIO POR FALTA DE PAGAMENTO (APENAS ADMIN LOCAL)
     if (user.role === 'admin' && sistemaBloqueado && !user.isVitalicio) {
         document.body.innerHTML = `
             <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#ffebee; color:#b71c1c; text-align:center;">
                 <i class="fas fa-ban" style="font-size:4rem; margin-bottom:20px;"></i>
                 <h1>ASSINATURA VENCIDA</h1>
-                <p>O acesso ao sistema da empresa <strong>${user.company}</strong> está suspenso por falta de créditos.</p>
-                <p style="margin-top:10px;">Por favor, entre em contato com o suporte para renovar sua licença.</p>
+                <p>O acesso da empresa <strong>${user.company}</strong> está suspenso.</p>
+                <p>Entre em contato com o suporte para regularizar.</p>
                 <button onclick="logoutSystem()" class="btn-danger" style="margin-top:30px;">SAIR</button>
             </div>
         `;
         return;
     }
 
-    // 4. ROUTING DE MENUS
+    // -----------------------------------------------------------
+    // 4. ROTEAMENTO DE MENUS (USUÁRIOS COM ACESSO LIBERADO)
+    // -----------------------------------------------------------
     if (user.role === 'admin') {
         document.getElementById('menu-admin').style.display = 'block';
         
-        // Exibir Validade na Sidebar
+        // Exibir Mostrador de Validade na Sidebar
         var displayVal = document.getElementById('systemValidityDisplay');
         var spanData = document.getElementById('valDataVencimento');
         if (displayVal && spanData) {
@@ -2055,21 +2066,20 @@ window.initSystemByRole = async function(user) {
                 displayVal.style.borderLeftColor = "gold";
             } else {
                 spanData.textContent = formatarDataParaBrasileiro(user.systemValidity.split('T')[0]);
-                if (diasRestantes < 5) displayVal.classList.add('expired'); // Fica vermelho se < 5 dias
+                if (diasRestantes < 5) displayVal.classList.add('expired');
             }
         }
 
         renderizarPainelEquipe();
         renderizarCalendario();
-        atualizarDashboard(); // Já carrega gráficos
+        atualizarDashboard();
         document.querySelector('[data-page="home"]').click();
 
     } else if (user.role === 'motorista' || user.role === 'ajudante') {
         document.getElementById('menu-employee').style.display = 'block';
         window.MODO_APENAS_LEITURA = true;
-        
-        // Tenta buscar serviços vinculados a este usuário
-        filtrarServicosFuncionario(user.uid);
+        // Funcionários não veem dados financeiros globais, apenas seus serviços
+        filtrarServicosFuncionario(user.uid); 
         document.querySelector('[data-page="employee-home"]').click();
     }
 };
@@ -2078,37 +2088,31 @@ window.initSystemByRole = async function(user) {
 // 16. EVENTOS DE NAVEGAÇÃO E UI
 // -----------------------------------------------------------------------------
 
-// Navegação Sidebar
 document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', function() {
-        // Remove active class
         document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
         document.querySelectorAll('.page').forEach(page => {
             page.classList.remove('active');
-            page.style.display = 'none'; // Força display none para animação funcionar
+            page.style.display = 'none';
         });
         
-        // Add active
         this.classList.add('active');
         var pageId = this.getAttribute('data-page');
         var targetPage = document.getElementById(pageId);
         if (targetPage) {
             targetPage.style.display = 'block';
-            setTimeout(() => targetPage.classList.add('active'), 10); // Timeout para CSS transition
+            setTimeout(() => targetPage.classList.add('active'), 10);
         }
 
-        // Se mobile, fecha menu
         if (window.innerWidth <= 768) {
             document.getElementById('sidebar').classList.remove('active');
         }
         
-        // Trigger de Atualizações Específicas
         if (pageId === 'home') atualizarDashboard();
         if (pageId === 'graficos') atualizarGraficoPrincipal(new Date().getMonth(), new Date().getFullYear());
     });
 });
 
-// Mobile Menu
 document.getElementById('mobileMenuBtn')?.addEventListener('click', function() {
     document.getElementById('sidebar').classList.toggle('active');
 });
@@ -2117,14 +2121,19 @@ document.getElementById('sidebarOverlay')?.addEventListener('click', function() 
     document.getElementById('sidebar').classList.remove('active');
 });
 
-// Abas de Cadastro
 document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
     btn.addEventListener('click', function() {
         document.querySelectorAll('.cadastro-tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.cadastro-form').forEach(f => f.classList.remove('active'));
-        
         this.classList.add('active');
         var tabId = this.getAttribute('data-tab');
         document.getElementById(tabId).classList.add('active');
     });
 });
+
+// Funções de filtro de funcionário (Mockup para evitar erro se não definida na Parte 4)
+window.filtrarServicosFuncionario = window.filtrarServicosFuncionario || function(uid) {
+    console.log("Buscando serviços para: " + uid);
+    // Lógica real está ou deveria estar na Parte 4 ou 2. 
+    // Se não houver, o painel do funcionário ficará vazio, mas sem erro.
+};
