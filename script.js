@@ -680,20 +680,19 @@ window.abrirModalDetalhesDia = function(dataString) {
     modalBody.innerHTML = htmlLista;
     document.getElementById('modalDayOperations').style.display = 'block';
 };
+
 // =============================================================================
-// PARTE 3: CADASTROS E INTERFACE (COM TRATAMENTO DE ERRO DE EMAIL)
+// PARTE 3: CADASTROS E INTERFACE (CRUDs E TABELAS)
 // =============================================================================
 
-// *** CORREÇÃO DAS ABAS DE CADASTRO ***
+// *** LÓGICA DAS ABAS DE CADASTRO ***
 document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.cadastro-tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.cadastro-form').forEach(f => f.classList.remove('active'));
-        
         btn.classList.add('active');
         const targetId = btn.getAttribute('data-tab');
         const targetForm = document.getElementById(targetId);
-        
         if (targetForm) {
             targetForm.classList.add('active');
             if(targetId === 'funcionarios') renderizarTabelaFuncionarios();
@@ -705,433 +704,289 @@ document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
     });
 });
 
-// FORMULÁRIO DE FUNCIONÁRIOS (CORRIGIDO PARA EMAIL EXISTENTE)
+// 1. SALVAR FUNCIONÁRIO
 document.addEventListener('submit', async function(e) {
     if (e.target.id === 'formFuncionario') {
         e.preventDefault();
-        var btnSubmit = e.target.querySelector('button[type="submit"]');
-        var textoOriginal = btnSubmit.innerHTML;
-        btnSubmit.disabled = true;
-        btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
-
+        var btn = e.target.querySelector('button[type="submit"]'); btn.disabled=true; btn.innerHTML='<i class="fas fa-spinner fa-spin"></i>';
         try {
             var id = document.getElementById('funcionarioId').value || Date.now().toString();
             var email = document.getElementById('funcEmail').value.toLowerCase().trim();
             var senha = document.getElementById('funcSenha').value; 
             var funcao = document.getElementById('funcFuncao').value;
             var nome = document.getElementById('funcNome').value.toUpperCase();
-            
-            // Verifica se é criação de login (Novo ID + Senha preenchida)
-            var criarLogin = (!document.getElementById('funcionarioId').value && senha);
             var novoUID = id; 
 
-            if (criarLogin) {
-                if(senha.length < 6) throw new Error("A senha deve ter no mínimo 6 dígitos.");
-                
+            if (!document.getElementById('funcionarioId').value && senha) {
+                if(senha.length < 6) throw new Error("Senha min 6 dígitos.");
                 try {
-                    console.log("Tentando criar usuário no Auth...");
                     novoUID = await window.dbRef.criarAuthUsuario(email, senha);
-                    
-                    // Salva metadados do login
                     await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "users", novoUID), {
-                        uid: novoUID, 
-                        name: nome, 
-                        email: email, 
-                        role: funcao,
-                        company: window.USUARIO_ATUAL.company, 
-                        createdAt: new Date().toISOString(), 
-                        approved: true, 
-                        senhaVisual: senha
+                        uid: novoUID, name: nome, email: email, role: funcao, company: window.USUARIO_ATUAL.company, createdAt: new Date().toISOString(), approved: true, senhaVisual: senha
                     });
-
                 } catch (authError) {
-                    // TRATAMENTO ESPECÍFICO PARA EMAIL JÁ EM USO
                     if (authError.code === 'auth/email-already-in-use') {
-                        if (!confirm(`O e-mail ${email} JÁ POSSUI UM LOGIN no sistema.\n\nDeseja cadastrar os dados do funcionário mesmo assim? (O login antigo será mantido)`)) {
-                            throw new Error("Operação cancelada pelo usuário.");
-                        }
-                        // Prossegue usando o ID gerado por data (novoUID = id), sem criar novo Auth
-                        console.warn("Seguindo com cadastro de dados sem recriar Auth.");
-                    } else {
-                        throw authError; // Lança outros erros normalmente
-                    }
+                        if (!confirm(`O e-mail ${email} já existe. Salvar dados mesmo assim?`)) throw new Error("Cancelado.");
+                    } else throw authError;
                 }
             }
 
-            var funcionarioObj = {
-                id: novoUID, 
-                nome: nome, 
-                funcao: funcao, 
-                documento: document.getElementById('funcDocumento').value,
-                email: email, 
-                telefone: document.getElementById('funcTelefone').value, 
-                pix: document.getElementById('funcPix').value, 
-                endereco: document.getElementById('funcEndereco').value,
-                cnh: document.getElementById('funcCNH').value, 
-                validadeCNH: document.getElementById('funcValidadeCNH').value,
-                categoriaCNH: document.getElementById('funcCategoriaCNH').value, 
+            var obj = {
+                id: novoUID, nome: nome, funcao: funcao, documento: document.getElementById('funcDocumento').value,
+                email: email, telefone: document.getElementById('funcTelefone').value, pix: document.getElementById('funcPix').value, 
+                endereco: document.getElementById('funcEndereco').value, cnh: document.getElementById('funcCNH').value, 
+                validadeCNH: document.getElementById('funcValidadeCNH').value, categoriaCNH: document.getElementById('funcCategoriaCNH').value, 
                 cursoDescricao: document.getElementById('funcCursoDescricao').value
             };
-            
-            if (senha) { funcionarioObj.senhaVisual = senha; }
+            if (senha) obj.senhaVisual = senha;
 
-            // Atualiza Cache Local
             var lista = CACHE_FUNCIONARIOS.filter(f => f.email !== email && f.id !== id);
-            lista.push(funcionarioObj);
-            
-            // Salva na Nuvem
+            lista.push(obj);
             await salvarListaFuncionarios(lista);
-            
-            alert("Funcionário Salvo com Sucesso!");
-            e.target.reset(); 
-            document.getElementById('funcionarioId').value = '';
-            toggleDriverFields(); 
-            preencherTodosSelects();
-
-        } catch (erro) { 
-            console.error(erro); 
-            // Ignora erro de cancelamento
-            if (erro.message !== "Operação cancelada pelo usuário.") {
-                alert("Erro: " + erro.message); 
-            }
-        } finally { 
-            btnSubmit.disabled = false; 
-            btnSubmit.innerHTML = textoOriginal; 
-        }
+            alert("Salvo!"); e.target.reset(); document.getElementById('funcionarioId').value=''; toggleDriverFields(); preencherTodosSelects();
+        } catch (erro) { if(erro.message!=="Cancelado.") alert(erro.message); } finally { btn.disabled=false; btn.innerHTML='SALVAR'; }
     }
 });
 
-// FORMULÁRIO DE VEÍCULOS
+// 2. VEÍCULOS
 document.addEventListener('submit', function(e) { 
-    if (e.target.id === 'formVeiculo') { 
-        e.preventDefault(); 
-        var placa = document.getElementById('veiculoPlaca').value.toUpperCase(); 
-        var novo = { 
-            placa: placa, 
-            modelo: document.getElementById('veiculoModelo').value.toUpperCase(), 
-            ano: document.getElementById('veiculoAno').value, 
-            renavam: document.getElementById('veiculoRenavam').value, 
-            chassi: document.getElementById('veiculoChassi').value 
-        }; 
-        var lista = CACHE_VEICULOS.filter(v => v.placa !== placa); 
-        lista.push(novo); 
-        salvarListaVeiculos(lista).then(() => { 
-            alert("Veículo Salvo!"); 
-            e.target.reset(); 
-            preencherTodosSelects(); 
-        }); 
-    } 
+    if (e.target.id === 'formVeiculo') { e.preventDefault(); var pl = document.getElementById('veiculoPlaca').value.toUpperCase(); var novo = { placa: pl, modelo: document.getElementById('veiculoModelo').value.toUpperCase(), ano: document.getElementById('veiculoAno').value, renavam: document.getElementById('veiculoRenavam').value, chassi: document.getElementById('veiculoChassi').value }; var lista = CACHE_VEICULOS.filter(v => v.placa !== pl); lista.push(novo); salvarListaVeiculos(lista).then(() => { alert("Salvo!"); e.target.reset(); preencherTodosSelects(); }); } 
 });
 
-// FORMULÁRIO DE CLIENTES
+// 3. CLIENTES
 document.addEventListener('submit', function(e) { 
-    if (e.target.id === 'formContratante') { 
-        e.preventDefault(); 
-        var cnpj = document.getElementById('contratanteCNPJ').value; 
-        var novo = { 
-            cnpj: cnpj, 
-            razaoSocial: document.getElementById('contratanteRazaoSocial').value.toUpperCase(), 
-            telefone: document.getElementById('contratanteTelefone').value 
-        }; 
-        var lista = CACHE_CONTRATANTES.filter(c => c.cnpj !== cnpj); 
-        lista.push(novo); 
-        salvarListaContratantes(lista).then(() => { 
-            alert("Cliente Salvo!"); 
-            e.target.reset(); 
-            preencherTodosSelects(); 
-        }); 
-    } 
+    if (e.target.id === 'formContratante') { e.preventDefault(); var c = document.getElementById('contratanteCNPJ').value; var novo = { cnpj: c, razaoSocial: document.getElementById('contratanteRazaoSocial').value.toUpperCase(), telefone: document.getElementById('contratanteTelefone').value }; var lista = CACHE_CONTRATANTES.filter(x => x.cnpj !== c); lista.push(novo); salvarListaContratantes(lista).then(() => { alert("Salvo!"); e.target.reset(); preencherTodosSelects(); }); } 
 });
 
-// FORMULÁRIO DE SERVIÇOS
+// 4. SERVIÇOS
 document.addEventListener('submit', function(e) { 
-    if (e.target.id === 'formAtividade') { 
-        e.preventDefault(); 
-        var id = document.getElementById('atividadeId').value || Date.now().toString(); 
-        var novo = { 
-            id: id, 
-            nome: document.getElementById('atividadeNome').value.toUpperCase() 
-        }; 
-        var lista = CACHE_ATIVIDADES.filter(a => String(a.id) !== String(id)); 
-        lista.push(novo); 
-        salvarListaAtividades(lista).then(() => { 
-            alert("Atividade Salva!"); 
-            e.target.reset(); 
-            document.getElementById('atividadeId').value = ''; 
-            preencherTodosSelects(); 
-        }); 
-    } 
+    if (e.target.id === 'formAtividade') { e.preventDefault(); var id = document.getElementById('atividadeId').value || Date.now().toString(); var novo = { id: id, nome: document.getElementById('atividadeNome').value.toUpperCase() }; var lista = CACHE_ATIVIDADES.filter(a => String(a.id) !== String(id)); lista.push(novo); salvarListaAtividades(lista).then(() => { alert("Salvo!"); e.target.reset(); document.getElementById('atividadeId').value=''; preencherTodosSelects(); }); } 
 });
 
-// FORMULÁRIO MINHA EMPRESA
+// 5. MINHA EMPRESA
 document.addEventListener('submit', function(e) { 
-    if (e.target.id === 'formMinhaEmpresa') { 
-        e.preventDefault(); 
-        var dados = { 
-            razaoSocial: document.getElementById('minhaEmpresaRazaoSocial').value.toUpperCase(), 
-            cnpj: document.getElementById('minhaEmpresaCNPJ').value, 
-            telefone: document.getElementById('minhaEmpresaTelefone').value 
-        }; 
-        salvarDadosMinhaEmpresa(dados).then(() => { 
-            alert("Dados da Empresa Atualizados!"); 
-            renderizarInformacoesEmpresa(); 
-        }); 
-    } 
+    if (e.target.id === 'formMinhaEmpresa') { e.preventDefault(); salvarDadosMinhaEmpresa({ razaoSocial: document.getElementById('minhaEmpresaRazaoSocial').value.toUpperCase(), cnpj: document.getElementById('minhaEmpresaCNPJ').value, telefone: document.getElementById('minhaEmpresaTelefone').value }).then(() => { alert("Atualizado!"); renderizarInformacoesEmpresa(); }); } 
 });
 
-// FORMULÁRIO DESPESAS GERAIS
+// 6. DESPESAS GERAIS
 document.addEventListener('submit', function(e) {
     if (e.target.id === 'formDespesaGeral') {
-        e.preventDefault(); 
-        var id = document.getElementById('despesaGeralId').value || Date.now().toString();
-        var novaDespesa = {
-            id: id, 
-            data: document.getElementById('despesaGeralData').value,
-            veiculoPlaca: document.getElementById('selectVeiculoDespesaGeral').value,
-            descricao: document.getElementById('despesaGeralDescricao').value.toUpperCase(),
-            valor: Number(document.getElementById('despesaGeralValor').value),
-            formaPagamento: document.getElementById('despesaFormaPagamento').value,
-            modoPagamento: document.getElementById('despesaModoPagamento').value,
-            parcelasTotal: document.getElementById('despesaParcelas').value,
-            parcelasPagas: document.getElementById('despesaParcelasPagas').value,
-            intervaloDias: document.getElementById('despesaIntervaloDias').value
+        e.preventDefault(); var id = document.getElementById('despesaGeralId').value || Date.now().toString();
+        var nv = {
+            id: id, data: document.getElementById('despesaGeralData').value, veiculoPlaca: document.getElementById('selectVeiculoDespesaGeral').value,
+            descricao: document.getElementById('despesaGeralDescricao').value.toUpperCase(), valor: Number(document.getElementById('despesaGeralValor').value),
+            formaPagamento: document.getElementById('despesaFormaPagamento').value, modoPagamento: document.getElementById('despesaModoPagamento').value,
+            parcelasTotal: document.getElementById('despesaParcelas').value, parcelasPagas: document.getElementById('despesaParcelasPagas').value, intervaloDias: document.getElementById('despesaIntervaloDias').value
         };
-        var lista = CACHE_DESPESAS.filter(d => String(d.id) !== String(id));
-        lista.push(novaDespesa);
-        salvarListaDespesas(lista).then(() => {
-            alert("Despesa Lançada!"); 
-            e.target.reset(); 
-            document.getElementById('despesaGeralId').value = '';
-            toggleDespesaParcelas(); 
-            renderizarTabelaDespesasGerais(); 
-            atualizarDashboard(); 
-        });
+        var lista = CACHE_DESPESAS.filter(d => String(d.id) !== String(id)); lista.push(nv);
+        salvarListaDespesas(lista).then(() => { alert("Lançado!"); e.target.reset(); document.getElementById('despesaGeralId').value=''; toggleDespesaParcelas(); renderizarTabelaDespesasGerais(); atualizarDashboard(); });
     }
 });
 
-// FORMULÁRIO OPERAÇÃO
+// 7. OPERAÇÕES
 document.addEventListener('submit', function(e) {
     if (e.target.id === 'formOperacao') {
-        e.preventDefault();
-        var idHidden = document.getElementById('operacaoId').value;
+        e.preventDefault(); var idHidden = document.getElementById('operacaoId').value;
         var opAntiga = idHidden ? CACHE_OPERACOES.find(o => String(o.id) === String(idHidden)) : null;
         var isAgendamento = document.getElementById('operacaoIsAgendamento').checked;
         var statusFinal = isAgendamento ? 'AGENDADA' : 'CONFIRMADA';
         
-        if (opAntiga && !isAgendamento) {
-            if (opAntiga.status === 'EM_ANDAMENTO' || opAntiga.status === 'FINALIZADA') {
-                statusFinal = opAntiga.status; 
-            }
-        }
+        if (opAntiga && !isAgendamento && (opAntiga.status === 'EM_ANDAMENTO' || opAntiga.status === 'FINALIZADA')) statusFinal = opAntiga.status; 
         var checkinsData = (opAntiga && opAntiga.checkins) ? opAntiga.checkins : { motorista: false, faltaMotorista: false, ajudantes: {} };
 
         var novaOp = {
-            id: idHidden || Date.now().toString(),
-            data: document.getElementById('operacaoData').value,
-            motoristaId: document.getElementById('selectMotoristaOperacao').value,
-            veiculoPlaca: document.getElementById('selectVeiculoOperacao').value,
-            contratanteCNPJ: document.getElementById('selectContratanteOperacao').value,
-            atividadeId: document.getElementById('selectAtividadeOperacao').value,
-            faturamento: document.getElementById('operacaoFaturamento').value,
-            adiantamento: document.getElementById('operacaoAdiantamento').value,
-            comissao: document.getElementById('operacaoComissao').value,
-            despesas: document.getElementById('operacaoDespesas').value,
-            combustivel: document.getElementById('operacaoCombustivel').value,
-            precoLitro: document.getElementById('operacaoPrecoLitro').value,
-            kmRodado: document.getElementById('operacaoKmRodado').value,
-            status: statusFinal, 
-            checkins: checkinsData, 
-            ajudantes: window._operacaoAjudantesTempList || [],
-            kmInicial: opAntiga ? opAntiga.kmInicial : 0, 
-            kmFinal: opAntiga ? opAntiga.kmFinal : 0
+            id: idHidden || Date.now().toString(), data: document.getElementById('operacaoData').value,
+            motoristaId: document.getElementById('selectMotoristaOperacao').value, veiculoPlaca: document.getElementById('selectVeiculoOperacao').value,
+            contratanteCNPJ: document.getElementById('selectContratanteOperacao').value, atividadeId: document.getElementById('selectAtividadeOperacao').value,
+            faturamento: document.getElementById('operacaoFaturamento').value, adiantamento: document.getElementById('operacaoAdiantamento').value,
+            comissao: document.getElementById('operacaoComissao').value, despesas: document.getElementById('operacaoDespesas').value,
+            combustivel: document.getElementById('operacaoCombustivel').value, precoLitro: document.getElementById('operacaoPrecoLitro').value,
+            kmRodado: document.getElementById('operacaoKmRodado').value, status: statusFinal, checkins: checkinsData, 
+            ajudantes: window._operacaoAjudantesTempList || [], kmInicial: opAntiga ? opAntiga.kmInicial : 0, kmFinal: opAntiga ? opAntiga.kmFinal : 0
         };
 
-        var lista = CACHE_OPERACOES.filter(o => String(o.id) !== String(novaOp.id));
-        lista.push(novaOp);
-        
+        var lista = CACHE_OPERACOES.filter(o => String(o.id) !== String(novaOp.id)); lista.push(novaOp);
         salvarListaOperacoes(lista).then(() => {
-            var msg = isAgendamento ? "Operação Agendada com Sucesso!" : "Operação Salva com Sucesso!";
-            alert(msg);
-            e.target.reset(); 
-            document.getElementById('operacaoId').value = '';
-            document.getElementById('operacaoIsAgendamento').checked = false;
-            window._operacaoAjudantesTempList = []; 
-            renderizarListaAjudantesAdicionados();
-            preencherTodosSelects(); 
-            renderizarCalendario(); 
-            atualizarDashboard();
+            alert(isAgendamento ? "Agendada!" : "Salva!"); e.target.reset(); document.getElementById('operacaoId').value = '';
+            document.getElementById('operacaoIsAgendamento').checked = false; window._operacaoAjudantesTempList = []; 
+            renderizarListaAjudantesAdicionados(); preencherTodosSelects(); renderizarCalendario(); atualizarDashboard();
         });
     }
 });
 
 // UI HELPERS
-window.toggleDriverFields = function() { 
-    var select = document.getElementById('funcFuncao'); 
-    var div = document.getElementById('driverSpecificFields'); 
-    if (select && div) {
-        div.style.display = (select.value === 'motorista') ? 'block' : 'none';
-    }
-};
+window.toggleDriverFields = function() { var s = document.getElementById('funcFuncao'); var d = document.getElementById('driverSpecificFields'); if(s && d) d.style.display = (s.value === 'motorista') ? 'block' : 'none'; };
+window.toggleDespesaParcelas = function() { var m = document.getElementById('despesaModoPagamento').value; var d = document.getElementById('divDespesaParcelas'); if(d) d.style.display = (m === 'parcelado') ? 'flex' : 'none'; };
+window.renderizarListaAjudantesAdicionados = function() { var ul = document.getElementById('listaAjudantesAdicionados'); if(!ul) return; ul.innerHTML = ''; (window._operacaoAjudantesTempList || []).forEach(item => { var f = buscarFuncionarioPorId(item.id); ul.innerHTML += `<li>${f?f.nome:'-'} (R$ ${formatarValorMoeda(item.diaria)}) <button type="button" class="btn-mini delete-btn" onclick="removerAjudanteTemp('${item.id}')">X</button></li>`; }); };
+window.removerAjudanteTemp = function(id) { window._operacaoAjudantesTempList = window._operacaoAjudantesTempList.filter(x => String(x.id) !== String(id)); renderizarListaAjudantesAdicionados(); };
+document.getElementById('btnManualAddAjudante')?.addEventListener('click', function() { var s=document.getElementById('selectAjudantesOperacao'); var id=s.value; if(!id) return alert("Selecione"); var v=prompt("Diária:"); if(v) { window._operacaoAjudantesTempList.push({ id: id, diaria: Number(v.replace(',', '.')) }); renderizarListaAjudantesAdicionados(); s.value=""; } });
+window.limparOutroFiltro = function(t) { if(t==='motorista') document.getElementById('filtroMotoristaGrafico').value=""; else document.getElementById('filtroVeiculoGrafico').value=""; };
 
-window.toggleDespesaParcelas = function() { 
-    var modo = document.getElementById('despesaModoPagamento').value; 
-    var div = document.getElementById('divDespesaParcelas'); 
-    if (div) {
-        div.style.display = (modo === 'parcelado') ? 'flex' : 'none';
-    }
-};
-
-window.renderizarListaAjudantesAdicionados = function() { 
-    var ul = document.getElementById('listaAjudantesAdicionados'); 
-    if (!ul) return; 
-    ul.innerHTML = ''; 
-    (window._operacaoAjudantesTempList || []).forEach(item => { 
-        var f = buscarFuncionarioPorId(item.id); 
-        var nome = f ? f.nome : 'Desconhecido'; 
-        var li = document.createElement('li');
-        li.innerHTML = `<span>${nome} <small>(Diária: ${formatarValorMoeda(item.diaria)})</small></span><button type="button" class="btn-mini delete-btn" onclick="removerAjudanteTemp('${item.id}')">X</button>`; 
-        ul.appendChild(li); 
-    }); 
-};
-
-window.removerAjudanteTemp = function(id) { 
-    window._operacaoAjudantesTempList = window._operacaoAjudantesTempList.filter(x => String(x.id) !== String(id)); 
-    renderizarListaAjudantesAdicionados(); 
-};
-
-document.getElementById('btnManualAddAjudante')?.addEventListener('click', function() { 
-    var sel = document.getElementById('selectAjudantesOperacao'); 
-    var idAj = sel.value; 
-    if (!idAj) return alert("Selecione um ajudante."); 
-    if (window._operacaoAjudantesTempList.find(x => x.id === idAj)) return alert("Já adicionado.");
-    var valor = prompt("Valor da Diária:"); 
-    if (valor) { 
-        window._operacaoAjudantesTempList.push({ id: idAj, diaria: Number(valor.replace(',', '.')) }); 
-        renderizarListaAjudantesAdicionados(); 
-        sel.value = ""; 
-    } 
-});
-
-window.limparOutroFiltro = function(tipo) { 
-    if (tipo === 'motorista') { 
-        document.getElementById('filtroMotoristaGrafico').value = ""; 
-    } else { 
-        document.getElementById('filtroVeiculoGrafico').value = ""; 
-    } 
-};
-
-// ATUALIZAÇÃO VISUAL
+// PREENCHIMENTO DE DADOS
 function preencherTodosSelects() {
-    console.log("Atualizando tabelas e selects...");
-    const fill = (id, dados, valKey, textKey, defText) => { 
-        var el = document.getElementById(id); 
-        if (!el) return; 
-        var atual = el.value; 
-        el.innerHTML = `<option value="">${defText}</option>` + dados.map(d => `<option value="${d[valKey]}">${d[textKey]}</option>`).join(''); 
-        if(atual) el.value = atual; 
-    };
+    console.log("Atualizando dados...");
+    const fill = (id, arr, k, t, d) => { var e=document.getElementById(id); if(!e) return; var v=e.value; e.innerHTML=`<option value="">${d}</option>`+arr.map(i=>`<option value="${i[k]}">${i[t]}</option>`).join(''); if(v) e.value=v; };
     
-    fill('selectMotoristaOperacao', CACHE_FUNCIONARIOS.filter(f => f.funcao === 'motorista'), 'id', 'nome', 'SELECIONE MOTORISTA...');
-    fill('selectVeiculoOperacao', CACHE_VEICULOS, 'placa', 'placa', 'SELECIONE VEÍCULO...');
-    fill('selectContratanteOperacao', CACHE_CONTRATANTES, 'cnpj', 'razaoSocial', 'SELECIONE CLIENTE...');
-    fill('selectAtividadeOperacao', CACHE_ATIVIDADES, 'id', 'nome', 'SELECIONE TIPO DE SERVIÇO...');
-    fill('selectAjudantesOperacao', CACHE_FUNCIONARIOS.filter(f => f.funcao === 'ajudante'), 'id', 'nome', 'ADICIONAR AJUDANTE...');
-    
-    fill('selectMotoristaRelatorio', CACHE_FUNCIONARIOS, 'id', 'nome', 'TODOS OS FUNCIONÁRIOS');
-    fill('selectVeiculoRelatorio', CACHE_VEICULOS, 'placa', 'placa', 'TODOS OS VEÍCULOS');
-    fill('selectContratanteRelatorio', CACHE_CONTRATANTES, 'cnpj', 'razaoSocial', 'TODOS OS CLIENTES');
-    fill('selectAtividadeRelatorio', CACHE_ATIVIDADES, 'id', 'nome', 'TODAS AS ATIVIDADES');
-    fill('filtroVeiculoGrafico', CACHE_VEICULOS, 'placa', 'placa', 'TODOS OS VEÍCULOS');
-    fill('filtroMotoristaGrafico', CACHE_FUNCIONARIOS, 'id', 'nome', 'TODOS OS MOTORISTAS');
-    fill('selectMotoristaRecibo', CACHE_FUNCIONARIOS, 'id', 'nome', 'SELECIONE O FUNCIONÁRIO...');
-    fill('selectVeiculoRecibo', CACHE_VEICULOS, 'placa', 'placa', 'TODOS');
-    fill('selectContratanteRecibo', CACHE_CONTRATANTES, 'cnpj', 'razaoSocial', 'TODOS');
-    fill('selectVeiculoDespesaGeral', CACHE_VEICULOS, 'placa', 'placa', 'SEM VÍNCULO (GERAL)');
+    fill('selectMotoristaOperacao', CACHE_FUNCIONARIOS.filter(f=>f.funcao==='motorista'), 'id', 'nome', 'SELECIONE...');
+    fill('selectVeiculoOperacao', CACHE_VEICULOS, 'placa', 'placa', 'SELECIONE...');
+    fill('selectContratanteOperacao', CACHE_CONTRATANTES, 'cnpj', 'razaoSocial', 'SELECIONE...');
+    fill('selectAtividadeOperacao', CACHE_ATIVIDADES, 'id', 'nome', 'SELECIONE...');
+    fill('selectAjudantesOperacao', CACHE_FUNCIONARIOS.filter(f=>f.funcao==='ajudante'), 'id', 'nome', 'ADICIONAR...');
+    fill('selectMotoristaRelatorio', CACHE_FUNCIONARIOS, 'id', 'nome', 'TODOS');
+    fill('selectVeiculoRelatorio', CACHE_VEICULOS, 'placa', 'placa', 'TODOS');
+    fill('selectContratanteRelatorio', CACHE_CONTRATANTES, 'cnpj', 'razaoSocial', 'TODOS');
+    fill('filtroVeiculoGrafico', CACHE_VEICULOS, 'placa', 'placa', 'TODOS');
+    fill('filtroMotoristaGrafico', CACHE_FUNCIONARIOS, 'id', 'nome', 'TODOS');
+    fill('selectMotoristaRecibo', CACHE_FUNCIONARIOS, 'id', 'nome', 'SELECIONE...');
+    fill('selectVeiculoDespesaGeral', CACHE_VEICULOS, 'placa', 'placa', 'GERAL');
 
-    renderizarTabelaFuncionarios();
-    renderizarTabelaVeiculos();
-    renderizarTabelaContratantes();
-    renderizarTabelaAtividades();
-    renderizarTabelaOperacoes();
-    renderizarInformacoesEmpresa();
-    
-    if(typeof renderizarTabelaDespesasGerais === 'function') renderizarTabelaDespesasGerais();
-    if(typeof renderizarTabelaMonitoramento === 'function') { renderizarTabelaMonitoramento(); renderizarTabelaFaltas(); }
-    if(typeof renderizarPainelEquipe === 'function') renderizarPainelEquipe();
+    renderizarTabelaFuncionarios(); renderizarTabelaVeiculos(); renderizarTabelaContratantes(); renderizarTabelaAtividades(); renderizarTabelaOperacoes(); renderizarInformacoesEmpresa();
+    if(window.renderizarTabelaDespesasGerais) renderizarTabelaDespesasGerais();
+    if(window.renderizarTabelaMonitoramento) { renderizarTabelaMonitoramento(); renderizarTabelaFaltas(); }
+    if(window.renderizarPainelEquipe) renderizarPainelEquipe();
 }
 
-function renderizarTabelaDespesasGerais() {
-    var tbody = document.querySelector('#tabelaDespesasGerais tbody'); 
-    if (!tbody) return; 
-    tbody.innerHTML = '';
-    CACHE_DESPESAS.sort((a,b) => new Date(b.data) - new Date(a.data)).forEach(d => {
-        var textoPgto = d.modoPagamento === 'parcelado' ? `PARCELADO (${d.parcelasTotal}x)` : 'À VISTA';
-        var tr = document.createElement('tr');
-        tr.innerHTML = `<td>${formatarDataParaBrasileiro(d.data)}</td><td>${d.veiculoPlaca || 'GERAL'}</td><td>${d.descricao}</td><td style="color:var(--danger-color); font-weight:bold;">${formatarValorMoeda(d.valor)}</td><td>${textoPgto}</td><td><button class="btn-mini delete-btn" onclick="excluirDespesa('${d.id}')"><i class="fas fa-trash"></i></button></td>`;
-        tbody.appendChild(tr);
-    });
-}
+function renderizarTabelaDespesasGerais() { var t=document.querySelector('#tabelaDespesasGerais tbody'); if(t) { t.innerHTML=''; CACHE_DESPESAS.sort((a,b)=>new Date(b.data)-new Date(a.data)).forEach(d=>{ var p=d.modoPagamento==='parcelado'?`PARCELADO (${d.parcelasTotal}x)`:'À VISTA'; t.innerHTML+=`<tr><td>${formatarDataParaBrasileiro(d.data)}</td><td>${d.veiculoPlaca||'GERAL'}</td><td>${d.descricao}</td><td style="color:red;font-weight:bold">${formatarValorMoeda(d.valor)}</td><td>${p}</td><td><button class="btn-mini delete-btn" onclick="excluirDespesa('${d.id}')"><i class="fas fa-trash"></i></button></td></tr>`; }); } }
+window.excluirDespesa = function(id) { if(confirm("Excluir?")) { var l=CACHE_DESPESAS.filter(d=>String(d.id)!==String(id)); salvarListaDespesas(l).then(()=>{renderizarTabelaDespesasGerais();atualizarDashboard();}); } };
 
-window.excluirDespesa = function(id) { 
-    if(!confirm("Excluir esta despesa?")) return; 
-    var lista = CACHE_DESPESAS.filter(d => String(d.id) !== String(id)); 
-    salvarListaDespesas(lista).then(() => { renderizarTabelaDespesasGerais(); atualizarDashboard(); }); 
-};
+function renderizarTabelaFuncionarios() { var t=document.querySelector('#tabelaFuncionarios tbody'); if(t) { t.innerHTML=''; CACHE_FUNCIONARIOS.forEach(f=>{ t.innerHTML+=`<tr><td>${f.nome}</td><td>${f.funcao}</td><td>${f.email||'-'}</td><td><button class="btn-mini edit-btn" onclick="preencherFormularioFuncionario('${f.id}')"><i class="fas fa-edit"></i></button> <button class="btn-mini delete-btn" onclick="excluirFuncionario('${f.id}')"><i class="fas fa-trash"></i></button></td></tr>`; }); } }
+window.excluirFuncionario = async function(id) { if(confirm("Excluir?")) { if(window.dbRef) try{ await window.dbRef.deleteDoc(window.dbRef.doc(window.dbRef.db,"users",id)); }catch(e){} var l=CACHE_FUNCIONARIOS.filter(f=>String(f.id)!==String(id)); await salvarListaFuncionarios(l); alert("Removido."); preencherTodosSelects(); } };
+window.excluirVeiculo = function(pl) { if(confirm("Excluir?")) salvarListaVeiculos(CACHE_VEICULOS.filter(v=>v.placa!==pl)).then(()=>preencherTodosSelects()); };
+window.excluirContratante = function(c) { if(confirm("Excluir?")) salvarListaContratantes(CACHE_CONTRATANTES.filter(x=>x.cnpj!==c)).then(()=>preencherTodosSelects()); };
+window.excluirAtividade = function(id) { if(confirm("Excluir?")) salvarListaAtividades(CACHE_ATIVIDADES.filter(a=>String(a.id)!==String(id))).then(()=>preencherTodosSelects()); };
 
-function renderizarTabelaFuncionarios() { 
-    var tbody = document.querySelector('#tabelaFuncionarios tbody'); 
+// --- AQUI ESTÁ A CORREÇÃO: BOTÕES DE AÇÃO (VISUALIZAR, EDITAR, EXCLUIR) ---
+function renderizarTabelaOperacoes() { 
+    var tbody = document.querySelector('#tabelaOperacoes tbody'); 
     if (!tbody) return; 
     tbody.innerHTML = ''; 
-    CACHE_FUNCIONARIOS.forEach(f => { 
-        var tr = document.createElement('tr');
-        tr.innerHTML = `<td>${f.nome}</td><td>${f.funcao}</td><td>${f.email||'-'}</td><td><button class="btn-mini edit-btn" onclick="preencherFormularioFuncionario('${f.id}')"><i class="fas fa-edit"></i></button> <button class="btn-mini delete-btn" onclick="excluirFuncionario('${f.id}')"><i class="fas fa-trash"></i></button></td>`; 
-        tbody.appendChild(tr);
+    
+    var lista = CACHE_OPERACOES.slice().sort((a,b) => new Date(b.data) - new Date(a.data)); 
+    
+    lista.forEach(op => { 
+        if (op.status === 'CANCELADA') return; 
+        
+        var mot = buscarFuncionarioPorId(op.motoristaId); 
+        var nomeMot = mot ? mot.nome : '<span style="color:red">Excluído</span>'; 
+        
+        // Botões de Ação Atualizados
+        var btnView = `<button class="btn-mini btn-info" onclick="visualizarOperacao('${op.id}')" title="VISUALIZAR DETALHES"><i class="fas fa-eye"></i></button>`;
+        var btnEdit = `<button class="btn-mini edit-btn" onclick="preencherFormularioOperacao('${op.id}')" title="EDITAR"><i class="fas fa-edit"></i></button>`;
+        var btnDel = `<button class="btn-mini delete-btn" onclick="excluirOperacao('${op.id}')" title="EXCLUIR"><i class="fas fa-trash"></i></button>`;
+        
+        var actions = window.MODO_APENAS_LEITURA ? btnView : `${btnView} ${btnEdit} ${btnDel}`;
+
+        var tr = document.createElement('tr'); 
+        tr.innerHTML = `
+            <td>${formatarDataParaBrasileiro(op.data)}</td>
+            <td><strong>${nomeMot}</strong><br><small>${op.veiculoPlaca}</small></td>
+            <td>${op.status}</td>
+            <td style="color:green; font-weight:bold;">${formatarValorMoeda(op.faturamento)}</td>
+            <td>${actions}</td>
+        `; 
+        tbody.appendChild(tr); 
     }); 
 }
 
-window.excluirFuncionario = async function(id) { 
-    if(!confirm("Excluir funcionário e revogar acesso?")) return; 
-    if (window.dbRef) { try { await window.dbRef.deleteDoc(window.dbRef.doc(window.dbRef.db, "users", id)); } catch(e) {} }
-    var lista = CACHE_FUNCIONARIOS.filter(f => String(f.id) !== String(id)); 
-    await salvarListaFuncionarios(lista); 
-    alert("Funcionário removido."); preencherTodosSelects(); 
-};
-
-window.excluirVeiculo = function(placa) { 
-    if(!confirm("Excluir?")) return; 
-    salvarListaVeiculos(CACHE_VEICULOS.filter(v => v.placa !== placa)).then(() => preencherTodosSelects()); 
-};
-
-window.excluirContratante = function(cnpj) { 
-    if(!confirm("Excluir?")) return; 
-    salvarListaContratantes(CACHE_CONTRATANTES.filter(c => c.cnpj !== cnpj)).then(() => preencherTodosSelects()); 
-};
-
-window.excluirAtividade = function(id) { 
-    if(!confirm("Excluir?")) return; 
-    salvarListaAtividades(CACHE_ATIVIDADES.filter(a => String(a.id) !== String(id))).then(() => preencherTodosSelects()); 
-};
-
 window.excluirOperacao = function(id) { 
-    if(!confirm("Excluir operação?")) return; 
-    salvarListaOperacoes(CACHE_OPERACOES.filter(o => String(o.id) !== String(id))).then(() => { preencherTodosSelects(); renderizarCalendario(); atualizarDashboard(); }); 
+    if(!confirm("Tem certeza que deseja excluir esta operação?")) return; 
+    var lista = CACHE_OPERACOES.filter(o => String(o.id) !== String(id));
+    salvarListaOperacoes(lista).then(() => { 
+        preencherTodosSelects(); renderizarCalendario(); atualizarDashboard(); 
+    }); 
 };
 
-window.preencherFormularioFuncionario = function(id) { var f = buscarFuncionarioPorId(id); if (!f) return; document.getElementById('funcionarioId').value = f.id; document.getElementById('funcNome').value = f.nome; document.getElementById('funcFuncao').value = f.funcao; document.getElementById('funcDocumento').value = f.documento; document.getElementById('funcEmail').value = f.email || ''; document.getElementById('funcTelefone').value = f.telefone; document.getElementById('funcPix').value = f.pix || ''; document.getElementById('funcEndereco').value = f.endereco || ''; toggleDriverFields(); if (f.funcao === 'motorista') { document.getElementById('funcCNH').value = f.cnh || ''; document.getElementById('funcValidadeCNH').value = f.validadeCNH || ''; document.getElementById('funcCategoriaCNH').value = f.categoriaCNH || ''; document.getElementById('funcCursoDescricao').value = f.cursoDescricao || ''; } document.querySelector('[data-page="cadastros"]').click(); document.querySelector('[data-tab="funcionarios"]').click(); };
-window.preencherFormularioVeiculo = function(placa) { var v = buscarVeiculoPorPlaca(placa); if (!v) return; document.getElementById('veiculoPlaca').value = v.placa; document.getElementById('veiculoModelo').value = v.modelo; document.getElementById('veiculoAno').value = v.ano; document.getElementById('veiculoRenavam').value = v.renavam || ''; document.getElementById('veiculoChassi').value = v.chassi || ''; document.querySelector('[data-page="cadastros"]').click(); document.querySelector('[data-tab="veiculos"]').click(); };
-window.preencherFormularioContratante = function(cnpj) { var c = buscarContratantePorCnpj(cnpj); if (!c) return; document.getElementById('contratanteCNPJ').value = c.cnpj; document.getElementById('contratanteRazaoSocial').value = c.razaoSocial; document.getElementById('contratanteTelefone').value = c.telefone; document.querySelector('[data-page="cadastros"]').click(); document.querySelector('[data-tab="contratantes"]').click(); };
-window.preencherFormularioOperacao = function(id) { var op = CACHE_OPERACOES.find(o => String(o.id) === String(id)); if (!op) return; document.getElementById('operacaoId').value = op.id; document.getElementById('operacaoData').value = op.data; document.getElementById('selectMotoristaOperacao').value = op.motoristaId; document.getElementById('selectVeiculoOperacao').value = op.veiculoPlaca; document.getElementById('selectContratanteOperacao').value = op.contratanteCNPJ; document.getElementById('selectAtividadeOperacao').value = op.atividadeId; document.getElementById('operacaoFaturamento').value = op.faturamento; document.getElementById('operacaoAdiantamento').value = op.adiantamento || ''; document.getElementById('operacaoComissao').value = op.comissao || ''; document.getElementById('operacaoDespesas').value = op.despesas || ''; document.getElementById('operacaoCombustivel').value = op.combustivel || ''; document.getElementById('operacaoPrecoLitro').value = op.precoLitro || ''; document.getElementById('operacaoKmRodado').value = op.kmRodado || ''; window._operacaoAjudantesTempList = op.ajudantes || []; renderizarListaAjudantesAdicionados(); document.getElementById('operacaoIsAgendamento').checked = (op.status === 'AGENDADA' || op.status === 'EM_ANDAMENTO'); document.querySelector('[data-page="operacoes"]').click(); };
+// --- FUNÇÃO PARA VISUALIZAR DETALHES NO MODAL (NOVA) ---
+window.visualizarOperacao = function(id) {
+    var op = CACHE_OPERACOES.find(o => String(o.id) === String(id));
+    if (!op) return;
 
-function renderizarTabelaVeiculos() { var tbody = document.querySelector('#tabelaVeiculos tbody'); if(tbody) { tbody.innerHTML=''; CACHE_VEICULOS.forEach(v => { var tr=document.createElement('tr'); tr.innerHTML=`<td>${v.placa}</td><td>${v.modelo}</td><td>${v.ano}</td><td><button class="btn-mini edit-btn" onclick="preencherFormularioVeiculo('${v.placa}')">EDIT</button> <button class="btn-mini delete-btn" onclick="excluirVeiculo('${v.placa}')">DEL</button></td>`; tbody.appendChild(tr); }); } }
-function renderizarTabelaContratantes() { var tbody = document.querySelector('#tabelaContratantes tbody'); if(tbody) { tbody.innerHTML=''; CACHE_CONTRATANTES.forEach(c => { var tr=document.createElement('tr'); tr.innerHTML=`<td>${c.razaoSocial}</td><td>${c.cnpj}</td><td>${c.telefone}</td><td><button class="btn-mini edit-btn" onclick="preencherFormularioContratante('${c.cnpj}')">EDIT</button> <button class="btn-mini delete-btn" onclick="excluirContratante('${c.cnpj}')">DEL</button></td>`; tbody.appendChild(tr); }); } }
+    // Recupera dados relacionados
+    var mot = buscarFuncionarioPorId(op.motoristaId);
+    var nomeMot = mot ? mot.nome : 'Não encontrado';
+    var cliente = buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial || 'Não encontrado';
+    var servico = buscarAtividadePorId(op.atividadeId)?.nome || '-';
+    
+    // Lista de Ajudantes
+    var htmlAjudantes = 'Nenhum';
+    if (op.ajudantes && op.ajudantes.length > 0) {
+        htmlAjudantes = '<ul style="margin:5px 0 0 20px; padding:0;">' + 
+            op.ajudantes.map(aj => {
+                var f = buscarFuncionarioPorId(aj.id);
+                return `<li>${f ? f.nome : 'Excluído'} (Diária: ${formatarValorMoeda(aj.diaria)})</li>`;
+            }).join('') + '</ul>';
+    }
+
+    // Calcula Lucro Aproximado da Operação
+    var custoTotal = (Number(op.despesas)||0) + (Number(op.combustivel)||0) + (Number(op.comissao)||0);
+    if(op.ajudantes) op.ajudantes.forEach(aj => custoTotal += (Number(aj.diaria)||0));
+    var lucro = (Number(op.faturamento)||0) - custoTotal;
+
+    var html = `
+        <div style="font-size: 0.9rem; color:#333;">
+            <div style="background:#f8f9fa; padding:15px; border-radius:6px; margin-bottom:15px; border-left: 5px solid var(--primary-color);">
+                <h3 style="margin:0 0 5px 0; color:var(--primary-color);">OPERAÇÃO #${op.id.substr(-4)}</h3>
+                <p><strong>DATA:</strong> ${formatarDataParaBrasileiro(op.data)}</p>
+                <p><strong>STATUS:</strong> <span class="status-pill ${op.status==='FINALIZADA'?'pill-active':'pill-pending'}">${op.status}</span></p>
+                <p><strong>CLIENTE:</strong> ${cliente}</p>
+                <p><strong>SERVIÇO:</strong> ${servico}</p>
+            </div>
+
+            <div style="margin-bottom:15px;">
+                <h4 style="border-bottom:1px solid #eee; padding-bottom:5px; margin-bottom:10px;">VEÍCULO & EQUIPE</h4>
+                <p><strong>VEÍCULO:</strong> ${op.veiculoPlaca}</p>
+                <p><strong>MOTORISTA:</strong> ${nomeMot}</p>
+                <p><strong>AJUDANTES:</strong></p>
+                ${htmlAjudantes}
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:15px;">
+                <div style="background:#e8f5e9; padding:10px; border-radius:6px;">
+                    <h4 style="margin:0 0 5px 0; color:var(--success-color);">RECEITA</h4>
+                    <p style="font-size:1.1rem; font-weight:bold;">${formatarValorMoeda(op.faturamento)}</p>
+                    <small>Adiantamento: ${formatarValorMoeda(op.adiantamento)}</small>
+                </div>
+                <div style="background:#ffebee; padding:10px; border-radius:6px;">
+                    <h4 style="margin:0 0 5px 0; color:var(--danger-color);">CUSTOS DIRETOS</h4>
+                    <p>Combustível: ${formatarValorMoeda(op.combustivel)}</p>
+                    <p>Despesas: ${formatarValorMoeda(op.despesas)}</p>
+                    <p>Comissões: ${formatarValorMoeda(op.comissao)}</p>
+                </div>
+            </div>
+            
+            <div style="background:#fff3e0; padding:10px; border-radius:6px; border:1px solid #ffe0b2;">
+                <h4 style="margin:0 0 5px 0; color:#e65100;">REGISTRO DE ROTA</h4>
+                <div style="display:flex; justify-content:space-between;">
+                    <span><strong>KM Inicial:</strong> ${op.kmInicial || '-'}</span>
+                    <span><strong>KM Final:</strong> ${op.kmFinal || '-'}</span>
+                    <span><strong>Rodado:</strong> ${op.kmRodado || '-'} km</span>
+                </div>
+            </div>
+        </div>
+    `;
+
+    var modalBody = document.getElementById('viewItemBody');
+    if(modalBody) {
+        modalBody.innerHTML = html;
+        document.getElementById('viewItemModal').style.display = 'flex';
+    }
+};
+
+window.preencherFormularioFuncionario = function(id) { var f=buscarFuncionarioPorId(id); if(!f) return; document.getElementById('funcionarioId').value=f.id; document.getElementById('funcNome').value=f.nome; document.getElementById('funcFuncao').value=f.funcao; document.getElementById('funcDocumento').value=f.documento; document.getElementById('funcEmail').value=f.email; document.getElementById('funcTelefone').value=f.telefone; document.querySelector('[data-tab="funcionarios"]').click(); };
+window.preencherFormularioVeiculo = function(placa) { var v=buscarVeiculoPorPlaca(placa); if(!v) return; document.getElementById('veiculoPlaca').value=v.placa; document.getElementById('veiculoModelo').value=v.modelo; document.getElementById('veiculoAno').value=v.ano; document.querySelector('[data-tab="veiculos"]').click(); };
+window.preencherFormularioContratante = function(c) { var x=buscarContratantePorCnpj(c); if(!x) return; document.getElementById('contratanteCNPJ').value=x.cnpj; document.getElementById('contratanteRazaoSocial').value=x.razaoSocial; document.getElementById('contratanteTelefone').value=x.telefone; document.querySelector('[data-tab="contratantes"]').click(); };
+window.preencherFormularioOperacao = function(id) { var op=CACHE_OPERACOES.find(o=>String(o.id)===String(id)); if(!op) return; document.getElementById('operacaoId').value=op.id; document.getElementById('operacaoData').value=op.data; document.getElementById('selectMotoristaOperacao').value=op.motoristaId; document.getElementById('selectVeiculoOperacao').value=op.veiculoPlaca; document.getElementById('operacaoFaturamento').value=op.faturamento; document.querySelector('[data-page="operacoes"]').click(); };
+
+function renderizarTabelaVeiculos() { var tbody = document.querySelector('#tabelaVeiculos tbody'); if(tbody) { tbody.innerHTML=''; CACHE_VEICULOS.forEach(v => { var tr=document.createElement('tr'); tr.innerHTML=`<td>${v.placa}</td><td>${v.modelo}</td><td>${v.ano}</td><td><button class="btn-mini edit-btn" onclick="preencherFormularioVeiculo('${v.placa}')">EDT</button> <button class="btn-mini delete-btn" onclick="excluirVeiculo('${v.placa}')">DEL</button></td>`; tbody.appendChild(tr); }); } }
+function renderizarTabelaContratantes() { var tbody = document.querySelector('#tabelaContratantes tbody'); if(tbody) { tbody.innerHTML=''; CACHE_CONTRATANTES.forEach(c => { var tr=document.createElement('tr'); tr.innerHTML=`<td>${c.razaoSocial}</td><td>${c.cnpj}</td><td>${c.telefone}</td><td><button class="btn-mini edit-btn" onclick="preencherFormularioContratante('${c.cnpj}')">EDT</button> <button class="btn-mini delete-btn" onclick="excluirContratante('${c.cnpj}')">DEL</button></td>`; tbody.appendChild(tr); }); } }
 function renderizarTabelaAtividades() { var tbody = document.querySelector('#tabelaAtividades tbody'); if(tbody) { tbody.innerHTML=''; CACHE_ATIVIDADES.forEach(a => { var tr=document.createElement('tr'); tr.innerHTML=`<td>${a.id.substr(-4)}</td><td>${a.nome}</td><td><button class="btn-mini delete-btn" onclick="excluirAtividade('${a.id}')">DEL</button></td>`; tbody.appendChild(tr); }); } }
-function renderizarTabelaOperacoes() { var tbody = document.querySelector('#tabelaOperacoes tbody'); if(tbody) { tbody.innerHTML=''; var lista = CACHE_OPERACOES.slice().sort((a,b)=>new Date(b.data)-new Date(a.data)); lista.forEach(op => { if(op.status==='CANCELADA') return; var m = buscarFuncionarioPorId(op.motoristaId)?.nome || 'Excluído'; var tr=document.createElement('tr'); tr.innerHTML=`<td>${formatarDataParaBrasileiro(op.data)}</td><td>${m}<br><small>${op.veiculoPlaca}</small></td><td>${op.status}</td><td>${formatarValorMoeda(op.faturamento)}</td><td><button class="btn-mini edit-btn" onclick="preencherFormularioOperacao('${op.id}')">EDIT</button> <button class="btn-mini delete-btn" onclick="excluirOperacao('${op.id}')">DEL</button></td>`; tbody.appendChild(tr); }); } }
 function renderizarInformacoesEmpresa() { var div = document.getElementById('viewMinhaEmpresaContent'); if (CACHE_MINHA_EMPRESA.razaoSocial) { div.innerHTML = `<strong>${CACHE_MINHA_EMPRESA.razaoSocial}</strong><br>CNPJ: ${CACHE_MINHA_EMPRESA.cnpj}<br>Tel: ${formatarTelefoneBrasil(CACHE_MINHA_EMPRESA.telefone)}`; } else { div.innerHTML = "Nenhum dado cadastrado."; } }
 
 window.closeModal = function() { document.getElementById('operationDetailsModal').style.display = 'none'; };
 window.closeViewModal = function() { document.getElementById('viewItemModal').style.display = 'none'; };
 window.closeCheckinConfirmModal = function() { document.getElementById('modalCheckinConfirm').style.display = 'none'; };
 window.closeAdicionarAjudanteModal = function() { document.getElementById('modalAdicionarAjudante').style.display = 'none'; };
+
 // =============================================================================
 // PARTE 4: MONITORAMENTO, RECIBOS E LÓGICA DO FUNCIONÁRIO
 // =============================================================================
