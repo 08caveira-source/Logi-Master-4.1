@@ -74,10 +74,10 @@
 
             <ul id="menu-employee" style="display:none; list-style:none;">
                 <li class="nav-item active" data-page="employee-home">
-                    <i class="fas fa-home"></i> INÍCIO
+                    <i class="fas fa-home"></i> PAINEL DE CHECK-IN
                 </li>
                 <li class="nav-item" data-page="employee-history">
-                    <i class="fas fa-history"></i> HISTÓRICO
+                    <i class="fas fa-history"></i> MEUS SERVIÇOS
                 </li>
                 <li class="nav-item" data-page="recibos">
                     <i class="fas fa-receipt"></i> MEUS RECIBOS
@@ -368,17 +368,6 @@
                     </table>
                 </div>
             </div>
-
-            <div class="card">
-                <h3>ENVIAR MENSAGEM PARA A EQUIPE</h3>
-                <form id="formAdminMessage" style="display:flex; gap:10px;">
-                    <input type="text" id="msgTextAdmin" required placeholder="Escreva o aviso aqui..." style="flex-grow:1;">
-                    <select id="msgRecipientSelect" style="width:200px;">
-                        <option value="all">TODOS</option>
-                    </select>
-                    <button type="submit" class="btn-primary">ENVIAR</button>
-                </form>
-            </div>
         </section>
 
         <section id="despesas" class="page">
@@ -658,7 +647,7 @@
 
             <div id="employeeRecibosPanel" style="display:none;">
                 <div class="card">
-                    <h3>MEUS RECIBOS</h3>
+                    <h3>MEUS RECIBOS DISPONÍVEIS</h3>
                     <div class="table-responsive">
                         <table id="tabelaMeusRecibos" class="data-table">
                             <thead><tr><th>EMISSÃO</th><th>PERÍODO</th><th>VALOR</th><th>AÇÃO</th></tr></thead>
@@ -723,21 +712,23 @@
 
         <section id="employee-home" class="page">
             <div class="section-header"><h2>PAINEL DE CHECK-IN</h2></div>
-            <div id="listaServicosAgendados" class="card">Buscando viagens...</div>
+            <div id="checkin-container" class="card">
+                <p style="text-align:center;">Aguardando dados...</p>
+            </div>
         </section>
 
         <section id="employee-history" class="page">
             <div class="section-header"><h2>MEUS SERVIÇOS</h2></div>
             <div class="card">
                 <div class="form-row">
-                    <div class="form-col"><label>INÍCIO</label><input type="date" id="empDataInicio"></div>
-                    <div class="form-col"><label>FIM</label><input type="date" id="empDataFim"></div>
+                    <div class="form-col"><label>INÍCIO</label><input type="date" id="dataInicioServicosFunc"></div>
+                    <div class="form-col"><label>FIM</label><input type="date" id="dataFimServicosFunc"></div>
                 </div>
-                <button class="btn-primary" onclick="filtrarHistoricoFuncionario()">BUSCAR</button>
-                <h3 id="empTotalReceber" style="text-align:center; color:var(--success-color); margin-top:20px;">R$ 0,00</h3>
-                <div class="table-responsive">
-                    <table id="tabelaHistoricoCompleto" class="data-table">
-                        <thead><tr><th>DATA</th><th>VEÍCULO</th><th>VALOR</th></tr></thead>
+                <button class="btn-primary" onclick="filtrarServicosFuncionario(window.USUARIO_ATUAL.uid)">BUSCAR</button>
+                
+                <div class="table-responsive" style="margin-top:20px;">
+                    <table id="tabelaMeusServicos" class="data-table">
+                        <thead><tr><th>DATA</th><th>VEÍCULO</th><th>FUNÇÃO</th><th>VALOR</th></tr></thead>
                         <tbody></tbody>
                     </table>
                 </div>
@@ -792,30 +783,6 @@
         </div>
     </div>
 
-    <div id="modalRequestProfileChange" class="modal">
-        <div class="modal-content">
-            <span class="close-btn" onclick="document.getElementById('modalRequestProfileChange').style.display='none'">&times;</span>
-            <h3>SOLICITAR ALTERAÇÃO</h3>
-            <form id="formRequestProfileChange">
-                <label>DADO A ALTERAR</label>
-                <select id="reqFieldType" required>
-                    <option value="TELEFONE">TELEFONE</option><option value="ENDERECO">ENDEREÇO</option><option value="PIX">PIX</option><option value="EMAIL">EMAIL</option>
-                </select>
-                <label>NOVO VALOR</label><input type="text" id="reqNewValue" required>
-                <button type="submit" class="btn-primary" style="width:100%; margin-top:15px;">ENVIAR</button>
-            </form>
-        </div>
-    </div>
-    
-    <div id="modalNotification" class="modal" style="z-index: 3000;">
-        <div class="modal-content notification-box" style="text-align:center;">
-            <h3 style="color:var(--warning-color);">MENSAGEM</h3>
-            <p id="notificationMessageText" style="font-size:1.2rem; font-weight:bold; margin:20px 0;"></p>
-            <small id="notificationSender"></small>
-            <button onclick="document.getElementById('modalNotification').style.display='none'" class="btn-primary" style="width:100%;">ENTENDIDO</button>
-        </div>
-    </div>
-
     <div id="modalRecibo" class="modal">
         <div class="modal-content" style="max-width:800px; padding:0;">
             <div style="background:#343a40; color:white; padding:15px; display:flex; justify-content:space-between; align-items:center;">
@@ -837,10 +804,6 @@
             <div style="margin:15px 0; display:flex; align-items:center; gap:5px;">
                 <input type="checkbox" id="checkVitalicio" style="width:auto;"> 
                 <label for="checkVitalicio" style="margin:0;">VITALÍCIO</label>
-            </div>
-            <div style="margin:15px 0; background:#fff3e0; padding:10px; border:1px solid #ffe0b2; border-radius:4px;">
-                <input type="checkbox" id="checkBloqueado" style="width:auto; accent-color:red;">
-                <label for="checkBloqueado" style="display:inline; color:#e65100; font-weight:bold;">BLOQUEAR / PAUSAR</label>
             </div>
             <div id="divAddCreditos">
                 <label>MESES A ADICIONAR</label><input type="number" id="qtdCreditosAdd" min="1" value="1">
