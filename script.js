@@ -1,6 +1,6 @@
 // =============================================================================
 // ARQUIVO: script.js
-// SISTEMA LOGIMASTER - VERSÃO 22.1 (CORRIGIDO E ATUALIZADO)
+// SISTEMA LOGIMASTER - VERSÃO 22.2 (CORREÇÃO DE BUGS: UI MASTER, DESPESAS E PERSISTÊNCIA)
 // =============================================================================
 
 // 1. CONSTANTES DE ARMAZENAMENTO (LOCALSTORAGE / FIREBASE)
@@ -818,6 +818,40 @@ document.addEventListener('submit', function(e) {
     } 
 });
 
+// --- CORREÇÃO: FORMULÁRIO DE DESPESAS GERAIS ---
+document.addEventListener('submit', function(e) {
+    if (e.target.id === 'formDespesaGeral') {
+        e.preventDefault(); // Impede o recarregamento da página
+
+        var id = document.getElementById('despesaGeralId').value || Date.now().toString();
+        var novaDespesa = {
+            id: id,
+            data: document.getElementById('despesaGeralData').value,
+            veiculoPlaca: document.getElementById('selectVeiculoDespesaGeral').value,
+            descricao: document.getElementById('despesaGeralDescricao').value.toUpperCase(),
+            valor: Number(document.getElementById('despesaGeralValor').value),
+            formaPagamento: document.getElementById('despesaFormaPagamento').value,
+            modoPagamento: document.getElementById('despesaModoPagamento').value,
+            // Parcelas (se aplicável)
+            parcelasTotal: document.getElementById('despesaParcelas').value,
+            parcelasPagas: document.getElementById('despesaParcelasPagas').value,
+            intervaloDias: document.getElementById('despesaIntervaloDias').value
+        };
+
+        var lista = CACHE_DESPESAS.filter(d => String(d.id) !== String(id));
+        lista.push(novaDespesa);
+
+        salvarListaDespesas(lista).then(() => {
+            alert("Despesa Lançada com Sucesso!");
+            e.target.reset();
+            document.getElementById('despesaGeralId').value = '';
+            toggleDespesaParcelas(); // Reseta visualização
+            renderizarTabelaDespesasGerais(); // Atualiza a tabela imediatamente
+            atualizarDashboard(); // Atualiza custos no dashboard
+        });
+    }
+});
+
 // -----------------------------------------------------------------------------
 // SALVAR OPERAÇÃO (COM STATUS E CHECKINS)
 // -----------------------------------------------------------------------------
@@ -925,6 +959,9 @@ function preencherTodosSelects() {
     renderizarTabelaOperacoes();
     renderizarInformacoesEmpresa();
     
+    // Renderiza também a tabela de despesas para garantir
+    if(typeof renderizarTabelaDespesasGerais === 'function') renderizarTabelaDespesasGerais();
+
     if(typeof renderizarTabelaProfileRequests === 'function') renderizarTabelaProfileRequests();
     if(typeof renderizarTabelaMonitoramento === 'function') {
         renderizarTabelaMonitoramento();
@@ -935,6 +972,37 @@ function preencherTodosSelects() {
 // -----------------------------------------------------------------------------
 // RENDERIZAÇÃO DE TABELAS E NOVAS FUNÇÕES (VISUALIZAR E RESETAR SENHA)
 // -----------------------------------------------------------------------------
+
+function renderizarTabelaDespesasGerais() {
+    var tbody = document.querySelector('#tabelaDespesasGerais tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    
+    CACHE_DESPESAS.sort((a,b) => new Date(b.data) - new Date(a.data)).forEach(d => {
+        var tr = document.createElement('tr');
+        var btnDelete = window.MODO_APENAS_LEITURA ? '' : 
+            `<button class="btn-mini delete-btn" onclick="excluirDespesa('${d.id}')"><i class="fas fa-trash"></i></button>`;
+        
+        tr.innerHTML = `
+            <td>${formatarDataParaBrasileiro(d.data)}</td>
+            <td>${d.veiculoPlaca || 'GERAL'}</td>
+            <td>${d.descricao}</td>
+            <td style="color:var(--danger-color); font-weight:bold;">${formatarValorMoeda(d.valor)}</td>
+            <td>${d.modoPagamento === 'parcelado' ? 'PARCELADO' : 'À VISTA'}</td>
+            <td>${btnDelete}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+window.excluirDespesa = function(id) {
+    if(!confirm("Tem certeza que deseja excluir esta despesa?")) return;
+    var lista = CACHE_DESPESAS.filter(d => String(d.id) !== String(id));
+    salvarListaDespesas(lista).then(() => {
+        renderizarTabelaDespesasGerais();
+        atualizarDashboard();
+    });
+};
 
 function renderizarTabelaFuncionarios() { 
     var tbody = document.querySelector('#tabelaFuncionarios tbody'); 
@@ -2050,8 +2118,12 @@ document.addEventListener('submit', async function(e) {
 window.initSystemByRole = async function(user) {
     console.log("Inicializando para:", user.role, user.email);
     
-    // Ocultar TUDO imediatamente para evitar o "flash"
-    document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+    // --- PASSO CRUCIAL: LIMPEZA DE UI ---
+    // Oculta TUDO imediatamente para evitar o "flash" de conteúdo incorreto
+    document.querySelectorAll('.page').forEach(p => {
+        p.style.display = 'none';
+        p.classList.remove('active'); // Garante que nenhum CSS mantenha visível
+    });
     document.querySelectorAll('.sidebar ul').forEach(ul => ul.style.display = 'none');
     
     window.USUARIO_ATUAL = user;
@@ -2063,10 +2135,12 @@ window.initSystemByRole = async function(user) {
         document.getElementById('userRoleDisplay').textContent = "SUPER ADMIN";
         document.getElementById('menu-super-admin').style.display = 'block';
         
-        document.getElementById('super-admin').style.display = 'block';
-        document.getElementById('super-admin').classList.add('active');
+        var superPage = document.getElementById('super-admin');
+        superPage.style.display = 'block';
+        setTimeout(() => superPage.classList.add('active'), 50);
         
-        // CORREÇÃO: Limpar dados de empresas específicas da memória para não misturar no cálculo
+        // CORREÇÃO CRÍTICA: LIMPAR MEMÓRIA OPERACIONAL
+        // Isso impede que dados carregados no localStorage apareçam no painel master
         CACHE_OPERACOES = [];
         CACHE_FUNCIONARIOS = [];
         CACHE_DESPESAS = [];
@@ -2119,6 +2193,8 @@ window.initSystemByRole = async function(user) {
             }
         }
 
+        // CORREÇÃO: Renderizar tabelas IMEDIATAMENTE após carregar dados
+        preencherTodosSelects(); // Popula tabelas de cadastro
         renderizarPainelEquipe();
         renderizarCalendario();
         atualizarDashboard();
@@ -2126,16 +2202,22 @@ window.initSystemByRole = async function(user) {
         var homePage = document.getElementById('home');
         if(homePage) {
             homePage.style.display = 'block';
-            homePage.classList.add('active');
+            setTimeout(() => homePage.classList.add('active'), 50);
         }
 
     } else if (user.role === 'motorista' || user.role === 'ajudante') {
         document.getElementById('menu-employee').style.display = 'block';
         window.MODO_APENAS_LEITURA = true;
+        
+        // CORREÇÃO: Renderizar tabelas também para funcionários (recibos, etc)
+        preencherTodosSelects();
+        
         if(typeof window.filtrarServicosFuncionario === 'function') {
              window.filtrarServicosFuncionario(user.uid); 
         }
-        document.querySelector('[data-page="employee-home"]').click();
+        
+        var empHome = document.querySelector('[data-page="employee-home"]');
+        if(empHome) empHome.click();
     }
 };
 
