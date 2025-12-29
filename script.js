@@ -1,9 +1,9 @@
 // =============================================================================
 // ARQUIVO: script.js
-// SISTEMA LOGIMASTER - VERSÃO 22.3 (CORREÇÕES: FINANCEIRO, RH, RELATÓRIOS E MASTER)
+// SISTEMA LOGIMASTER - VERSÃO 22.4 (CORREÇÕES: RECIBOS, CHECK-IN E SINCRONIA)
 // =============================================================================
 
-// 1. CONSTANTES DE ARMAZENAMENTO (LOCALSTORAGE / FIREBASE)
+// 1. CONSTANTES DE ARMAZENAMENTO
 const CHAVE_DB_FUNCIONARIOS = 'db_funcionarios';
 const CHAVE_DB_VEICULOS = 'db_veiculos';
 const CHAVE_DB_CONTRATANTES = 'db_contratantes';
@@ -14,23 +14,21 @@ const CHAVE_DB_ATIVIDADES = 'db_atividades';
 const CHAVE_DB_PROFILE_REQUESTS = 'db_profile_requests';
 const CHAVE_DB_RECIBOS = 'db_recibos';
 
-// 2. VARIÁVEIS GLOBAIS DE ESTADO
+// 2. VARIÁVEIS GLOBAIS
 window.USUARIO_ATUAL = null;
 window.MODO_APENAS_LEITURA = false; 
 window.currentDate = new Date(); 
 window.chartInstance = null; 
 window._operacaoAjudantesTempList = []; 
-window._mensagemAtualId = null; 
-window._intervaloMonitoramento = null; 
 
-// VARIÁVEIS GLOBAIS DO SISTEMA DE CRÉDITOS
+// STATUS DO SISTEMA
 window.SYSTEM_STATUS = {
-    validade: null, // Data ISO
+    validade: null,
     isVitalicio: false,
     bloqueado: false
 };
 
-// 3. CACHE LOCAL (Sincronizado com a memória)
+// 3. CACHE LOCAL
 var CACHE_FUNCIONARIOS = [];
 var CACHE_VEICULOS = [];
 var CACHE_CONTRATANTES = [];
@@ -41,7 +39,7 @@ var CACHE_ATIVIDADES = [];
 var CACHE_PROFILE_REQUESTS = [];
 var CACHE_RECIBOS = [];
 
-// 4. FUNÇÕES DE FORMATAÇÃO (HELPERS)
+// 4. HELPERS
 function formatarValorMoeda(valor) {
     var numero = Number(valor);
     if (isNaN(numero)) return 'R$ 0,00';
@@ -50,7 +48,6 @@ function formatarValorMoeda(valor) {
 
 function formatarDataParaBrasileiro(dataIso) {
     if (!dataIso) return '-';
-    // Espera formato YYYY-MM-DD
     var partes = dataIso.split('-');
     if (partes.length >= 3) {
         return partes[2].substring(0, 2) + '/' + partes[1] + '/' + partes[0];
@@ -60,22 +57,16 @@ function formatarDataParaBrasileiro(dataIso) {
 
 function formatarTelefoneBrasil(telefone) {
     var numeros = String(telefone || '').replace(/\D/g, '');
-    if (numeros.length > 10) {
-        return '(' + numeros.slice(0, 2) + ') ' + numeros.slice(2, 7) + '-' + numeros.slice(7, 11);
-    } else if (numeros.length > 6) {
-        return '(' + numeros.slice(0, 2) + ') ' + numeros.slice(2, 6) + '-' + numeros.slice(6);
-    }
+    if (numeros.length > 10) return '(' + numeros.slice(0, 2) + ') ' + numeros.slice(2, 7) + '-' + numeros.slice(7, 11);
+    else if (numeros.length > 6) return '(' + numeros.slice(0, 2) + ') ' + numeros.slice(2, 6) + '-' + numeros.slice(6);
     return telefone;
 }
 
-// Remove acentos para comparação (Gráficos)
 function removerAcentos(texto) {
     return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
-// 5. CAMADA DE DADOS (PERSISTÊNCIA LOCAL + FIREBASE)
-
-// Remove undefined para evitar erro no Firestore
+// 5. CAMADA DE DADOS
 function sanitizarObjetoParaFirebase(obj) {
     return JSON.parse(JSON.stringify(obj, (key, value) => {
         if (value === undefined) return null;
@@ -83,43 +74,35 @@ function sanitizarObjetoParaFirebase(obj) {
     }));
 }
 
-function carregarDadosGenerico(chave, variavelCache, valorPadrao) {
+function carregarDadosGenerico(chave, valorPadrao) {
     try {
         var dados = localStorage.getItem(chave);
         return dados ? JSON.parse(dados) : valorPadrao;
     } catch (erro) {
-        console.error("Erro ao carregar " + chave, erro);
+        console.error("Erro loading " + chave, erro);
         return valorPadrao;
     }
 }
 
 function carregarTodosDadosLocais() {
-    console.log("Carregando dados locais...");
-    CACHE_FUNCIONARIOS = carregarDadosGenerico(CHAVE_DB_FUNCIONARIOS, [], []);
-    CACHE_VEICULOS = carregarDadosGenerico(CHAVE_DB_VEICULOS, [], []);
-    CACHE_CONTRATANTES = carregarDadosGenerico(CHAVE_DB_CONTRATANTES, [], []);
-    CACHE_OPERACOES = carregarDadosGenerico(CHAVE_DB_OPERACOES, [], []);
-    CACHE_MINHA_EMPRESA = carregarDadosGenerico(CHAVE_DB_MINHA_EMPRESA, {}, {});
-    CACHE_DESPESAS = carregarDadosGenerico(CHAVE_DB_DESPESAS, [], []);
-    CACHE_ATIVIDADES = carregarDadosGenerico(CHAVE_DB_ATIVIDADES, [], []);
-    CACHE_PROFILE_REQUESTS = carregarDadosGenerico(CHAVE_DB_PROFILE_REQUESTS, [], []);
-    CACHE_RECIBOS = carregarDadosGenerico(CHAVE_DB_RECIBOS, [], []); 
+    CACHE_FUNCIONARIOS = carregarDadosGenerico(CHAVE_DB_FUNCIONARIOS, []);
+    CACHE_VEICULOS = carregarDadosGenerico(CHAVE_DB_VEICULOS, []);
+    CACHE_CONTRATANTES = carregarDadosGenerico(CHAVE_DB_CONTRATANTES, []);
+    CACHE_OPERACOES = carregarDadosGenerico(CHAVE_DB_OPERACOES, []);
+    CACHE_MINHA_EMPRESA = carregarDadosGenerico(CHAVE_DB_MINHA_EMPRESA, {});
+    CACHE_DESPESAS = carregarDadosGenerico(CHAVE_DB_DESPESAS, []);
+    CACHE_ATIVIDADES = carregarDadosGenerico(CHAVE_DB_ATIVIDADES, []);
+    CACHE_PROFILE_REQUESTS = carregarDadosGenerico(CHAVE_DB_PROFILE_REQUESTS, []);
+    CACHE_RECIBOS = carregarDadosGenerico(CHAVE_DB_RECIBOS, []); 
 }
 
 async function salvarDadosGenerico(chave, dados, atualizarCacheCallback) {
-    // 1. Atualiza memória
     atualizarCacheCallback(dados);
-    
-    // 2. Atualiza LocalStorage
     localStorage.setItem(chave, JSON.stringify(dados));
     
-    // 3. Atualiza Firebase (Se logado e com sistema ativo)
     if (window.dbRef && window.USUARIO_ATUAL && window.USUARIO_ATUAL.company) {
-        // Bloqueio de escrita se o sistema estiver vencido (exceto super admin)
-        if (window.SYSTEM_STATUS.bloqueado && window.USUARIO_ATUAL.role !== 'admin_master') {
-             console.warn("Salvamento bloqueado: Sistema sem créditos.");
-             return;
-        }
+        // Bloqueio se vencido (Exceto Master)
+        if (window.SYSTEM_STATUS.bloqueado && window.USUARIO_ATUAL.role !== 'admin_master') return;
 
         const { db, doc, setDoc } = window.dbRef;
         try {
@@ -129,13 +112,11 @@ async function salvarDadosGenerico(chave, dados, atualizarCacheCallback) {
                 updatedBy: window.USUARIO_ATUAL.email
             });
             await setDoc(doc(db, 'companies', window.USUARIO_ATUAL.company, 'data', chave), dadosLimpos);
-        } catch (erro) {
-            console.error("Erro ao salvar no Firebase (" + chave + "):", erro);
-        }
+        } catch (erro) { console.error("Erro Firebase (" + chave + "):", erro); }
     }
 }
 
-// Funções de salvamento específicas
+// Salva e atualiza cache
 async function salvarListaFuncionarios(lista) { await salvarDadosGenerico(CHAVE_DB_FUNCIONARIOS, lista, (d) => CACHE_FUNCIONARIOS = d); }
 async function salvarListaVeiculos(lista) { await salvarDadosGenerico(CHAVE_DB_VEICULOS, lista, (d) => CACHE_VEICULOS = d); }
 async function salvarListaContratantes(lista) { await salvarDadosGenerico(CHAVE_DB_CONTRATANTES, lista, (d) => CACHE_CONTRATANTES = d); }
@@ -144,20 +125,14 @@ async function salvarDadosMinhaEmpresa(dados) { await salvarDadosGenerico(CHAVE_
 async function salvarListaDespesas(lista) { await salvarDadosGenerico(CHAVE_DB_DESPESAS, lista, (d) => CACHE_DESPESAS = d); }
 async function salvarListaAtividades(lista) { await salvarDadosGenerico(CHAVE_DB_ATIVIDADES, lista, (d) => CACHE_ATIVIDADES = d); }
 async function salvarListaRecibos(lista) { await salvarDadosGenerico(CHAVE_DB_RECIBOS, lista, (d) => CACHE_RECIBOS = d); }
+async function salvarProfileRequests(lista) { await salvarDadosGenerico(CHAVE_DB_PROFILE_REQUESTS, lista, (d) => CACHE_PROFILE_REQUESTS = d); }
 
-async function salvarProfileRequests(lista) { 
-    await salvarDadosGenerico(CHAVE_DB_PROFILE_REQUESTS, lista, (d) => CACHE_PROFILE_REQUESTS = d); 
-    if(typeof renderizarTabelaProfileRequests === 'function') renderizarTabelaProfileRequests();
-}
-
-// Buscas Rápidas (Helpers)
+// Buscas Helpers
 function buscarFuncionarioPorId(id) { return CACHE_FUNCIONARIOS.find(f => String(f.id) === String(id)); }
 function buscarVeiculoPorPlaca(placa) { return CACHE_VEICULOS.find(v => v.placa === placa); }
 function buscarContratantePorCnpj(cnpj) { return CACHE_CONTRATANTES.find(c => String(c.cnpj) === String(cnpj)); }
 function buscarAtividadePorId(id) { return CACHE_ATIVIDADES.find(a => String(a.id) === String(id)); }
-function buscarReciboPorId(id) { return CACHE_RECIBOS.find(r => String(r.id) === String(id)); }
 
-// Inicialização Inicial de Dados (Local)
 carregarTodosDadosLocais();
 // =============================================================================
 // PARTE 2: DASHBOARD, PRIVACIDADE E GRÁFICOS
@@ -234,13 +209,13 @@ window.atualizarDashboard = function() {
         }
     });
 
-    // 2. Processar Despesas Gerais (COM LÓGICA DE PARCELAMENTO)
+    // 2. Processar Despesas Gerais (COM LÓGICA DE PARCELAMENTO CORRIGIDA)
     CACHE_DESPESAS.forEach(function(desp) {
         var valorTotal = Number(desp.valor) || 0;
         var dataDesp = new Date(desp.data + 'T12:00:00');
         
         if (desp.modoPagamento === 'parcelado' && desp.parcelasTotal > 1) {
-            // Lógica de Parcelas
+            // Lógica de Parcelas: Divide o valor total pelo número de parcelas
             var qtdParcelas = Number(desp.parcelasTotal);
             var valorParcela = valorTotal / qtdParcelas;
             var intervalo = Number(desp.intervaloDias) || 30;
@@ -326,7 +301,7 @@ function atualizarGraficoPrincipal(mes, ano) {
 
             var receitaOp = Number(op.faturamento) || 0;
             var combustivelOp = Number(op.combustivel) || 0;
-            var despesasOp = Number(op.despesas) || 0; // Despesas de viagem (pedágio, etc) geralmente Manutenção/Operacional
+            var despesasOp = Number(op.despesas) || 0; 
             var comissaoOp = 0;
 
             if (!op.checkins || !op.checkins.faltaMotorista) {
@@ -357,12 +332,8 @@ function atualizarGraficoPrincipal(mes, ano) {
 
     // 2. Processar Despesas Gerais (Categorização por Palavra-Chave e Parcelas)
     CACHE_DESPESAS.forEach(desp => {
-        // Filtro de veículo nas despesas (se houver vínculo)
         if (filtroVeiculo && desp.veiculoPlaca && desp.veiculoPlaca !== filtroVeiculo) return;
-        // Filtro de motorista não se aplica diretamente a despesas gerais, a menos que tenhamos esse vínculo, 
-        // mas o sistema atual vincula despesa a VEÍCULO ou GERAL. Se filtrar motorista, ignoramos despesas gerais veiculares que não sejam do carro dele? 
-        // Para simplificar e seguir a regra de negócio: Despesa Geral conta no global ou por veículo.
-
+        
         var valorComputado = 0;
         var valorTotal = Number(desp.valor) || 0;
         var dataDesp = new Date(desp.data + 'T12:00:00');
@@ -388,19 +359,19 @@ function atualizarGraficoPrincipal(mes, ano) {
         if (valorComputado > 0) {
             stats.custos += valorComputado;
 
-            // Categorização Inteligente
+            // Categorização Inteligente (Ignorando acentos)
             var desc = removerAcentos(desp.descricao || "");
             
-            // Regras do Prompt
-            // Manutenção: "Manutenção", "Óleo", "Pneu"
+            // Regras:
+            // Manutenção: "manutencao", "oleo", "pneu"
             if (desc.includes("manutencao") || desc.includes("oleo") || desc.includes("pneu")) {
                 gManutencao += valorComputado;
             } 
-            // Pessoal: "Comida", "Hotel", "Outros"
+            // Pessoal: "comida", "hotel", "outros", "alimentacao", "hospedagem"
             else if (desc.includes("comida") || desc.includes("hotel") || desc.includes("outros") || desc.includes("alimentacao") || desc.includes("hospedagem")) {
                 gPessoal += valorComputado;
             } 
-            // Fallback (Padrão para Manutenção se não especificado, ou criar 'Outros')
+            // Fallback: Manutenção se não especificado
             else {
                 gManutencao += valorComputado; 
             }
@@ -579,17 +550,11 @@ window.abrirModalDetalhesDia = function(dataString) {
 
     var modalBody = document.getElementById('modalDayBody');
     var modalTitle = document.getElementById('modalDayTitle');
-    var modalSummary = document.getElementById('modalDaySummary');
 
     if (!modalBody) return;
 
     var dataFormatada = formatarDataParaBrasileiro(dataString);
     if (modalTitle) modalTitle.textContent = 'DETALHES COMPLETOS: ' + dataFormatada;
-    
-    // ... (Lógica de renderização da tabela do modal mantida igual, apenas exibindo) ...
-    // Para economizar espaço na resposta, manterei a lógica original de renderização do modal aqui,
-    // pois ela não precisa de alterações lógicas profundas, apenas exibição.
-    // ... Código do Modal (Resumo mantido) ...
     
     var htmlLista = '<div style="max-height:400px; overflow-y:auto;"><table class="data-table" style="width:100%; font-size:0.75rem;"><thead><tr style="background:#263238; color:white;"><th>CLIENTE</th><th>VEÍCULO</th><th>EQUIPE</th><th>FINANCEIRO</th></tr></thead><tbody>';
     
@@ -600,7 +565,7 @@ window.abrirModalDetalhesDia = function(dataString) {
     });
     htmlLista += '</tbody></table></div>';
     
-    modalBody.innerHTML = htmlLista || '<p>Sem operações.</p>';
+    modalBody.innerHTML = htmlLista || '<p style="text-align:center; padding:20px;">Sem operações.</p>';
     document.getElementById('modalDayOperations').style.display = 'block';
 };
 // =============================================================================
@@ -635,6 +600,7 @@ document.addEventListener('submit', async function(e) {
                 console.log("Criando usuário no Auth...");
                 novoUID = await window.dbRef.criarAuthUsuario(email, senha);
                 
+                // Salva no Firestore (Users Collection) para Login
                 await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "users", novoUID), {
                     uid: novoUID, 
                     name: nome, 
@@ -663,8 +629,10 @@ document.addEventListener('submit', async function(e) {
                 cursoDescricao: document.getElementById('funcCursoDescricao').value
             };
             
+            // Se editou a senha, atualiza visualmente
             if (senha) { funcionarioObj.senhaVisual = senha; }
 
+            // Atualiza Cache Local removendo o antigo e pondo o novo
             var lista = CACHE_FUNCIONARIOS.filter(f => f.email !== email && f.id !== id);
             lista.push(funcionarioObj);
             
@@ -764,7 +732,7 @@ document.addEventListener('submit', function(e) {
     } 
 });
 
-// --- CADASTRO DE DESPESAS GERAIS (COM PARCELAMENTO) ---
+// CADASTRO DE DESPESAS GERAIS
 document.addEventListener('submit', function(e) {
     if (e.target.id === 'formDespesaGeral') {
         e.preventDefault(); 
@@ -778,7 +746,6 @@ document.addEventListener('submit', function(e) {
             valor: Number(document.getElementById('despesaGeralValor').value),
             formaPagamento: document.getElementById('despesaFormaPagamento').value,
             modoPagamento: document.getElementById('despesaModoPagamento').value,
-            // Salva dados de parcelamento para cálculo mensal
             parcelasTotal: document.getElementById('despesaParcelas').value,
             parcelasPagas: document.getElementById('despesaParcelasPagas').value,
             intervaloDias: document.getElementById('despesaIntervaloDias').value
@@ -799,7 +766,7 @@ document.addEventListener('submit', function(e) {
 });
 
 // -----------------------------------------------------------------------------
-// SALVAR OPERAÇÃO (COM STATUS E CHECKINS)
+// SALVAR OPERAÇÃO
 // -----------------------------------------------------------------------------
 document.addEventListener('submit', function(e) {
     if (e.target.id === 'formOperacao') {
@@ -810,7 +777,7 @@ document.addEventListener('submit', function(e) {
         var isAgendamento = document.getElementById('operacaoIsAgendamento').checked;
         var statusFinal = isAgendamento ? 'AGENDADA' : 'CONFIRMADA';
         
-        // Preserva status anterior se já estava em andamento/finalizada
+        // Preserva status se já estava em rota ou finalizada
         if (opAntiga && !isAgendamento) {
             if (opAntiga.status === 'EM_ANDAMENTO' || opAntiga.status === 'FINALIZADA') {
                 statusFinal = opAntiga.status; 
@@ -856,7 +823,7 @@ document.addEventListener('submit', function(e) {
 });
 
 // -----------------------------------------------------------------------------
-// FUNÇÕES AUXILIARES DE FORMULÁRIO E RENDERIZAÇÃO
+// FUNÇÕES AUXILIARES E RENDERIZAÇÃO
 // -----------------------------------------------------------------------------
 
 window.toggleDriverFields = function() { var select = document.getElementById('funcFuncao'); var divMotorista = document.getElementById('driverSpecificFields'); if (select && divMotorista) { divMotorista.style.display = (select.value === 'motorista') ? 'block' : 'none'; } };
@@ -881,22 +848,17 @@ function preencherTodosSelects() {
     fill('selectAtividadeOperacao', CACHE_ATIVIDADES, 'id', 'nome', 'SELECIONE TIPO DE SERVIÇO...');
     fill('selectAjudantesOperacao', CACHE_FUNCIONARIOS.filter(f => f.funcao === 'ajudante'), 'id', 'nome', 'ADICIONAR AJUDANTE...');
     
-    // Filtros de Relatório
+    // Filtros
     fill('selectMotoristaRelatorio', CACHE_FUNCIONARIOS, 'id', 'nome', 'TODOS OS FUNCIONÁRIOS');
     fill('selectVeiculoRelatorio', CACHE_VEICULOS, 'placa', 'placa', 'TODOS OS VEÍCULOS');
     fill('selectContratanteRelatorio', CACHE_CONTRATANTES, 'cnpj', 'razaoSocial', 'TODOS OS CLIENTES');
     fill('selectAtividadeRelatorio', CACHE_ATIVIDADES, 'id', 'nome', 'TODAS AS ATIVIDADES');
-    
-    // NOVO: Filtro de Gráfico
     fill('filtroVeiculoGrafico', CACHE_VEICULOS, 'placa', 'placa', 'TODOS OS VEÍCULOS');
     fill('filtroMotoristaGrafico', CACHE_FUNCIONARIOS, 'id', 'nome', 'TODOS OS MOTORISTAS');
-    
-    // Recibos e Despesas
     fill('selectMotoristaRecibo', CACHE_FUNCIONARIOS, 'id', 'nome', 'SELECIONE O FUNCIONÁRIO...');
     fill('selectVeiculoRecibo', CACHE_VEICULOS, 'placa', 'placa', 'TODOS');
     fill('selectContratanteRecibo', CACHE_CONTRATANTES, 'cnpj', 'razaoSocial', 'TODOS');
     fill('selectVeiculoDespesaGeral', CACHE_VEICULOS, 'placa', 'placa', 'SEM VÍNCULO (GERAL)');
-    fill('msgRecipientSelect', CACHE_FUNCIONARIOS, 'id', 'nome', 'TODOS OS FUNCIONÁRIOS');
 
     renderizarTabelaFuncionarios();
     renderizarTabelaVeiculos();
@@ -905,9 +867,7 @@ function preencherTodosSelects() {
     renderizarTabelaOperacoes();
     renderizarInformacoesEmpresa();
     
-    // Atualiza tabela de despesas (nova implementação)
     if(typeof renderizarTabelaDespesasGerais === 'function') renderizarTabelaDespesasGerais();
-    // Atualiza monitoramento (nova implementação com botão de falta)
     if(typeof renderizarTabelaMonitoramento === 'function') {
         renderizarTabelaMonitoramento();
         renderizarTabelaFaltas(); 
@@ -915,7 +875,7 @@ function preencherTodosSelects() {
 }
 
 // -----------------------------------------------------------------------------
-// RENDERIZAÇÃO DE TABELAS E NOVAS FUNÇÕES
+// RENDERIZAÇÃO DE TABELAS
 // -----------------------------------------------------------------------------
 
 function renderizarTabelaDespesasGerais() {
@@ -993,7 +953,6 @@ window.visualizarFuncionario = function(id) {
                 <span class="status-pill pill-active">${f.funcao}</span>
                 <p style="font-size:0.8rem; color:#888;">ID: ${f.id}</p>
             </div>
-            
             ${createCopyRow('E-mail (Login)', f.email)}
             ${createCopyRow('Senha (Cadastro)', f.senhaVisual || '******')}
             ${createCopyRow('Telefone', f.telefone)}
@@ -1011,47 +970,28 @@ window.visualizarFuncionario = function(id) {
             ${createCopyRow('Cursos', f.cursoDescricao)}
         `;
     }
-
     html += `</div>`;
-
-    var modalBody = document.getElementById('viewItemBody');
-    var modalTitle = document.getElementById('viewItemTitle');
-    if (modalBody) {
-        modalTitle.textContent = "FICHA DO FUNCIONÁRIO";
-        modalBody.innerHTML = html;
-        document.getElementById('viewItemModal').style.display = 'flex';
-    }
+    var mb = document.getElementById('viewItemBody');
+    if(mb) { mb.innerHTML = html; document.getElementById('viewItemModal').style.display = 'flex'; }
 };
 
 window.copiarTexto = function(texto) {
-    navigator.clipboard.writeText(texto).then(() => {
-        alert("Copiado: " + texto);
-    }).catch(err => console.error('Erro ao copiar', err));
+    navigator.clipboard.writeText(texto).then(() => { alert("Copiado: " + texto); });
 };
 
 window.resetarSenhaFuncionario = async function(id) {
     var f = buscarFuncionarioPorId(id);
     if (!f) return;
-
     var novaSenha = prompt(`DIGITE A NOVA SENHA PARA ${f.nome}:\n(Mínimo 6 caracteres)`);
-    if (!novaSenha) return;
-    if (novaSenha.length < 6) return alert("A senha deve ter no mínimo 6 dígitos.");
+    if (!novaSenha || novaSenha.length < 6) return alert("Senha inválida.");
 
     f.senhaVisual = novaSenha;
-    
     await salvarListaFuncionarios(CACHE_FUNCIONARIOS);
-
     if (window.dbRef) {
         try {
-            const { db, doc, updateDoc } = window.dbRef;
-            await updateDoc(doc(db, "users", f.id), {
-                senhaVisual: novaSenha
-            });
-            alert(`Senha atualizada no cadastro!\n\nNovo Login: ${f.email}\nNova Senha: ${novaSenha}\n\nInforme esta nova senha ao funcionário.`);
-        } catch (e) {
-            console.error(e);
-            alert("Senha salva localmente, mas houve erro ao sincronizar na nuvem.");
-        }
+            await window.dbRef.updateDoc(window.dbRef.doc(window.dbRef.db, "users", f.id), { senhaVisual: novaSenha });
+            alert("Senha atualizada.");
+        } catch (e) { alert("Senha salva localmente. Erro nuvem."); }
     }
 };
 
@@ -1059,26 +999,14 @@ function renderizarTabelaVeiculos() { var tbody = document.querySelector('#tabel
 function renderizarTabelaContratantes() { var tbody = document.querySelector('#tabelaContratantes tbody'); if (!tbody) return; tbody.innerHTML = ''; CACHE_CONTRATANTES.forEach(c => { var tr = document.createElement('tr'); var btnActions = window.MODO_APENAS_LEITURA ? '' : `<button class="btn-mini edit-btn" onclick="preencherFormularioContratante('${c.cnpj}')"><i class="fas fa-edit"></i></button><button class="btn-mini delete-btn" onclick="excluirContratante('${c.cnpj}')"><i class="fas fa-trash"></i></button>`; tr.innerHTML = `<td>${c.razaoSocial}</td><td>${c.cnpj}</td><td>${formatarTelefoneBrasil(c.telefone)}</td><td>${btnActions}</td>`; tbody.appendChild(tr); }); }
 function renderizarTabelaAtividades() { var tbody = document.querySelector('#tabelaAtividades tbody'); if (!tbody) return; tbody.innerHTML = ''; CACHE_ATIVIDADES.forEach(a => { var tr = document.createElement('tr'); var btnActions = window.MODO_APENAS_LEITURA ? '' : `<button class="btn-mini delete-btn" onclick="excluirAtividade('${a.id}')"><i class="fas fa-trash"></i></button>`; tr.innerHTML = `<td>${a.id.substr(-4)}</td><td>${a.nome}</td><td>${btnActions}</td>`; tbody.appendChild(tr); }); }
 
-// EXCLUSÃO COM REVOGAÇÃO DE ACESSO
+// EXCLUSÃO
 window.excluirFuncionario = async function(id) { 
-    if(!confirm("ATENÇÃO: Excluir removerá o acesso deste usuário ao sistema imediatamente. Continuar?")) return; 
-    
-    if (window.dbRef) {
-        try {
-            const { db, doc, deleteDoc } = window.dbRef;
-            await deleteDoc(doc(db, "users", id));
-        } catch(e) {
-            console.warn("Não foi possível remover da nuvem (offline ou erro):", e);
-        }
-    }
-
+    if(!confirm("Excluir funcionário e revogar acesso?")) return; 
+    if (window.dbRef) { try { await window.dbRef.deleteDoc(window.dbRef.doc(window.dbRef.db, "users", id)); } catch(e) {} }
     var lista = CACHE_FUNCIONARIOS.filter(f => String(f.id) !== String(id)); 
     await salvarListaFuncionarios(lista); 
-    
-    alert("Funcionário removido e acesso revogado.");
-    preencherTodosSelects(); 
+    alert("Funcionário removido."); preencherTodosSelects(); 
 };
-
 window.excluirVeiculo = function(placa) { if(!confirm("Excluir?")) return; salvarListaVeiculos(CACHE_VEICULOS.filter(v => v.placa !== placa)).then(() => preencherTodosSelects()); };
 window.excluirContratante = function(cnpj) { if(!confirm("Excluir?")) return; salvarListaContratantes(CACHE_CONTRATANTES.filter(c => c.cnpj !== cnpj)).then(() => preencherTodosSelects()); };
 window.excluirAtividade = function(id) { if(!confirm("Excluir?")) return; salvarListaAtividades(CACHE_ATIVIDADES.filter(a => String(a.id) !== String(id))).then(() => preencherTodosSelects()); };
@@ -1125,18 +1053,18 @@ window.renderizarTabelaOperacoes = function() {
     }); 
 };
 
-// Fechar Modais e Render Empresa
+// Fechar Modais
 window.closeViewModal = function() { document.getElementById('viewItemModal').style.display = 'none'; };
 window.closeModal = function() { document.getElementById('operationDetailsModal').style.display = 'none'; };
 window.closeCheckinConfirmModal = function() { document.getElementById('modalCheckinConfirm').style.display = 'none'; };
 window.closeAdicionarAjudanteModal = function() { document.getElementById('modalAdicionarAjudante').style.display = 'none'; };
 function renderizarInformacoesEmpresa() { var div = document.getElementById('viewMinhaEmpresaContent'); if (CACHE_MINHA_EMPRESA.razaoSocial) { div.innerHTML = `<strong>${CACHE_MINHA_EMPRESA.razaoSocial}</strong><br>CNPJ: ${CACHE_MINHA_EMPRESA.cnpj}<br>Tel: ${formatarTelefoneBrasil(CACHE_MINHA_EMPRESA.telefone)}`; } else { div.innerHTML = "Nenhum dado cadastrado."; } }
 // =============================================================================
-// PARTE 4: MONITORAMENTO, GESTÃO DE EQUIPE, RELATÓRIOS E RECIBOS
+// PARTE 4: MONITORAMENTO, RELATÓRIOS, RECIBOS E LÓGICA DO FUNCIONÁRIO
 // =============================================================================
 
 // -----------------------------------------------------------------------------
-// MONITORAMENTO DE ROTAS E CHECK-INS (INDIVIDUALIZADO)
+// MONITORAMENTO DE ROTAS E CHECK-INS (ADMINISTRATIVO)
 // -----------------------------------------------------------------------------
 
 window.renderizarTabelaMonitoramento = function() {
@@ -1155,7 +1083,6 @@ window.renderizarTabelaMonitoramento = function() {
         return;
     }
 
-    // Atualiza Badge
     var badge = document.getElementById('badgeCheckins');
     if (badge) {
         badge.textContent = pendentes.length;
@@ -1168,15 +1095,19 @@ window.renderizarTabelaMonitoramento = function() {
             ? '<span class="status-pill" style="background:orange; color:white; animation: pulse 2s infinite;">EM ROTA</span>' 
             : '<span class="status-pill pill-pending">AGENDADA</span>';
 
-        // 1. Linha do Motorista
+        // 1. Motorista
         var mot = buscarFuncionarioPorId(op.motoristaId);
         if (mot) {
             var faltouMot = (op.checkins && op.checkins.faltaMotorista);
+            var checkInFeito = (op.checkins && op.checkins.motorista); // Se já confirmou inicio
+            
+            var statusEquipe = checkInFeito ? '<span style="color:green"><i class="fas fa-check"></i> INICIADO</span>' : '<span style="color:#999">AGUARDANDO</span>';
+            if (faltouMot) statusEquipe = '<span style="color:red; font-weight:bold;">FALTA</span>';
+
             var btnFaltaMot = faltouMot 
-                ? '<span style="color:red; font-weight:bold;">FALTA REGISTRADA</span>' 
+                ? '-' 
                 : `<button class="btn-mini btn-danger" onclick="registrarFalta('${op.id}', '${mot.id}', 'motorista')">MARCAR FALTA</button>`;
 
-            // Se já faltou, riscamos o nome
             var nomeDisplay = faltouMot ? `<s style="color:#999;">${mot.nome}</s>` : `<strong>${mot.nome}</strong> (Mot)`;
 
             var trM = document.createElement('tr');
@@ -1185,32 +1116,32 @@ window.renderizarTabelaMonitoramento = function() {
                 <td>${nomeDisplay}<br><small>${op.veiculoPlaca}</small></td>
                 <td>${cliente}</td>
                 <td>${statusHtml}</td>
-                <td>R$ ${formatarValorMoeda(op.comissao)}</td>
+                <td>${statusEquipe}</td>
                 <td>${btnFaltaMot}</td>
             `;
             tbody.appendChild(trM);
         }
 
-        // 2. Linhas dos Ajudantes
+        // 2. Ajudantes
         if (op.ajudantes && op.ajudantes.length > 0) {
             op.ajudantes.forEach(ajItem => {
                 var aj = buscarFuncionarioPorId(ajItem.id);
                 if (aj) {
                     var faltouAj = (op.checkins && op.checkins.faltas && op.checkins.faltas[aj.id]);
                     var btnFaltaAj = faltouAj
-                        ? '<span style="color:red; font-weight:bold;">FALTA REGISTRADA</span>'
+                        ? '-'
                         : `<button class="btn-mini btn-danger" onclick="registrarFalta('${op.id}', '${aj.id}', 'ajudante')">MARCAR FALTA</button>`;
                     
                     var nomeAjDisplay = faltouAj ? `<s style="color:#999;">${aj.nome}</s>` : `${aj.nome} (Ajud)`;
 
                     var trA = document.createElement('tr');
-                    trA.style.background = "#f9f9f9"; // Diferenciar ajudantes visualmente
+                    trA.style.background = "#f9f9f9"; 
                     trA.innerHTML = `
                         <td style="border:none;"></td>
                         <td>${nomeAjDisplay}</td>
-                        <td style="color:#777;"><small>^ Vinculado à rota acima</small></td>
+                        <td style="color:#777;"><small>^ Vinculado</small></td>
                         <td>${statusHtml}</td>
-                        <td>R$ ${formatarValorMoeda(ajItem.diaria)}</td>
+                        <td>-</td>
                         <td>${btnFaltaAj}</td>
                     `;
                     tbody.appendChild(trA);
@@ -1221,27 +1152,23 @@ window.renderizarTabelaMonitoramento = function() {
 };
 
 window.registrarFalta = async function(opId, funcId, tipo) {
-    if (!confirm("Confirmar FALTA para este funcionário?\n\nO valor a receber nesta operação será cancelado.")) return;
-
+    if (!confirm("Confirmar FALTA? O valor financeiro será removido desta operação.")) return;
     var op = CACHE_OPERACOES.find(o => String(o.id) === String(opId));
     if (!op) return;
 
-    // Inicializa estrutura de checkins se não existir
     if (!op.checkins) op.checkins = { motorista: false, faltaMotorista: false, faltas: {} };
     if (!op.checkins.faltas) op.checkins.faltas = {};
 
     if (tipo === 'motorista') {
         op.checkins.faltaMotorista = true;
-        op.checkins.motorista = false; // Anula check-in se houver
+        op.checkins.motorista = false; 
     } else {
         op.checkins.faltas[funcId] = true;
     }
-
     await salvarListaOperacoes(CACHE_OPERACOES);
-    alert("Falta registrada. O custo foi removido do financeiro.");
+    alert("Falta registrada.");
     renderizarTabelaMonitoramento();
     renderizarTabelaFaltas();
-    atualizarDashboard(); // Recalcula custos
 };
 
 window.renderizarTabelaFaltas = function() {
@@ -1249,15 +1176,12 @@ window.renderizarTabelaFaltas = function() {
     if (!tbody) return;
     tbody.innerHTML = '';
     var count = 0;
-
     CACHE_OPERACOES.forEach(function(op) {
         if (!op.checkins) return;
-        // Motorista
         if (op.checkins.faltaMotorista) {
             var m = buscarFuncionarioPorId(op.motoristaId);
             if(m) { adicionarLinhaFalta(tbody, op.data, m.nome, 'MOTORISTA', op.id); count++; }
         }
-        // Ajudantes
         if (op.checkins.faltas) {
             Object.keys(op.checkins.faltas).forEach(k => {
                 if(op.checkins.faltas[k]) {
@@ -1277,14 +1201,7 @@ function adicionarLinhaFalta(tbody, data, nome, funcao, opId) {
 }
 
 // -----------------------------------------------------------------------------
-// GESTÃO DE EQUIPE (ADMINISTRATIVO)
-// -----------------------------------------------------------------------------
-// (Painel de Solicitações e Aprovações mantido conforme estrutura anterior, 
-// a lógica já está na Parte 3 ou será chamada na 5, aqui apenas renderizadores específicos se necessário)
-// A função renderizarPainelEquipe é chamada na inicialização.
-
-// -----------------------------------------------------------------------------
-// GERAÇÃO DE RELATÓRIOS (CORRIGIDO E MELHORADO)
+// GERAÇÃO DE RELATÓRIOS
 // -----------------------------------------------------------------------------
 
 function filtrarOperacoesParaRelatorio() {
@@ -1314,100 +1231,48 @@ window.gerarRelatorioGeral = function() {
     var veiculoSelecionado = document.getElementById('selectVeiculoRelatorio').value;
     var htmlCabecalho = '';
 
-    // --- BLOCO ESPECIAL: DETALHES DO VEÍCULO ---
     if (veiculoSelecionado) {
         var vStats = { fat:0, custo:0, km:0, litros:0, lucro:0 };
-        
         ops.forEach(op => {
             var rec = Number(op.faturamento)||0;
             var cust = (Number(op.combustivel)||0) + (Number(op.despesas)||0);
             if (!op.checkins || !op.checkins.faltaMotorista) cust += (Number(op.comissao)||0);
-            if(op.ajudantes) op.ajudantes.forEach(aj => {
-                 if(!(op.checkins && op.checkins.faltas && op.checkins.faltas[aj.id])) cust += (Number(aj.diaria)||0);
-            });
-            
-            vStats.fat += rec;
-            vStats.custo += cust;
-            vStats.lucro += (rec - cust);
-            vStats.km += (Number(op.kmRodado)||0);
-            
-            var preco = Number(op.precoLitro)||0;
-            var comb = Number(op.combustivel)||0;
+            if(op.ajudantes) op.ajudantes.forEach(aj => { if(!(op.checkins && op.checkins.faltas && op.checkins.faltas[aj.id])) cust += (Number(aj.diaria)||0); });
+            vStats.fat += rec; vStats.custo += cust; vStats.lucro += (rec - cust); vStats.km += (Number(op.kmRodado)||0);
+            var preco = Number(op.precoLitro)||0; var comb = Number(op.combustivel)||0;
             if(preco > 0 && comb > 0) vStats.litros += (comb/preco);
         });
         
         var mediaKmL = vStats.litros > 0 ? (vStats.km / vStats.litros) : 0;
-        var mediaReaisKm = vStats.km > 0 ? ((Number(vStats.custoCombustivel)||0) / vStats.km) : 0; // Aproximado
-
         htmlCabecalho = `
             <div style="background:#e3f2fd; border:1px solid #90caf9; padding:15px; margin-bottom:20px; border-radius:8px;">
-                <h3 style="color:#1565c0; border-bottom:1px solid #1565c0; padding-bottom:5px; margin-top:0;">
-                    ANÁLISE DE VEÍCULO: ${veiculoSelecionado}
-                </h3>
+                <h3 style="color:#1565c0; border-bottom:1px solid #1565c0; padding-bottom:5px; margin-top:0;">VEÍCULO: ${veiculoSelecionado}</h3>
                 <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:15px; margin-top:10px;">
-                    <div><small>FATURAMENTO BRUTO</small><br><strong style="font-size:1.2em;">${formatarValorMoeda(vStats.fat)}</strong></div>
-                    <div><small>KM RODADO TOTAL</small><br><strong style="font-size:1.2em;">${vStats.km} km</strong></div>
-                    <div><small>MÉDIA CONSUMO</small><br><strong style="font-size:1.2em; color:${mediaKmL > 0 ? 'black' : 'red'};">${mediaKmL.toFixed(2)} Km/L</strong></div>
-                    <div><small>LUCRO LÍQUIDO</small><br><strong style="font-size:1.2em; color:${vStats.lucro >= 0 ? 'green' : 'red'};">${formatarValorMoeda(vStats.lucro)}</strong></div>
+                    <div><small>FATURAMENTO</small><br><strong>${formatarValorMoeda(vStats.fat)}</strong></div>
+                    <div><small>KM TOTAL</small><br><strong>${vStats.km} km</strong></div>
+                    <div><small>MÉDIA</small><br><strong>${mediaKmL.toFixed(2)} Km/L</strong></div>
+                    <div><small>LUCRO</small><br><strong style="color:${vStats.lucro >= 0 ? 'green' : 'red'};">${formatarValorMoeda(vStats.lucro)}</strong></div>
                 </div>
-            </div>
-        `;
+            </div>`;
     }
 
     var html = `
-        <div style="text-align:center; margin-bottom:20px;">
-            <h3>RELATÓRIO FINANCEIRO GERAL</h3>
-            <p>Período: ${formatarDataParaBrasileiro(document.getElementById('dataInicioRelatorio').value)} a ${formatarDataParaBrasileiro(document.getElementById('dataFimRelatorio').value)}</p>
-        </div>
+        <div style="text-align:center; margin-bottom:20px;"><h3>RELATÓRIO FINANCEIRO GERAL</h3></div>
         ${htmlCabecalho}
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>DATA</th>
-                    <th>VEÍCULO</th>
-                    <th>CLIENTE</th>
-                    <th>FATURAMENTO</th>
-                    <th>LUCRO</th>
-                </tr>
-            </thead>
-            <tbody>
+        <table class="data-table"><thead><tr><th>DATA</th><th>VEÍCULO</th><th>CLIENTE</th><th>FATURAMENTO</th><th>LUCRO</th></tr></thead><tbody>
     `;
 
-    var totalFat = 0;
-    var totalLucro = 0;
-
+    var totalFat = 0; var totalLucro = 0;
     ops.forEach(op => {
         var cli = buscarContratantePorCnpj(op.contratanteCNPJ);
         var receita = Number(op.faturamento)||0;
         var custo = (Number(op.combustivel)||0) + (Number(op.despesas)||0);
         if (!op.checkins || !op.checkins.faltaMotorista) custo += (Number(op.comissao)||0);
-        if(op.ajudantes) op.ajudantes.forEach(aj => {
-             if(!(op.checkins && op.checkins.faltas && op.checkins.faltas[aj.id])) custo += (Number(aj.diaria)||0);
-        });
-
-        var lucro = receita - custo;
-        totalFat += receita;
-        totalLucro += lucro;
-
-        html += `
-            <tr>
-                <td>${formatarDataParaBrasileiro(op.data)}</td>
-                <td>${op.veiculoPlaca}</td>
-                <td>${cli ? cli.razaoSocial.substring(0,15) : '-'}</td>
-                <td>${formatarValorMoeda(receita)}</td>
-                <td style="color:${lucro>=0?'green':'red'}">${formatarValorMoeda(lucro)}</td>
-            </tr>
-        `;
+        if(op.ajudantes) op.ajudantes.forEach(aj => { if(!(op.checkins && op.checkins.faltas && op.checkins.faltas[aj.id])) custo += (Number(aj.diaria)||0); });
+        var lucro = receita - custo; totalFat += receita; totalLucro += lucro;
+        html += `<tr><td>${formatarDataParaBrasileiro(op.data)}</td><td>${op.veiculoPlaca}</td><td>${cli ? cli.razaoSocial.substring(0,15) : '-'}</td><td>${formatarValorMoeda(receita)}</td><td style="color:${lucro>=0?'green':'red'}">${formatarValorMoeda(lucro)}</td></tr>`;
     });
-
-    html += `
-            <tr style="background:#f5f5f5; font-weight:bold;">
-                <td colspan="3" style="text-align:right;">TOTAIS:</td>
-                <td style="color:var(--primary-color);">${formatarValorMoeda(totalFat)}</td>
-                <td style="color:${totalLucro>=0?'green':'red'}">${formatarValorMoeda(totalLucro)}</td>
-            </tr>
-        </tbody></table>
-    `;
+    html += `<tr style="background:#f5f5f5; font-weight:bold;"><td colspan="3" style="text-align:right;">TOTAIS:</td><td>${formatarValorMoeda(totalFat)}</td><td style="color:${totalLucro>=0?'green':'red'}">${formatarValorMoeda(totalLucro)}</td></tr></tbody></table>`;
 
     document.getElementById('reportContent').innerHTML = html;
     document.getElementById('reportResults').style.display = 'block';
@@ -1421,50 +1286,20 @@ window.gerarRelatorioCobranca = function() {
     ops.forEach(op => {
         var cNome = buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial || 'DESCONHECIDO';
         if (!porCliente[cNome]) porCliente[cNome] = { ops: [], totalFat: 0, totalAdiant: 0 };
-        
         porCliente[cNome].ops.push(op);
         porCliente[cNome].totalFat += (Number(op.faturamento)||0);
         porCliente[cNome].totalAdiant += (Number(op.adiantamento)||0);
     });
 
     var html = `<div style="text-align:center; margin-bottom:30px;"><h2>RELATÓRIO DE COBRANÇA (LÍQUIDO)</h2></div>`;
-
     for (var cliente in porCliente) {
         var liquido = porCliente[cliente].totalFat - porCliente[cliente].totalAdiant;
-        
-        html += `
-            <div style="margin-bottom:30px; border:1px solid #ccc; padding:15px; page-break-inside: avoid;">
-                <h3 style="background:#eee; padding:10px; margin:-15px -15px 15px -15px;">${cliente}</h3>
-                <table class="data-table" style="width:100%;">
-                    <thead><tr><th>DATA</th><th>PLACA</th><th>VALOR SERVIÇO</th><th>ADIANTAMENTO</th></tr></thead>
-                    <tbody>
-        `;
+        html += `<div style="margin-bottom:30px; border:1px solid #ccc; padding:15px; page-break-inside: avoid;"><h3 style="background:#eee; padding:10px; margin:-15px -15px 15px -15px;">${cliente}</h3><table class="data-table" style="width:100%;"><thead><tr><th>DATA</th><th>PLACA</th><th>VALOR SERVIÇO</th><th>ADIANTAMENTO</th></tr></thead><tbody>`;
         porCliente[cliente].ops.forEach(op => {
-            html += `<tr>
-                <td>${formatarDataParaBrasileiro(op.data)}</td>
-                <td>${op.veiculoPlaca}</td>
-                <td>${formatarValorMoeda(op.faturamento)}</td>
-                <td style="color:red;">${op.adiantamento > 0 ? '- '+formatarValorMoeda(op.adiantamento) : '-'}</td>
-            </tr>`;
+            html += `<tr><td>${formatarDataParaBrasileiro(op.data)}</td><td>${op.veiculoPlaca}</td><td>${formatarValorMoeda(op.faturamento)}</td><td style="color:red;">${op.adiantamento > 0 ? '- '+formatarValorMoeda(op.adiantamento) : '-'}</td></tr>`;
         });
-        html += `
-                    </tbody>
-                    <tfoot>
-                        <tr style="background:#fff8e1;">
-                            <td colspan="2" style="text-align:right;">SUBTOTAIS:</td>
-                            <td style="font-weight:bold;">${formatarValorMoeda(porCliente[cliente].totalFat)}</td>
-                            <td style="font-weight:bold; color:red;">-${formatarValorMoeda(porCliente[cliente].totalAdiant)}</td>
-                        </tr>
-                        <tr style="background:#333; color:white;">
-                            <td colspan="3" style="text-align:right; font-weight:bold;">LÍQUIDO A RECEBER:</td>
-                            <td style="font-weight:bold; font-size:1.1rem; color:#4caf50;">${formatarValorMoeda(liquido)}</td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-        `;
+        html += `</tbody><tfoot><tr style="background:#333; color:white;"><td colspan="3" style="text-align:right; font-weight:bold;">LÍQUIDO A RECEBER:</td><td style="font-weight:bold; font-size:1.1rem; color:#4caf50;">${formatarValorMoeda(liquido)}</td></tr></tfoot></table></div>`;
     }
-
     document.getElementById('reportContent').innerHTML = html;
     document.getElementById('reportResults').style.display = 'block';
 };
@@ -1476,7 +1311,7 @@ window.exportarRelatorioPDF = function() {
 };
 
 // -----------------------------------------------------------------------------
-// RECIBOS DE PAGAMENTO (GERAÇÃO E ENVIO)
+// RECIBOS DE PAGAMENTO (ADMIN)
 // -----------------------------------------------------------------------------
 
 window.gerarReciboPagamento = function() {
@@ -1485,182 +1320,140 @@ window.gerarReciboPagamento = function() {
     var dataFim = document.getElementById('dataFimRecibo').value;
 
     if (!motId || !dataIni || !dataFim) return alert("Preencha todos os campos.");
-
     var funcionario = buscarFuncionarioPorId(motId);
     if (!funcionario) return alert("Funcionário inválido.");
 
-    var totalValor = 0;
-    var opsEnvolvidas = [];
-
+    var totalValor = 0; var opsEnvolvidas = [];
     CACHE_OPERACOES.forEach(op => {
         if (op.status === 'CANCELADA' || op.data < dataIni || op.data > dataFim) return;
         var valorGanho = 0;
-        
-        // Verifica se é motorista ou ajudante e se NÃO faltou
-        if (op.motoristaId === motId) {
-            if (!op.checkins || !op.checkins.faltaMotorista) valorGanho = Number(op.comissao) || 0;
-        } else if (op.ajudantes) {
+        if (op.motoristaId === motId && (!op.checkins || !op.checkins.faltaMotorista)) valorGanho = Number(op.comissao) || 0;
+        else if (op.ajudantes) {
             var aj = op.ajudantes.find(a => a.id === motId);
-            if (aj) {
-                if (!(op.checkins && op.checkins.faltas && op.checkins.faltas[motId])) valorGanho = Number(aj.diaria) || 0;
-            }
+            if (aj && !(op.checkins && op.checkins.faltas && op.checkins.faltas[motId])) valorGanho = Number(aj.diaria) || 0;
         }
-
         if (valorGanho > 0) {
             totalValor += valorGanho;
             opsEnvolvidas.push({ data: op.data, cliente: buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial || 'Avulso', valor: valorGanho });
         }
     });
 
-    // Layout Recibo (Visualização)
-    var htmlRecibo = `
-        <div style="border: 2px solid #333; padding: 30px; font-family: 'Courier New', monospace; background:#fff;">
-            <div style="text-align:center; border-bottom: 2px dashed #333; padding-bottom:15px; margin-bottom:20px;">
-                <h2 style="margin:0;">RECIBO DE PAGAMENTO</h2>
-                <p style="margin:5px 0;">${CACHE_MINHA_EMPRESA.razaoSocial || 'LOGIMASTER TRANSP.'}</p>
-            </div>
-            <div style="margin-bottom:20px;">
-                <p><strong>BENEFICIÁRIO:</strong> ${funcionario.nome}</p>
-                <p><strong>PERÍODO:</strong> ${formatarDataParaBrasileiro(dataIni)} A ${formatarDataParaBrasileiro(dataFim)}</p>
-            </div>
-            <table style="width:100%; border-collapse: collapse; margin-bottom:20px;">
-                <thead><tr style="border-bottom:1px solid #000;"><th align="left">DATA</th><th align="left">CLIENTE</th><th align="right">VALOR</th></tr></thead>
-                <tbody>
-                    ${opsEnvolvidas.map(o => `<tr><td>${formatarDataParaBrasileiro(o.data)}</td><td>${o.cliente.substring(0,15)}</td><td align="right">${formatarValorMoeda(o.valor)}</td></tr>`).join('')}
-                </tbody>
-            </table>
-            <div style="text-align:right; font-size:1.4rem; font-weight:bold; border-top:2px solid #333; padding-top:10px;">TOTAL: ${formatarValorMoeda(totalValor)}</div>
-        </div>
-    `;
-
+    var htmlRecibo = `<div style="border:2px solid #333; padding:20px; font-family:'Courier New'; background:#fff;"><h3 style="text-align:center;">RECIBO</h3><p><strong>BENEFICIÁRIO:</strong> ${funcionario.nome}</p><p><strong>PERÍODO:</strong> ${formatarDataParaBrasileiro(dataIni)} A ${formatarDataParaBrasileiro(dataFim)}</p><table style="width:100%;"><tr><th align="left">DATA</th><th align="right">VALOR</th></tr>${opsEnvolvidas.map(o=>`<tr><td>${formatarDataParaBrasileiro(o.data)}</td><td align="right">${formatarValorMoeda(o.valor)}</td></tr>`).join('')}</table><h3 style="text-align:right; border-top:2px solid #000;">TOTAL: ${formatarValorMoeda(totalValor)}</h3></div>`;
     document.getElementById('modalReciboContent').innerHTML = htmlRecibo;
-    
-    // Botão Salvar
-    var actionsDiv = document.getElementById('modalReciboActions');
-    actionsDiv.innerHTML = `<button class="btn-success" onclick="salvarReciboNoHistorico('${funcionario.id}', '${funcionario.nome}', '${dataIni}', '${dataFim}', ${totalValor})"><i class="fas fa-save"></i> SALVAR E GERAR</button>`;
+    document.getElementById('modalReciboActions').innerHTML = `<button class="btn-success" onclick="salvarReciboNoHistorico('${funcionario.id}', '${funcionario.nome}', '${dataIni}', '${dataFim}', ${totalValor})"><i class="fas fa-save"></i> SALVAR E GERAR</button>`;
     document.getElementById('modalRecibo').style.display = 'flex';
 };
 
 window.salvarReciboNoHistorico = function(funcId, funcNome, ini, fim, valor) {
-    var novoRecibo = {
-        id: Date.now().toString(),
-        dataEmissao: new Date().toISOString(),
-        funcionarioId: funcId,
-        funcionarioNome: funcNome,
-        periodo: `${formatarDataParaBrasileiro(ini)} a ${formatarDataParaBrasileiro(fim)}`,
-        valorTotal: valor,
-        enviado: false // Novo campo: Status de envio
-    };
-    
+    var novoRecibo = { id: Date.now().toString(), dataEmissao: new Date().toISOString(), funcionarioId: funcId, funcionarioNome: funcNome, periodo: `${formatarDataParaBrasileiro(ini)} a ${formatarDataParaBrasileiro(fim)}`, valorTotal: valor, enviado: false };
     var lista = CACHE_RECIBOS || [];
     lista.push(novoRecibo);
-    salvarListaRecibos(lista).then(() => {
-        alert("Recibo salvo! Agora você pode enviá-lo ao funcionário.");
-        document.getElementById('modalRecibo').style.display = 'none';
-        renderizarHistoricoRecibos();
-    });
+    salvarListaRecibos(lista).then(() => { alert("Recibo salvo!"); document.getElementById('modalRecibo').style.display = 'none'; renderizarHistoricoRecibos(); });
 };
 
 window.renderizarHistoricoRecibos = function() {
     var tbody = document.querySelector('#tabelaHistoricoRecibos tbody');
     if (!tbody) return;
     tbody.innerHTML = '';
-    
     (CACHE_RECIBOS || []).sort((a,b) => new Date(b.dataEmissao) - new Date(a.dataEmissao)).forEach(r => {
-        var statusLabel = r.enviado 
-            ? '<span class="status-pill pill-active"><i class="fas fa-check-double"></i> ENVIADO</span>' 
-            : '<span class="status-pill pill-pending">NÃO ENVIADO</span>';
-            
-        var btnEnviar = r.enviado 
-            ? '' 
-            : `<button class="btn-mini btn-primary" onclick="enviarReciboFuncionario('${r.id}')" title="Enviar para Painel do Funcionário"><i class="fas fa-paper-plane"></i></button>`;
-
-        var tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${new Date(r.dataEmissao).toLocaleDateString()}</td>
-            <td>${r.funcionarioNome}</td>
-            <td>${r.periodo}</td>
-            <td>${formatarValorMoeda(r.valorTotal)}</td>
-            <td>${statusLabel}</td>
-            <td>
-                ${btnEnviar}
-                <button class="btn-mini btn-secondary" onclick="imprimirReciboStored('${r.id}')"><i class="fas fa-print"></i></button>
-            </td>
-        `;
-        tbody.appendChild(tr);
+        var statusLabel = r.enviado ? '<span class="status-pill pill-active">ENVIADO</span>' : '<span class="status-pill pill-pending">NÃO ENVIADO</span>';
+        var btnEnviar = r.enviado ? '' : `<button class="btn-mini btn-primary" onclick="enviarReciboFuncionario('${r.id}')" title="Enviar"><i class="fas fa-paper-plane"></i></button>`;
+        tbody.innerHTML += `<tr><td>${new Date(r.dataEmissao).toLocaleDateString()}</td><td>${r.funcionarioNome}</td><td>${formatarValorMoeda(r.valorTotal)}</td><td>${statusLabel}</td><td>${btnEnviar}</td></tr>`;
     });
 };
 
 window.enviarReciboFuncionario = async function(reciboId) {
-    if(!confirm("Enviar este recibo para o painel do funcionário?")) return;
-    
+    if(!confirm("Enviar este recibo?")) return;
     var rec = CACHE_RECIBOS.find(r => r.id === reciboId);
     if(rec) {
         rec.enviado = true;
         await salvarListaRecibos(CACHE_RECIBOS);
         renderizarHistoricoRecibos();
-        alert("Recibo enviado com sucesso!");
+        alert("Enviado com sucesso!");
     }
 };
 
 // -----------------------------------------------------------------------------
-// FUNÇÕES DO FUNCIONÁRIO (BUSCA DE SERVIÇOS E RECIBOS)
+// LÓGICA DO FUNCIONÁRIO (CHECK-IN E BUSCA DE SERVIÇOS)
 // -----------------------------------------------------------------------------
 
-window.filtrarServicosFuncionario = function(uid) {
-    // Esta função será usada pelo painel do funcionário para preencher "Meus Serviços"
-    // Busca em motoristaId E no array de ajudantes
+// CORREÇÃO: Check-in real (substitui "Buscando viagens...")
+window.renderizarCheckinFuncionario = function() {
+    var container = document.getElementById('checkin-container'); // O ID no HTML do card
+    if (!container) return;
+    
+    var uid = window.USUARIO_ATUAL.uid;
+    var hoje = new Date().toISOString().split('T')[0];
+
+    // Busca operações de hoje ou futuras, ou em andamento
+    var opsPendentes = CACHE_OPERACOES.filter(op => {
+        return (op.motoristaId === uid && op.status !== 'CANCELADA' && (op.status === 'AGENDADA' || op.status === 'EM_ANDAMENTO'));
+    });
+
+    if (opsPendentes.length === 0) {
+        container.innerHTML = '<p style="text-align:center; padding:20px; color:#666;">Nenhuma viagem agendada para hoje ou pendente de início.</p>';
+        return;
+    }
+
+    var html = '';
+    opsPendentes.forEach(op => {
+        var btnAcao = '';
+        if (op.status === 'AGENDADA') {
+            btnAcao = `<button class="btn-success" style="width:100%; margin-top:10px;" onclick="confirmarInicioViagem('${op.id}')">INICIAR VIAGEM</button>`;
+        } else if (op.status === 'EM_ANDAMENTO') {
+            btnAcao = `<button class="btn-warning" style="width:100%; margin-top:10px;" onclick="finalizarViagem('${op.id}')">FINALIZAR VIAGEM</button>`;
+        }
+
+        html += `
+            <div style="background:white; border:1px solid #ddd; padding:15px; border-radius:8px; margin-bottom:15px; border-left:5px solid var(--primary-color);">
+                <h4>${op.veiculoPlaca} - ${formatarDataParaBrasileiro(op.data)}</h4>
+                <p><strong>Rota/Cliente:</strong> ${buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial || 'CLIENTE'}</p>
+                ${btnAcao}
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+};
+
+// CORREÇÃO: Filtro por data nos serviços do funcionário
+window.filtrarServicosFuncionario = function(uid, dataInicio = null, dataFim = null) {
     var minhasOps = CACHE_OPERACOES.filter(op => {
         var ehMotorista = (op.motoristaId === uid);
         var ehAjudante = (op.ajudantes && op.ajudantes.some(aj => aj.id === uid));
-        return (ehMotorista || ehAjudante) && op.status !== 'CANCELADA';
+        var dataOk = true;
+        if (dataInicio && op.data < dataInicio) dataOk = false;
+        if (dataFim && op.data > dataFim) dataOk = false;
+        return (ehMotorista || ehAjudante) && op.status !== 'CANCELADA' && dataOk;
     }).sort((a,b) => new Date(b.data) - new Date(a.data));
 
     var tbody = document.getElementById('tabelaMeusServicos')?.querySelector('tbody');
     if(tbody) {
         tbody.innerHTML = '';
-        if(minhasOps.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4">Nenhum serviço encontrado.</td></tr>';
-            return;
-        }
+        if(minhasOps.length === 0) { tbody.innerHTML = '<tr><td colspan="4">Nenhum serviço encontrado no período.</td></tr>'; return; }
         
         minhasOps.forEach(op => {
             var papel = (op.motoristaId === uid) ? 'MOTORISTA' : 'AJUDANTE';
             var valor = 0;
             if(papel === 'MOTORISTA') valor = Number(op.comissao)||0;
-            else {
-                var aj = op.ajudantes.find(x => x.id === uid);
-                if(aj) valor = Number(aj.diaria)||0;
-            }
+            else { var aj = op.ajudantes.find(x => x.id === uid); if(aj) valor = Number(aj.diaria)||0; }
 
-            // Verifica se faltou
             var faltou = false;
             if (papel === 'MOTORISTA' && op.checkins && op.checkins.faltaMotorista) faltou = true;
             if (papel === 'AJUDANTE' && op.checkins && op.checkins.faltas && op.checkins.faltas[uid]) faltou = true;
-
             var valDisplay = faltou ? '<span style="color:red; text-decoration:line-through;">FALTA</span>' : formatarValorMoeda(valor);
 
-            var tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${formatarDataParaBrasileiro(op.data)}</td>
-                <td>${op.veiculoPlaca}</td>
-                <td>${papel}</td>
-                <td>${valDisplay}</td>
-            `;
-            tbody.appendChild(tr);
+            tbody.innerHTML += `<tr><td>${formatarDataParaBrasileiro(op.data)}</td><td>${op.veiculoPlaca}</td><td>${papel}</td><td>${valDisplay}</td></tr>`;
         });
     }
-    
-    // Atualiza também "Meus Recibos" (Apenas os ENVIADOS)
-    var meusRecibos = CACHE_RECIBOS.filter(r => r.funcionarioId === uid && r.enviado === true);
+
+    // Atualiza Recibos (apenas enviados)
     var tbodyRec = document.getElementById('tabelaMeusRecibos')?.querySelector('tbody');
     if(tbodyRec) {
+        var meusRecibos = CACHE_RECIBOS.filter(r => r.funcionarioId === uid && r.enviado === true);
         tbodyRec.innerHTML = '';
         if(meusRecibos.length === 0) tbodyRec.innerHTML = '<tr><td colspan="4">Nenhum recibo disponível.</td></tr>';
         meusRecibos.forEach(r => {
-            var tr = document.createElement('tr');
-            tr.innerHTML = `<td>${new Date(r.dataEmissao).toLocaleDateString()}</td><td>${r.periodo}</td><td>${formatarValorMoeda(r.valorTotal)}</td><td><button class="btn-mini btn-primary" onclick="visualizarReciboFuncionario('${r.id}')"><i class="fas fa-eye"></i></button></td>`;
-            tbodyRec.appendChild(tr);
+            tbodyRec.innerHTML += `<tr><td>${new Date(r.dataEmissao).toLocaleDateString()}</td><td>${r.periodo}</td><td>${formatarValorMoeda(r.valorTotal)}</td><td><button class="btn-mini btn-primary"><i class="fas fa-eye"></i></button></td></tr>`;
         });
     }
 };
@@ -1812,17 +1605,13 @@ window.toggleCompanyDetails = function(headerElement) {
     if (body.style.display === 'none') {
         body.style.display = 'block';
         if(icon) icon.style.transform = 'rotate(180deg)';
-        headerElement.style.borderBottom = '1px solid #ddd'; // Separação visual
+        headerElement.style.borderBottom = '1px solid #ddd'; 
     } else {
         body.style.display = 'none';
         if(icon) icon.style.transform = 'rotate(0deg)';
         headerElement.style.borderBottom = 'none';
     }
 };
-
-// ... (Funções de Reset de Senha Global, Créditos e Criação de Empresa mantidas da versão anterior) ...
-// Para economizar caracteres e focar no novo, assuma que resetarSenhaComMigracao, abrirModalCreditos, 
-// salvarCreditosEmpresa e excluirUsuarioGlobal estão aqui conforme Parte 5 anterior.
 
 window.resetarSenhaComMigracao = async function(oldUid, email, nome) {
     var novaSenha = prompt(`RESETAR SENHA DE: ${nome}\n(${email})\n\nDIGITE A NOVA SENHA (Mín 6 dígitos):`);
@@ -1888,23 +1677,31 @@ window.salvarCreditosEmpresa = async function() {
     } catch(e) { alert("Erro: "+e.message); }
 };
 
+window.excluirUsuarioGlobal = async function(uid) {
+    if (!confirm("Tem certeza? Esta ação é irreversível e bloqueará o acesso deste usuário.")) return;
+    try {
+        const { db, doc, deleteDoc } = window.dbRef;
+        await deleteDoc(doc(db, "users", uid));
+        carregarPainelSuperAdmin(true); 
+    } catch(e) { alert("Erro: " + e.message); }
+};
+
 // -----------------------------------------------------------------------------
 // MEUS DADOS (FUNCIONÁRIO) - VISUALIZAÇÃO E SOLICITAÇÃO
 // -----------------------------------------------------------------------------
 
 window.renderizarMeusDados = function() {
     var user = window.USUARIO_ATUAL;
-    // Tenta achar dados mais completos no cache local (se houver sincronia) ou usa o do Auth
-    var dadosCompletos = CACHE_FUNCIONARIOS.find(f => f.id === user.uid) || user;
+    // Tenta achar dados mais completos no cache local
+    var dadosCompletos = CACHE_FUNCIONARIOS.find(f => String(f.id) === String(user.uid)) || user;
     
-    // Fallback se não estiver no cache local ainda (primeiro login)
+    // Fallback se faltar campos
     if (!dadosCompletos.endereco) dadosCompletos.endereco = "Não informado";
     if (!dadosCompletos.telefone) dadosCompletos.telefone = "Não informado";
 
     var container = document.getElementById('meusDadosContainer');
     if (!container) return;
 
-    // Função auxiliar para gerar linha de dado
     const linhaDado = (label, valor, campoDb) => `
         <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding:10px 0;">
             <div>
@@ -1969,13 +1766,12 @@ window.solicitarAlteracaoDado = function(campo, valorAtual) {
 };
 
 // -----------------------------------------------------------------------------
-// INICIALIZAÇÃO DO SISTEMA (ROTEAMENTO E INÍCIO RÁPIDO)
+// INICIALIZAÇÃO DO SISTEMA
 // -----------------------------------------------------------------------------
 
 window.initSystemByRole = async function(user) {
     console.log("Inicializando...", user.role);
     
-    // Ocultar TUDO
     document.querySelectorAll('.page').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); });
     document.querySelectorAll('.sidebar ul').forEach(ul => ul.style.display = 'none');
     
@@ -1987,8 +1783,7 @@ window.initSystemByRole = async function(user) {
         document.getElementById('userRoleDisplay').textContent = "SUPER ADMIN";
         document.getElementById('menu-super-admin').style.display = 'block';
         
-        // Limpa cache local para evitar vazamento de dados de empresas anteriores
-        CACHE_OPERACOES = []; CACHE_FUNCIONARIOS = []; CACHE_VEICULOS = [];
+        CACHE_OPERACOES = []; CACHE_FUNCIONARIOS = []; // Limpa memória
         
         document.getElementById('super-admin').style.display = 'block';
         setTimeout(() => document.getElementById('super-admin').classList.add('active'), 50);
@@ -1999,7 +1794,7 @@ window.initSystemByRole = async function(user) {
     // --- USUÁRIO COMUM (ADMIN OU FUNCIONÁRIO) ---
     if (!user.approved) return document.body.innerHTML = `<div style="text-align:center; padding:50px;"><h1>AGUARDANDO APROVAÇÃO</h1><button onclick="logoutSystem()">SAIR</button></div>`;
 
-    // Validação de Vencimento
+    // Validação
     var sistemaBloqueado = false;
     if (user.role === 'admin' && !user.isVitalicio) {
         if (!user.systemValidity || new Date(user.systemValidity) < new Date()) {
@@ -2008,13 +1803,12 @@ window.initSystemByRole = async function(user) {
     }
     if (user.role === 'admin' && sistemaBloqueado) return document.body.innerHTML = `<div style="text-align:center; padding:50px; color:red;"><h1>ASSINATURA VENCIDA</h1><button onclick="logoutSystem()">SAIR</button></div>`;
 
-    // Renderização Inicial de Dados (CRÍTICO: Carrega tabelas na memória)
+    // CRÍTICO: Carrega tabelas na memória antes de renderizar qualquer coisa
     preencherTodosSelects();
 
     if (user.role === 'admin') {
         document.getElementById('menu-admin').style.display = 'block';
         
-        // Display Validade
         var displayVal = document.getElementById('systemValidityDisplay');
         if (displayVal) {
             displayVal.style.display = 'block';
@@ -2038,9 +1832,10 @@ window.initSystemByRole = async function(user) {
         var pageHome = document.getElementById('employee-home');
         if(pageHome) { pageHome.style.display = 'block'; setTimeout(() => pageHome.classList.add('active'), 50); }
         
-        // Carrega dados específicos
-        filtrarServicosFuncionario(user.uid);
-        renderizarMeusDados();
+        // Inicializações Específicas do Funcionário
+        filtrarServicosFuncionario(user.uid); // Carrega Meus Serviços
+        renderizarCheckinFuncionario(); // Carrega rotas pendentes
+        renderizarMeusDados(); // Carrega perfil
     }
 };
 
@@ -2061,6 +1856,7 @@ document.querySelectorAll('.nav-item').forEach(item => {
         if (pageId === 'home') atualizarDashboard();
         if (pageId === 'graficos') atualizarGraficoPrincipal(new Date().getMonth(), new Date().getFullYear());
         if (pageId === 'meus-dados') renderizarMeusDados();
+        if (pageId === 'employee-checkin') renderizarCheckinFuncionario(); // Refresh no checkin ao entrar
     });
 });
 
