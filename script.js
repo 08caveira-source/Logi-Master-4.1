@@ -685,25 +685,21 @@ window.abrirModalDetalhesDia = function(dataString) {
     document.getElementById('modalDayOperations').style.display = 'block';
 };
 // =============================================================================
-// PARTE 3: CADASTROS E INTERFACE (COM CORREÇÃO DAS ABAS)
+// PARTE 3: CADASTROS E INTERFACE (COM TRATAMENTO DE ERRO DE EMAIL)
 // =============================================================================
 
-// *** CORREÇÃO IMPORTANTE DAS ABAS DE CADASTRO ***
+// *** CORREÇÃO DAS ABAS DE CADASTRO ***
 document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-        // Remove ativo de todos os botões e formulários
         document.querySelectorAll('.cadastro-tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.cadastro-form').forEach(f => f.classList.remove('active'));
         
-        // Ativa o clicado
         btn.classList.add('active');
         const targetId = btn.getAttribute('data-tab');
         const targetForm = document.getElementById(targetId);
         
         if (targetForm) {
             targetForm.classList.add('active');
-            
-            // Força atualização da tabela correspondente ao abrir a aba
             if(targetId === 'funcionarios') renderizarTabelaFuncionarios();
             if(targetId === 'veiculos') renderizarTabelaVeiculos();
             if(targetId === 'contratantes') renderizarTabelaContratantes();
@@ -713,7 +709,7 @@ document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
     });
 });
 
-// FORMULÁRIO DE FUNCIONÁRIOS
+// FORMULÁRIO DE FUNCIONÁRIOS (CORRIGIDO PARA EMAIL EXISTENTE)
 document.addEventListener('submit', async function(e) {
     if (e.target.id === 'formFuncionario') {
         e.preventDefault();
@@ -728,23 +724,42 @@ document.addEventListener('submit', async function(e) {
             var senha = document.getElementById('funcSenha').value; 
             var funcao = document.getElementById('funcFuncao').value;
             var nome = document.getElementById('funcNome').value.toUpperCase();
+            
+            // Verifica se é criação de login (Novo ID + Senha preenchida)
             var criarLogin = (!document.getElementById('funcionarioId').value && senha);
             var novoUID = id; 
 
             if (criarLogin) {
                 if(senha.length < 6) throw new Error("A senha deve ter no mínimo 6 dígitos.");
-                novoUID = await window.dbRef.criarAuthUsuario(email, senha);
                 
-                await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "users", novoUID), {
-                    uid: novoUID, 
-                    name: nome, 
-                    email: email, 
-                    role: funcao,
-                    company: window.USUARIO_ATUAL.company, 
-                    createdAt: new Date().toISOString(), 
-                    approved: true, 
-                    senhaVisual: senha
-                });
+                try {
+                    console.log("Tentando criar usuário no Auth...");
+                    novoUID = await window.dbRef.criarAuthUsuario(email, senha);
+                    
+                    // Salva metadados do login
+                    await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "users", novoUID), {
+                        uid: novoUID, 
+                        name: nome, 
+                        email: email, 
+                        role: funcao,
+                        company: window.USUARIO_ATUAL.company, 
+                        createdAt: new Date().toISOString(), 
+                        approved: true, 
+                        senhaVisual: senha
+                    });
+
+                } catch (authError) {
+                    // TRATAMENTO ESPECÍFICO PARA EMAIL JÁ EM USO
+                    if (authError.code === 'auth/email-already-in-use') {
+                        if (!confirm(`O e-mail ${email} JÁ POSSUI UM LOGIN no sistema.\n\nDeseja cadastrar os dados do funcionário mesmo assim? (O login antigo será mantido)`)) {
+                            throw new Error("Operação cancelada pelo usuário.");
+                        }
+                        // Prossegue usando o ID gerado por data (novoUID = id), sem criar novo Auth
+                        console.warn("Seguindo com cadastro de dados sem recriar Auth.");
+                    } else {
+                        throw authError; // Lança outros erros normalmente
+                    }
+                }
             }
 
             var funcionarioObj = {
@@ -762,16 +777,16 @@ document.addEventListener('submit', async function(e) {
                 cursoDescricao: document.getElementById('funcCursoDescricao').value
             };
             
-            if (senha) {
-                funcionarioObj.senhaVisual = senha;
-            }
+            if (senha) { funcionarioObj.senhaVisual = senha; }
 
+            // Atualiza Cache Local
             var lista = CACHE_FUNCIONARIOS.filter(f => f.email !== email && f.id !== id);
             lista.push(funcionarioObj);
             
+            // Salva na Nuvem
             await salvarListaFuncionarios(lista);
             
-            alert("Funcionário Salvo e Sincronizado!");
+            alert("Funcionário Salvo com Sucesso!");
             e.target.reset(); 
             document.getElementById('funcionarioId').value = '';
             toggleDriverFields(); 
@@ -779,7 +794,10 @@ document.addEventListener('submit', async function(e) {
 
         } catch (erro) { 
             console.error(erro); 
-            alert("Erro: " + erro.message); 
+            // Ignora erro de cancelamento
+            if (erro.message !== "Operação cancelada pelo usuário.") {
+                alert("Erro: " + erro.message); 
+            }
         } finally { 
             btnSubmit.disabled = false; 
             btnSubmit.innerHTML = textoOriginal; 
@@ -943,8 +961,6 @@ document.addEventListener('submit', function(e) {
             document.getElementById('operacaoIsAgendamento').checked = false;
             window._operacaoAjudantesTempList = []; 
             renderizarListaAjudantesAdicionados();
-            
-            // ATUALIZAÇÃO CRÍTICA
             preencherTodosSelects(); 
             renderizarCalendario(); 
             atualizarDashboard();
@@ -952,7 +968,7 @@ document.addEventListener('submit', function(e) {
     }
 });
 
-// UI HELPERS (Funções de interface)
+// UI HELPERS
 window.toggleDriverFields = function() { 
     var select = document.getElementById('funcFuncao'); 
     var div = document.getElementById('driverSpecificFields'); 
@@ -1008,7 +1024,7 @@ window.limparOutroFiltro = function(tipo) {
     } 
 };
 
-// FUNÇÃO MESTRE DE ATUALIZAÇÃO VISUAL (Popula Selects e Chama Tabelas)
+// ATUALIZAÇÃO VISUAL
 function preencherTodosSelects() {
     console.log("Atualizando tabelas e selects...");
     const fill = (id, dados, valKey, textKey, defText) => { 
@@ -1052,7 +1068,6 @@ function renderizarTabelaDespesasGerais() {
     var tbody = document.querySelector('#tabelaDespesasGerais tbody'); 
     if (!tbody) return; 
     tbody.innerHTML = '';
-    
     CACHE_DESPESAS.sort((a,b) => new Date(b.data) - new Date(a.data)).forEach(d => {
         var textoPgto = d.modoPagamento === 'parcelado' ? `PARCELADO (${d.parcelasTotal}x)` : 'À VISTA';
         var tr = document.createElement('tr');
@@ -1103,9 +1118,7 @@ window.excluirAtividade = function(id) {
 
 window.excluirOperacao = function(id) { 
     if(!confirm("Excluir operação?")) return; 
-    salvarListaOperacoes(CACHE_OPERACOES.filter(o => String(o.id) !== String(id))).then(() => { 
-        preencherTodosSelects(); renderizarCalendario(); atualizarDashboard(); 
-    }); 
+    salvarListaOperacoes(CACHE_OPERACOES.filter(o => String(o.id) !== String(id))).then(() => { preencherTodosSelects(); renderizarCalendario(); atualizarDashboard(); }); 
 };
 
 window.preencherFormularioFuncionario = function(id) { var f = buscarFuncionarioPorId(id); if (!f) return; document.getElementById('funcionarioId').value = f.id; document.getElementById('funcNome').value = f.nome; document.getElementById('funcFuncao').value = f.funcao; document.getElementById('funcDocumento').value = f.documento; document.getElementById('funcEmail').value = f.email || ''; document.getElementById('funcTelefone').value = f.telefone; document.getElementById('funcPix').value = f.pix || ''; document.getElementById('funcEndereco').value = f.endereco || ''; toggleDriverFields(); if (f.funcao === 'motorista') { document.getElementById('funcCNH').value = f.cnh || ''; document.getElementById('funcValidadeCNH').value = f.validadeCNH || ''; document.getElementById('funcCategoriaCNH').value = f.categoriaCNH || ''; document.getElementById('funcCursoDescricao').value = f.cursoDescricao || ''; } document.querySelector('[data-page="cadastros"]').click(); document.querySelector('[data-tab="funcionarios"]').click(); };
