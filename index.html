@@ -801,14 +801,22 @@
             <input type="hidden" id="empresaIdCredito">
             <p><strong>EMPRESA:</strong> <span id="nomeEmpresaCredito"></span></p>
             <p><strong>ATUAL:</strong> <span id="validadeAtualCredito"></span></p>
+            
             <div style="margin:15px 0; display:flex; align-items:center; gap:5px;">
                 <input type="checkbox" id="checkVitalicio" style="width:auto;"> 
-                <label for="checkVitalicio" style="margin:0;">VITALÍCIO</label>
+                <label for="checkVitalicio" style="margin:0;">VITALÍCIO (SEM VENCIMENTO)</label>
             </div>
+            
+            <div style="margin:15px 0; background:#fff3e0; padding:10px; border:1px solid #ffe0b2; border-radius:4px;">
+                <input type="checkbox" id="checkBloqueado" style="width:auto; accent-color:red;">
+                <label for="checkBloqueado" style="display:inline; color:#e65100; font-weight:bold;">BLOQUEAR ACESSO</label>
+            </div>
+
             <div id="divAddCreditos">
-                <label>MESES A ADICIONAR</label><input type="number" id="qtdCreditosAdd" min="1" value="1">
+                <label>MESES A ADICIONAR</label>
+                <input type="number" id="qtdCreditosAdd" min="1" value="1">
             </div>
-            <button onclick="salvarCreditosEmpresa()" class="btn-success" style="width:100%; margin-top:15px;">SALVAR</button>
+            <button onclick="salvarCreditosEmpresa()" class="btn-success" style="width:100%; margin-top:15px;">SALVAR ALTERAÇÕES</button>
         </div>
     </div>
 

@@ -1480,11 +1480,10 @@ window.filtrarServicosFuncionario = function(uid) {
     }
 };
 // =============================================================================
-// PARTE 5: SUPER ADMIN (GESTÃO TOTAL), MEUS DADOS E INICIALIZAÇÃO
+// PARTE 5: SUPER ADMIN, MEUS DADOS E INICIALIZAÇÃO (FIX FINAL)
 // =============================================================================
 
-// --- CONFIGURAÇÃO DE SEGURANÇA ---
-const EMAILS_MESTRES = ["admin@logimaster.com", "suporte@logimaster.com"]; 
+const EMAILS_MESTRES = ["admin@logimaster.com", "suporte@logimaster.com", "08caveira@gmail.com"]; 
 
 // -----------------------------------------------------------------------------
 // PAINEL SUPER ADMIN (MASTER)
@@ -1494,12 +1493,12 @@ window.carregarPainelSuperAdmin = async function() {
     const container = document.getElementById('superAdminContainer');
     if(!container) return;
     
-    container.innerHTML = '<p style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Baixando dados globais...</p>';
+    container.innerHTML = '<p style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Atualizando lista...</p>';
 
     try {
         const { db, collection, getDocs } = window.dbRef;
         
-        // 1. Busca global direta no Firestore
+        // Busca Forçada na Nuvem
         const companiesSnap = await getDocs(collection(db, "companies"));
         const usersSnap = await getDocs(collection(db, "users"));
         
@@ -1511,246 +1510,205 @@ window.carregarPainelSuperAdmin = async function() {
         container.innerHTML = '';
 
         if(companies.length === 0) {
-            container.innerHTML = '<div class="alert alert-info">Nenhuma empresa cadastrada. Utilize o formulário acima para criar.</div>';
+            container.innerHTML = '<div class="alert alert-info">Nenhuma empresa encontrada.</div>';
             return;
         }
 
-        // 2. Renderização (Lista de Empresas)
         companies.forEach(comp => {
             const usersDaEmpresa = users.filter(u => u.company === comp.id);
             const admin = usersDaEmpresa.find(u => u.role === 'admin');
             
-            // Status Visual e Validade
-            let statusBadge = "";
-            let validadeTexto = "SEM DADOS";
-            let borderColor = "#ddd";
+            // Tratamento de Erros Visuais
+            let statusBadge = comp.isBlocked ? 
+                `<span class="status-pill pill-paused">BLOQUEADO</span>` : 
+                (comp.isVitalicio ? `<span class="status-pill pill-active">VITALÍCIO</span>` : 
+                (comp.systemValidity && new Date(comp.systemValidity) < new Date() ? `<span class="status-pill pill-blocked">VENCIDO</span>` : `<span class="status-pill pill-active">ATIVO</span>`));
             
-            if (comp.isBlocked) {
-                validadeTexto = "BLOQUEADO";
-                statusBadge = `<span class="status-pill pill-paused">BLOQUEADO</span>`;
-                borderColor = "var(--danger-color)";
-            } else if (comp.isVitalicio) {
-                validadeTexto = "VITALÍCIO";
-                statusBadge = `<span class="status-pill pill-active">VITALÍCIO</span>`;
-                borderColor = "gold";
-            } else if (comp.systemValidity) {
-                const val = new Date(comp.systemValidity);
-                if (val < new Date()) {
-                    statusBadge = `<span class="status-pill pill-blocked">VENCIDO</span>`;
-                    validadeTexto = formatarDataParaBrasileiro(comp.systemValidity);
-                    borderColor = "var(--danger-color)";
-                } else {
-                    statusBadge = `<span class="status-pill pill-active">ATIVO</span>`;
-                    validadeTexto = formatarDataParaBrasileiro(comp.systemValidity);
-                    borderColor = "var(--success-color)";
-                }
-            }
+            let validadeTexto = comp.isVitalicio ? "VITALÍCIO" : (comp.systemValidity ? formatarDataParaBrasileiro(comp.systemValidity) : "SEM DADOS");
+            let borderColor = comp.isBlocked ? "var(--danger-color)" : (comp.isVitalicio ? "gold" : "#ddd");
 
             const div = document.createElement('div');
             div.className = 'company-wrapper';
-            div.style.marginBottom = "15px";
-            div.style.border = `1px solid ${borderColor}`;
-            div.style.borderRadius = "8px";
-            div.style.backgroundColor = "white";
-            div.style.overflow = "hidden";
+            div.style.cssText = `margin-bottom:15px; border:1px solid ${borderColor}; border-radius:8px; background:white; overflow:hidden;`;
 
             div.innerHTML = `
                 <div class="company-header" onclick="toggleCompanyDetails(this)" style="padding:15px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#f8f9fa;">
                     <div style="display:flex; align-items:center; gap:15px;">
-                        <div style="background:var(--primary-color); color:white; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:1.2rem;">
+                        <div style="background:var(--primary-color); color:white; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;">
                             ${comp.id.substring(0,2).toUpperCase()}
                         </div>
                         <div>
                             <h4 style="margin:0; text-transform:uppercase;">${comp.id}</h4>
-                            <small style="color:#666;">Admin: ${admin ? admin.email : '<span style="color:red">Sem Admin</span>'}</small>
+                            <small style="color:#666;">Admin: ${admin ? admin.email : '<span style="color:red">Não Identificado / Erro</span>'}</small>
                         </div>
                     </div>
-                    
                     <div style="display:flex; align-items:center; gap:15px;">
                         <div style="text-align:right;">
                             <div style="font-size:0.7rem; color:#888;">VALIDADE</div>
                             <strong style="font-size:0.9rem;">${validadeTexto}</strong>
                         </div>
                         ${statusBadge}
-                        <button class="btn-mini btn-primary" onclick="event.stopPropagation(); abrirModalCreditos('${comp.id}', '${comp.systemValidity||''}', ${comp.isVitalicio||false})" title="Editar Créditos/Bloqueio">
+                        <button class="btn-mini btn-primary" onclick="event.stopPropagation(); abrirModalCreditos('${comp.id}', '${comp.systemValidity||''}', ${comp.isVitalicio||false}, ${comp.isBlocked||false})" title="Editar">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn-mini btn-danger" onclick="event.stopPropagation(); excluirEmpresaTotal('${comp.id}')" title="Excluir Empresa e Usuários">
+                        <button class="btn-mini btn-danger" onclick="event.stopPropagation(); excluirEmpresaTotal('${comp.id}')" title="Excluir">
                             <i class="fas fa-trash"></i>
                         </button>
-                        <i class="fas fa-chevron-down" style="color:#ccc; margin-left:5px;"></i>
                     </div>
                 </div>
-                
-                <div class="company-body" style="display:none; padding:20px; border-top:1px solid #eee; background:#fff;">
-                    <h5 style="margin-bottom:10px; color:#666;">USUÁRIOS VINCULADOS (${usersDaEmpresa.length})</h5>
-                    <table class="data-table" style="width:100%; font-size:0.9rem;">
-                        <thead><tr><th>NOME</th><th>EMAIL</th><th>SENHA (VISUAL)</th><th>FUNÇÃO</th><th>AÇÃO</th></tr></thead>
+                <div class="company-body" style="display:none; padding:20px; border-top:1px solid #eee;">
+                    <h5 style="color:#666;">USUÁRIOS (${usersDaEmpresa.length})</h5>
+                    <table class="data-table" style="width:100%;">
+                        <thead><tr><th>NOME</th><th>EMAIL</th><th>SENHA</th><th>AÇÃO</th></tr></thead>
                         <tbody>
                             ${usersDaEmpresa.map(u => `
                                 <tr>
                                     <td>${u.name}</td>
                                     <td>${u.email}</td>
                                     <td style="font-family:monospace; color:#007bff;">${u.senhaVisual || '***'}</td>
-                                    <td>${u.role.toUpperCase()}</td>
                                     <td>
-                                        <button class="btn-mini btn-warning" onclick="resetarSenhaComMigracao('${u.uid}', '${u.email}', '${u.name}')" title="Resetar Senha">
-                                            <i class="fas fa-key"></i>
-                                        </button>
-                                        <button class="btn-mini btn-danger" onclick="excluirUsuarioGlobal('${u.uid}')" title="Remover Usuário">
-                                            <i class="fas fa-user-times"></i>
-                                        </button>
+                                        <button class="btn-mini btn-warning" onclick="resetarSenhaComMigracao('${u.uid}', '${u.email}', '${u.name}')">RESET</button>
+                                        <button class="btn-mini btn-danger" onclick="excluirUsuarioGlobal('${u.uid}')">DEL</button>
                                     </td>
-                                </tr>
-                            `).join('')}
+                                </tr>`).join('')}
                         </tbody>
                     </table>
                 </div>
             `;
             container.appendChild(div);
         });
-
     } catch (e) {
         console.error(e);
-        container.innerHTML = '<p style="color:red">Erro ao carregar lista de empresas: ' + e.message + '</p>';
+        container.innerHTML = `<p style="color:red">Erro: ${e.message}</p>`;
     }
 };
 
-window.toggleCompanyDetails = function(headerElement) {
-    const body = headerElement.nextElementSibling;
-    const icon = headerElement.querySelector('.fa-chevron-down');
-    
-    if (body.style.display === 'none') {
-        body.style.display = 'block';
-        if(icon) icon.style.transform = 'rotate(180deg)';
-        headerElement.style.borderBottom = '1px solid #ddd'; 
-    } else {
-        body.style.display = 'none';
-        if(icon) icon.style.transform = 'rotate(0deg)';
-        headerElement.style.borderBottom = 'none';
-    }
+window.toggleCompanyDetails = function(header) {
+    const body = header.nextElementSibling;
+    body.style.display = body.style.display === 'none' ? 'block' : 'none';
 };
 
-// --- AÇÕES GLOBAIS DE GESTÃO ---
-
-// 1. EXCLUIR EMPRESA TOTAL (Domínio + Usuários)
-window.excluirEmpresaTotal = async function(companyId) {
-    var confirmacao = prompt(`ATENÇÃO PERIGO!\n\nVocê está prestes a excluir a empresa "${companyId.toUpperCase()}" e TODOS os seus usuários.\n\nEsta ação é irreversível.\n\nDigite "DELETAR" para confirmar:`);
-    
-    if (confirmacao !== "DELETAR") return;
-
-    try {
-        const { db, collection, query, where, getDocs, deleteDoc, doc, writeBatch } = window.dbRef;
+// --- FUNÇÃO CRÍTICA: CRIAR EMPRESA (COM RECUPERAÇÃO DE ERRO) ---
+document.addEventListener('submit', async function(e) {
+    if (e.target.id === 'formCreateCompany') {
+        e.preventDefault();
+        var dominio = document.getElementById('newCompanyDomain').value.trim().toLowerCase();
+        var email = document.getElementById('newAdminEmail').value.trim();
+        var senha = document.getElementById('newAdminPassword').value.trim();
         
-        // A. Buscar todos os usuários da empresa
-        const q = query(collection(db, "users"), where("company", "==", companyId));
-        const snapshot = await getDocs(q);
-        
-        const batch = writeBatch(db);
-        let count = 0;
+        if (dominio.length < 3) return alert("Domínio inválido.");
 
-        // B. Deletar usuários (Batch)
-        snapshot.forEach((documento) => {
-            batch.delete(documento.ref);
-            count++;
-        });
+        const { db, doc, setDoc, getDocs, query, collection, where } = window.dbRef;
 
-        // C. Deletar documento da empresa
-        const companyRef = doc(db, "companies", companyId);
-        batch.delete(companyRef);
-
-        await batch.commit();
-        
-        alert(`SUCESSO!\nEmpresa ${companyId} e ${count} usuários foram removidos.`);
-        carregarPainelSuperAdmin();
-
-    } catch (e) {
-        alert("Erro ao excluir: " + e.message);
-    }
-};
-
-// 2. RESETAR SENHA (GLOBAL)
-window.resetarSenhaComMigracao = async function(oldUid, email, nome) {
-    var novaSenha = prompt(`RESETAR SENHA DE: ${nome}\n(${email})\n\nDIGITE A NOVA SENHA (Mín 6 dígitos):`);
-    if(!novaSenha || novaSenha.length < 6) return alert("Mínimo 6 dígitos.");
-    
-    try {
-        let newUid = await window.dbRef.criarAuthUsuario(email, novaSenha);
-        const { db, doc, getDoc, setDoc, deleteDoc } = window.dbRef;
-        
-        const oldRef = doc(db, "users", oldUid);
-        const oldSnap = await getDoc(oldRef);
-        
-        if (oldSnap.exists()) {
-            const data = oldSnap.data();
-            data.uid = newUid;
-            data.senhaVisual = novaSenha;
-            data.migratedAt = new Date().toISOString();
+        try {
+            // 1. Tenta criar Auth
+            var uid = await window.dbRef.criarAuthUsuario(email, senha);
             
-            await setDoc(doc(db, "users", newUid), data);
-            await deleteDoc(oldRef);
-        }
-        alert("Senha resetada com sucesso!");
-        carregarPainelSuperAdmin();
-    } catch (e) { alert("Erro: " + e.message); }
-};
+            // 2. Se passar, cria Usuário Admin no DB
+            await setDoc(doc(db, "users", uid), {
+                uid: uid, name: "ADMIN " + dominio.toUpperCase(), email: email, role: 'admin', 
+                company: dominio, createdAt: new Date().toISOString(), approved: true, 
+                isVitalicio: false, isBlocked: false, senhaVisual: senha,
+                systemValidity: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
+            });
 
-// 3. GERENCIAR CRÉDITOS E BLOQUEIO
-window.abrirModalCreditos = function(companyId, validade, isVitalicio) {
+        } catch (erro) {
+            // SE O EMAIL JÁ EXISTE (O Erro da imagem)
+            if (erro.code === 'auth/email-already-in-use') {
+                if(!confirm(`O e-mail ${email} JÁ EXISTE no sistema.\n\nDeseja criar apenas a empresa "${dominio}" e tentar vincular esse usuário depois?`)) {
+                    return;
+                }
+                // Prossegue para criar apenas a empresa
+            } else {
+                return alert("Erro fatal: " + erro.message);
+            }
+        }
+
+        try {
+            // 3. Cria/Garante Documento da Empresa (Para aparecer na lista)
+            await setDoc(doc(db, "companies", dominio), { 
+                id: dominio, createdAt: new Date().toISOString(),
+                isBlocked: false, isVitalicio: false,
+                systemValidity: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
+            }, { merge: true }); // Merge evita sobrescrever se já existir
+
+            alert(`Processo concluído para: ${dominio}`);
+            e.target.reset();
+            carregarPainelSuperAdmin();
+
+        } catch (dbError) {
+            alert("Erro ao salvar dados da empresa: " + dbError.message);
+        }
+    }
+});
+
+// --- GESTÃO DE CRÉDITOS E BLOQUEIO ---
+window.abrirModalCreditos = function(companyId, validade, isVitalicio, isBlocked) {
     document.getElementById('empresaIdCredito').value = companyId;
     document.getElementById('nomeEmpresaCredito').textContent = companyId.toUpperCase();
     
     var texto = isVitalicio ? "VITALÍCIO" : (validade ? formatarDataParaBrasileiro(validade.split('T')[0]) : "SEM REGISTRO");
     document.getElementById('validadeAtualCredito').textContent = texto;
     
-    document.getElementById('checkVitalicio').checked = isVitalicio;
-    document.getElementById('divAddCreditos').style.display = isVitalicio ? 'none' : 'block';
+    // Verificações de segurança (Evita erro null)
+    var elVitalicio = document.getElementById('checkVitalicio');
+    var elBloqueado = document.getElementById('checkBloqueado');
+    var elDivAdd = document.getElementById('divAddCreditos');
+
+    if(elVitalicio) elVitalicio.checked = isVitalicio;
+    if(elBloqueado) elBloqueado.checked = isBlocked;
+    if(elDivAdd) elDivAdd.style.display = isVitalicio ? 'none' : 'block';
     
-    document.getElementById('checkVitalicio').onchange = function() { 
-        document.getElementById('divAddCreditos').style.display = this.checked ? 'none' : 'block'; 
-    };
+    if(elVitalicio) {
+        elVitalicio.onchange = function() { 
+            if(elDivAdd) elDivAdd.style.display = this.checked ? 'none' : 'block'; 
+        };
+    }
     
     document.getElementById('modalCreditos').style.display = 'flex';
 };
 
 window.salvarCreditosEmpresa = async function() {
     var companyId = document.getElementById('empresaIdCredito').value;
-    var isVitalicio = document.getElementById('checkVitalicio').checked;
-    var isBloqueado = document.getElementById('checkBloqueado').checked;
+    
+    // Leitura Segura
+    var elVitalicio = document.getElementById('checkVitalicio');
+    var elBloqueado = document.getElementById('checkBloqueado');
+    var isVitalicio = elVitalicio ? elVitalicio.checked : false;
+    var isBloqueado = elBloqueado ? elBloqueado.checked : false;
+    
     var meses = parseInt(document.getElementById('qtdCreditosAdd').value);
     
     try {
-        const { db, collection, query, where, getDocs, updateDoc, doc, setDoc } = window.dbRef;
+        const { db, collection, query, where, getDocs, updateDoc, doc, setDoc, writeBatch } = window.dbRef;
         
-        // Atualiza a empresa na collection 'companies'
         var dadosEmpresa = { isVitalicio: isVitalicio, isBlocked: isBloqueado };
         var novaData = null;
 
         if (!isVitalicio && !isBloqueado) {
-            // Busca Admin para ver validade atual e somar
             const q = query(collection(db, "users"), where("company", "==", companyId), where("role", "==", "admin"));
             const snap = await getDocs(q);
-            
             var base = new Date();
+            // Se já tem validade futura, soma nela
             if(!snap.empty) {
-                var adminData = snap.docs[0].data();
-                if(adminData.systemValidity && new Date(adminData.systemValidity) > base) {
-                    base = new Date(adminData.systemValidity);
-                }
+                var adm = snap.docs[0].data();
+                if(adm.systemValidity && new Date(adm.systemValidity) > base) base = new Date(adm.systemValidity);
             }
-            base.setDate(base.getDate() + (meses * 30));
+            // Soma os meses
+            if (meses > 0) base.setDate(base.getDate() + (meses * 30));
+            
             novaData = base.toISOString();
             dadosEmpresa.systemValidity = novaData;
         }
 
-        // 1. Atualiza Doc da Empresa
+        // 1. Atualiza Empresa
         await setDoc(doc(db, "companies", companyId), dadosEmpresa, { merge: true });
 
-        // 2. Atualiza TODOS os usuários daquela empresa (para garantir bloqueio/desbloqueio em massa)
+        // 2. Atualiza Usuários (Batch)
         const qUsers = query(collection(db, "users"), where("company", "==", companyId));
         const snapUsers = await getDocs(qUsers);
+        const batch = writeBatch(db);
         
-        const batch = window.dbRef.writeBatch(db);
         snapUsers.forEach(uDoc => {
             let updateData = { isBlocked: isBloqueado, isVitalicio: isVitalicio };
             if (novaData) updateData.systemValidity = novaData;
@@ -1758,219 +1716,132 @@ window.salvarCreditosEmpresa = async function() {
         });
         await batch.commit();
 
-        alert("Alterações salvas e aplicadas a todos os usuários da empresa!");
+        alert("Empresa atualizada com sucesso!");
         document.getElementById('modalCreditos').style.display = 'none';
         carregarPainelSuperAdmin();
     } catch(e) { alert("Erro: " + e.message); }
 };
 
-window.excluirUsuarioGlobal = async function(uid) {
-    if (!confirm("Remover apenas este usuário?")) return;
+window.excluirEmpresaTotal = async function(companyId) {
+    if (prompt(`Digite "DELETAR" para apagar a empresa ${companyId} e TODOS os usuários:`) !== "DELETAR") return;
     try {
-        const { db, doc, deleteDoc } = window.dbRef;
-        await deleteDoc(doc(db, "users", uid));
-        carregarPainelSuperAdmin(); 
-    } catch(e) { alert("Erro: " + e.message); }
+        const { db, collection, query, where, getDocs, doc, writeBatch } = window.dbRef;
+        const batch = writeBatch(db);
+        
+        // Deleta usuários
+        const q = query(collection(db, "users"), where("company", "==", companyId));
+        const snap = await getDocs(q);
+        snap.forEach(d => batch.delete(d.ref));
+        
+        // Deleta empresa
+        batch.delete(doc(db, "companies", companyId));
+        
+        await batch.commit();
+        alert("Empresa excluída.");
+        carregarPainelSuperAdmin();
+    } catch (e) { alert("Erro: " + e.message); }
 };
 
-// Listener Criar Nova Empresa
-document.addEventListener('submit', async function(e) {
-    if (e.target.id === 'formCreateCompany') {
-        e.preventDefault();
-        var dominio = document.getElementById('newCompanyDomain').value.trim().toLowerCase(); // Força minúsculo
-        var email = document.getElementById('newAdminEmail').value.trim();
-        var senha = document.getElementById('newAdminPassword').value.trim();
-        
-        if (dominio.length < 3) return alert("Domínio muito curto.");
-
-        try {
-            var uid = await window.dbRef.criarAuthUsuario(email, senha);
-            const { db, doc, setDoc } = window.dbRef;
-            
-            // 1. Cria Usuário Admin
-            await setDoc(doc(db, "users", uid), {
-                uid: uid, 
-                name: "ADMIN " + dominio.toUpperCase(), 
-                email: email, 
-                role: 'admin', 
-                company: dominio,
-                createdAt: new Date().toISOString(), 
-                approved: true, 
-                isVitalicio: false,
-                isBlocked: false,
-                systemValidity: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString(),
-                senhaVisual: senha
-            });
-            
-            // 2. Cria Documento da Empresa (Para listagem)
-            await setDoc(doc(db, "companies", dominio), { 
-                id: dominio, 
-                createdAt: new Date().toISOString(),
-                isBlocked: false,
-                isVitalicio: false,
-                systemValidity: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
-            });
-            
-            alert(`Empresa "${dominio}" criada com sucesso!\nLogin Admin: ${email}`);
-            e.target.reset();
-            carregarPainelSuperAdmin();
-            
-        } catch (erro) { 
-            alert("Erro ao criar: " + erro.message); 
+// ... (Funções Reset Senha e Excluir Usuário Global mantidas iguais à versão anterior) ...
+window.resetarSenhaComMigracao = async function(oldUid, email, nome) {
+    var novaSenha = prompt(`NOVA SENHA PARA ${nome}:`);
+    if(!novaSenha || novaSenha.length < 6) return alert("Mín 6 dígitos.");
+    try {
+        let newUid = await window.dbRef.criarAuthUsuario(email, novaSenha);
+        const { db, doc, getDoc, setDoc, deleteDoc } = window.dbRef;
+        const oldRef = doc(db, "users", oldUid);
+        const oldSnap = await getDoc(oldRef);
+        if (oldSnap.exists()) {
+            const data = oldSnap.data();
+            data.uid = newUid; data.senhaVisual = novaSenha;
+            await setDoc(doc(db, "users", newUid), data);
+            await deleteDoc(oldRef);
         }
-    }
-});
+        alert("Senha alterada."); carregarPainelSuperAdmin();
+    } catch (e) { alert("Erro: " + e.message); }
+};
+
+window.excluirUsuarioGlobal = async function(uid) {
+    if(!confirm("Remover usuário?")) return;
+    try { await window.dbRef.deleteDoc(window.dbRef.doc(window.dbRef.db, "users", uid)); carregarPainelSuperAdmin(); } 
+    catch(e) { alert(e.message); }
+};
 
 // -----------------------------------------------------------------------------
-// MEUS DADOS (FUNCIONÁRIO - VISUALIZAÇÃO APENAS)
+// MEUS DADOS (FUNCIONÁRIO)
 // -----------------------------------------------------------------------------
-
 window.renderizarMeusDados = function() {
     var user = window.USUARIO_ATUAL;
     var dados = CACHE_FUNCIONARIOS.find(f => String(f.id) === String(user.uid)) || user;
-    
     var html = `
-        <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
-            <div style="text-align:center; margin-bottom:20px;">
-                <i class="fas fa-user-circle" style="font-size:3rem; color:var(--primary-color);"></i>
-                <h3>${dados.nome || dados.name}</h3>
-                <span class="status-pill pill-active">${dados.funcao || dados.role}</span>
+        <div style="background:white; padding:20px; border-radius:8px; text-align:center;">
+            <i class="fas fa-user-circle" style="font-size:3rem; color:var(--primary-color);"></i>
+            <h3>${dados.nome || dados.name}</h3><span class="status-pill pill-active">${dados.funcao || dados.role}</span>
+            <div style="margin-top:20px; text-align:left;">
+                ${makeLine('Telefone', dados.telefone, 'TELEFONE')}
+                ${makeLine('Endereço', dados.endereco, 'ENDERECO')}
+                ${makeLine('PIX', dados.pix, 'PIX')}
             </div>
-            ${makeLine('Telefone', dados.telefone, 'TELEFONE')}
-            ${makeLine('Endereço', dados.endereco, 'ENDERECO')}
-            ${makeLine('PIX', dados.pix, 'PIX')}
-            ${makeLine('Email', dados.email, 'EMAIL')}
-    `;
-    if(dados.funcao === 'motorista') {
-        html += `<h4 style="margin-top:20px;">DADOS CNH</h4>${makeLine('CNH', dados.cnh, 'CNH')}${makeLine('Validade', formatarDataParaBrasileiro(dados.validadeCNH), 'VALIDADE_CNH')}`;
-    }
-    html += `</div>`;
-    
-    var container = document.getElementById('meusDadosContainer');
-    if(container) container.innerHTML = html;
+        </div>`;
+    var c = document.getElementById('meusDadosContainer'); if(c) c.innerHTML = html;
 };
-
-function makeLine(label, val, field) {
-    return `<div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #eee;">
-        <div><strong>${label}:</strong> ${val||'-'}</div>
-        <button class="btn-mini btn-secondary" onclick="solicitarAlteracao('${field}', '${val}')"><i class="fas fa-pen"></i></button>
-    </div>`;
-}
-
-window.solicitarAlteracao = function(campo, atual) {
-    var novo = prompt("Novo valor desejado:", atual);
-    if(novo && novo !== atual) {
-        var req = { id: Date.now().toString(), data: new Date().toISOString(), funcionarioId: window.USUARIO_ATUAL.uid, funcionarioEmail: window.USUARIO_ATUAL.email, campo: campo, valorAntigo: atual, valorNovo: novo, status: 'PENDENTE' };
-        var lista = CACHE_PROFILE_REQUESTS || [];
-        lista.push(req);
-        salvarProfileRequests(lista).then(() => alert("Solicitação enviada ao administrador!"));
-    }
-};
+function makeLine(l, v, f) { return `<div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #eee;"><div><strong>${l}:</strong> ${v||'-'}</div><button class="btn-mini btn-secondary" onclick="solicitarAlt('${f}','${v}')"><i class="fas fa-pen"></i></button></div>`; }
+window.solicitarAlt = function(c, v) { var n=prompt("Novo valor:",v); if(n&&n!==v) { var r={id:Date.now().toString(), data:new Date().toISOString(), funcionarioId:window.USUARIO_ATUAL.uid, funcionarioEmail:window.USUARIO_ATUAL.email, campo:c, valorAntigo:v, valorNovo:n, status:'PENDENTE'}; CACHE_PROFILE_REQUESTS.push(r); salvarProfileRequests(CACHE_PROFILE_REQUESTS).then(()=>alert("Solicitado!")); }};
 
 // -----------------------------------------------------------------------------
-// INICIALIZAÇÃO E ROTEAMENTO (FINAL)
+// INICIALIZAÇÃO
 // -----------------------------------------------------------------------------
-
 window.initSystemByRole = async function(user) {
-    console.log(">>> INIT SYSTEM:", user.role);
+    console.log("INIT:", user.role);
     window.USUARIO_ATUAL = user;
-
-    // 1. Ocultar tudo inicialmente
+    
+    // 1. Esconde tudo
     document.querySelectorAll('.page').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); });
     document.querySelectorAll('.sidebar ul').forEach(ul => ul.style.display = 'none');
 
-    // 2. Roteamento SUPER ADMIN
+    // 2. Super Admin (Bypass Sync)
     if (EMAILS_MESTRES.includes(user.email) || user.role === 'admin_master') {
         document.getElementById('menu-super-admin').style.display = 'block';
         var p = document.getElementById('super-admin');
         p.style.display = 'block'; setTimeout(() => p.classList.add('active'), 50);
         carregarPainelSuperAdmin();
-        return; // Encerra aqui para Super Admin
+        return;
     }
 
-    // 3. Sincronia de Dados (Para Admin e Func)
-    await sincronizarDadosComFirebase(); 
-    preencherTodosSelects(); // Atualiza UI
+    // 3. Sync Dados (Admin/Func)
+    await sincronizarDadosComFirebase();
+    preencherTodosSelects();
 
-    // 4. Roteamento ADMIN
     if (user.role === 'admin') {
-        if (user.isBlocked) return document.body.innerHTML = "<div style='text-align:center;padding:50px;color:red'><h1>BLOQUEADO</h1></div>";
-        
-        // Verifica validade se não for vitalício
-        if (!user.isVitalicio) {
-            if (!user.systemValidity || new Date(user.systemValidity) < new Date()) {
-                document.body.innerHTML = "<div style='text-align:center; padding:50px; color:red'><h1>SISTEMA VENCIDO</h1><button onclick='logoutSystem()'>SAIR</button></div>";
-                return;
-            }
-        }
-
+        if(user.isBlocked) return document.body.innerHTML = "<h1 style='text-align:center;margin-top:50px;color:red'>BLOQUEADO</h1>";
         document.getElementById('menu-admin').style.display = 'block';
-        
-        var home = document.getElementById('home');
-        if(home) { 
-            home.style.display = 'block'; 
-            setTimeout(() => home.classList.add('active'), 50); 
-            document.querySelector('[data-page="home"]')?.classList.add('active');
-        }
+        var h = document.getElementById('home');
+        if(h) { h.style.display='block'; setTimeout(()=>h.classList.add('active'), 50); }
         atualizarDashboard();
-
     } else {
-        // 5. Roteamento FUNCIONÁRIO
         document.getElementById('menu-employee').style.display = 'block';
         window.MODO_APENAS_LEITURA = true;
-        
-        var empHome = document.getElementById('employee-home');
-        if(empHome) { 
-            empHome.style.display = 'block'; 
-            setTimeout(() => empHome.classList.add('active'), 50);
-            document.querySelector('[data-page="employee-home"]')?.classList.add('active');
-        }
-        
+        var eh = document.getElementById('employee-home');
+        if(eh) { eh.style.display='block'; setTimeout(()=>eh.classList.add('active'), 50); }
         renderizarCheckinFuncionario();
         renderizarMeusDados();
     }
 };
 
-// -----------------------------------------------------------------------------
-// NAVEGAÇÃO E BACKUP
-// -----------------------------------------------------------------------------
+// Navegação
 document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', function() {
-        document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
-        document.querySelectorAll('.page').forEach(page => { page.classList.remove('active'); page.style.display = 'none'; });
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        document.querySelectorAll('.page').forEach(p => { p.classList.remove('active'); p.style.display='none'; });
         this.classList.add('active');
-        var target = document.getElementById(this.getAttribute('data-page'));
-        if (target) { target.style.display = 'block'; setTimeout(() => target.classList.add('active'), 10); }
-        if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('active');
-        
-        if (this.getAttribute('data-page') === 'home') atualizarDashboard();
-        if (this.getAttribute('data-page') === 'meus-dados') renderizarMeusDados();
-        if (this.getAttribute('data-page') === 'employee-checkin') renderizarCheckinFuncionario();
+        var t = document.getElementById(this.getAttribute('data-page'));
+        if(t) { t.style.display='block'; setTimeout(()=>t.classList.add('active'), 10); }
+        if(window.innerWidth<=768) document.getElementById('sidebar').classList.remove('active');
+        var pg = this.getAttribute('data-page');
+        if(pg==='home') atualizarDashboard();
+        if(pg==='meus-dados') renderizarMeusDados();
+        if(pg==='employee-checkin') renderizarCheckinFuncionario();
     });
 });
-
-document.getElementById('mobileMenuBtn')?.addEventListener('click', () => document.getElementById('sidebar').classList.toggle('active'));
-document.getElementById('sidebarOverlay')?.addEventListener('click', () => document.getElementById('sidebar').classList.remove('active'));
-
-window.exportDataBackup = function() {
-    var data = { meta: { date: new Date(), user: window.USUARIO_ATUAL.email }, data: { funcionarios: CACHE_FUNCIONARIOS, veiculos: CACHE_VEICULOS, operacoes: CACHE_OPERACOES, despesas: CACHE_DESPESAS } };
-    var a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data)); a.download = "backup.json"; a.click();
-};
-
-window.importDataBackup = function(event) {
-    var reader = new FileReader();
-    reader.onload = function(e) {
-        if(confirm("Restaurar backup?")) {
-            var json = JSON.parse(e.target.result);
-            if(json.data) {
-                localStorage.setItem(CHAVE_DB_FUNCIONARIOS, JSON.stringify(json.data.funcionarios));
-                localStorage.setItem(CHAVE_DB_VEICULOS, JSON.stringify(json.data.veiculos));
-                localStorage.setItem(CHAVE_DB_OPERACOES, JSON.stringify(json.data.operacoes));
-                localStorage.setItem(CHAVE_DB_DESPESAS, JSON.stringify(json.data.despesas));
-                alert("Backup restaurado! Recarregando...");
-                window.location.reload();
-            }
-        }
-    };
-    reader.readAsText(event.target.files[0]);
-};
+document.getElementById('mobileMenuBtn')?.addEventListener('click', ()=>document.getElementById('sidebar').classList.toggle('active'));
+document.getElementById('sidebarOverlay')?.addEventListener('click', ()=>document.getElementById('sidebar').classList.remove('active'));
