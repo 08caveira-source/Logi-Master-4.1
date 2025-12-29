@@ -1,7 +1,3 @@
-/* =============================================================================
-   LOGIMASTER - ESTILO ATUALIZADO (PRIVACIDADE E LAYOUT PRO)
-   ============================================================================= */
-
 @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@300;400;600;700&display=swap');
 
 :root {
@@ -37,7 +33,7 @@ body {
     color: var(--sidebar-text);
     position: fixed;
     top: 0; left: 0; bottom: 0;
-    z-index: 1050; /* Aumentado para sobrepor */
+    z-index: 2000 !important; /* CORRIGIDO: Z-INDEX MAIOR QUE TUDO */
     display: flex;
     flex-direction: column;
     box-shadow: 2px 0 5px rgba(0,0,0,0.1);
@@ -158,7 +154,7 @@ body {
 .veh-stat-box small { display: block; color: #6c757d; font-weight: bold; font-size: 0.75rem; text-transform: uppercase; }
 .veh-stat-box span { font-size: 1.1rem; font-weight: 700; color: #343a40; }
 
-/* --- CONFIG BUTTONS (ORGANIZAÇÃO) --- */
+/* --- CONFIG BUTTONS --- */
 .config-actions-container {
     display: flex;
     flex-wrap: wrap;
@@ -199,7 +195,7 @@ button:hover { filter: brightness(0.9); }
 .pill-active { background: var(--success-color); }
 .pill-pending { background: var(--warning-color); color: #333; }
 .pill-blocked { background: var(--danger-color); }
-.pill-paused { background: #6f42c1; } /* Roxo */
+.pill-paused { background: #6f42c1; }
 
 /* --- MODAL --- */
 .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center; overflow-y: auto; padding: 10px; }
@@ -212,21 +208,22 @@ button:hover { filter: brightness(0.9); }
 @media (max-width: 768px) {
     .sidebar { transform: translateX(-100%); }
     .sidebar.active { transform: translateX(0); }
-    .content { margin-left: 0; padding-top: 0; } /* Remove padding top extra */
+    .content { margin-left: 0; padding-top: 0; }
     .mobile-nav { display: flex; }
     .section-header { margin: -20px -20px 20px -20px; border-radius: 0; }
     .config-actions-container { flex-direction: column; align-items: stretch; }
     .config-group { flex-direction: column; }
     button { width: 100%; justify-content: center; }
 }
+
 /* =============================================================================
-   CORREÇÕES DE LAYOUT (ADICIONE AO FINAL DO ARQUIVO)
+   CORREÇÕES ESPECÍFICAS (CALENDÁRIO, ABAS E GRÁFICOS)
    ============================================================================= */
 
-/* 1. CORREÇÃO DO CALENDÁRIO */
+/* 1. Calendário Grid */
 .calendar-grid {
     display: grid;
-    grid-template-columns: repeat(7, 1fr); /* 7 colunas fixas */
+    grid-template-columns: repeat(7, 1fr);
     gap: 8px;
     padding: 10px 0;
 }
@@ -235,7 +232,7 @@ button:hover { filter: brightness(0.9); }
     background-color: #fff;
     border: 1px solid #dee2e6;
     border-radius: 4px;
-    min-height: 80px; /* Altura mínima para caber as bolinhas */
+    min-height: 80px;
     padding: 5px;
     cursor: pointer;
     display: flex;
@@ -248,13 +245,8 @@ button:hover { filter: brightness(0.9); }
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
-.day-cell.empty {
-    background: transparent;
-    border: none;
-    cursor: default;
-}
+.day-cell.empty { background: transparent; border: none; cursor: default; }
 
-/* Bolinha de status da viagem no calendário */
 .event-dot {
     width: 8px;
     height: 8px;
@@ -263,25 +255,9 @@ button:hover { filter: brightness(0.9); }
     display: inline-block;
 }
 
-/* 2. CORREÇÃO DO MENU MOBILE (Z-INDEX) */
-/* O sidebar precisa ser maior que o .mobile-nav (que é 1100) */
-.sidebar {
-    z-index: 2000 !important; 
-}
-/* =============================================================================
-   CORREÇÃO DAS ABAS DE CADASTRO (Adicione ao final do arquivo)
-   ============================================================================= */
+/* 2. Abas de Cadastro (Tabs) */
+.cadastro-form { display: none; }
+.cadastro-form.active { display: block; animation: fadeIn 0.3s ease; }
 
-.cadastro-form {
-    display: none; /* Esconde todos por padrão */
-}
-
-.cadastro-form.active {
-    display: block; /* Mostra apenas o que tem a classe active */
-    animation: fadeIn 0.3s ease;
-}
-
-/* Garante que o gráfico fique contido no container e não vaze */
-.chart-container canvas {
-    max-width: 100%;
-}
+/* 3. Gráfico (Chart) */
+.chart-container canvas { max-width: 100%; }

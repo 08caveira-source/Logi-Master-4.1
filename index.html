@@ -7,7 +7,6 @@
     <title>LOGIMASTER | GESTÃO DE FROTAS E LOGÍSTICA</title>
     
     <link rel="stylesheet" href="style.css">
-    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
@@ -36,6 +35,9 @@
                 <li class="nav-item active" data-page="home">
                     <i class="fas fa-tachometer-alt"></i> DASHBOARD
                 </li>
+                <li class="nav-item" data-page="graficos">
+                    <i class="fas fa-chart-pie"></i> ANÁLISE GRÁFICA
+                </li>
                 <li class="nav-item" data-page="operacoes">
                     <i class="fas fa-shipping-fast"></i> OPERAÇÕES / VIAGENS
                 </li> 
@@ -54,9 +56,6 @@
                 </li>
                 <li class="nav-item" data-page="relatorios">
                     <i class="fas fa-chart-bar"></i> RELATÓRIOS
-                </li>
-                <li class="nav-item" data-page="graficos">
-                    <i class="fas fa-chart-pie"></i> ANÁLISE GRÁFICA
                 </li>
                 <li class="nav-item" data-page="access-management">
                     <i class="fas fa-users-cog"></i> EQUIPE 
@@ -105,7 +104,7 @@
         </div>
     </aside>
 
-    <div class="overlay" id="sidebarOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:900;"></div>
+    <div class="overlay" id="sidebarOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1900;"></div>
 
     <main class="content">
         
@@ -153,33 +152,6 @@
             </div>
         </section>
 
-        <div style="display:flex; justify-content:space-between; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
-    <h3>PERFORMANCE OPERACIONAL (VEÍCULO OU MOTORISTA)</h3>
-    
-    <div style="display:flex; gap:10px; align-items:center; flex-wrap: wrap;">
-        <div style="display:flex; flex-direction:column;">
-            <label for="filtroVeiculoGrafico" style="margin:0; font-size:0.7rem;">FILTRAR VEÍCULO:</label>
-            <select id="filtroVeiculoGrafico" onchange="limparOutroFiltro('motorista'); atualizarDashboard()" style="min-width:180px;">
-                <option value="">TODOS OS VEÍCULOS</option>
-            </select>
-        </div>
-
-        <div style="display:flex; flex-direction:column;">
-            <label for="filtroMotoristaGrafico" style="margin:0; font-size:0.7rem;">FILTRAR MOTORISTA:</label>
-            <select id="filtroMotoristaGrafico" onchange="limparOutroFiltro('veiculo'); atualizarDashboard()" style="min-width:180px;">
-                <option value="">TODOS OS MOTORISTAS</option>
-            </select>
-        </div>
-    </div>
-</div>
-
-<div id="chartVehicleSummaryContainer"></div>
-
-                <div class="chart-container" style="position: relative; height:450px; width:100%;">
-                    <canvas id="mainChart"></canvas>
-                </div>
-            </div>
-        </section>
         <section id="graficos" class="page">
             <div class="section-header"><h2>ANÁLISE GRÁFICA FINANCEIRA</h2></div>
             
