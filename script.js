@@ -1,6 +1,6 @@
 // =============================================================================
 // ARQUIVO: script.js
-// SISTEMA LOGIMASTER - VERSÃO 3.0 (CORREÇÃO TOTAL DE SINCRONIA E FLUXO)
+// SISTEMA LOGIMASTER - VERSÃO FINAL 3.1 (ESTÁVEL)
 // =============================================================================
 
 // 1. CONSTANTES DE ARMAZENAMENTO
@@ -66,9 +66,8 @@ function removerAcentos(texto) {
     return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
-// 5. NOVA CAMADA DE DADOS (SYNC FIREBASE OBRIGATÓRIO)
+// 5. CAMADA DE DADOS (SYNC FIREBASE OBRIGATÓRIO)
 
-// Sanitização para evitar erros no Firestore
 function sanitizarObjetoParaFirebase(obj) {
     return JSON.parse(JSON.stringify(obj, (key, value) => {
         if (value === undefined) return null;
@@ -81,37 +80,32 @@ async function sincronizarDadosComFirebase() {
     console.log(">>> INICIANDO SINCRONIA COM A NUVEM...");
     
     if (!window.dbRef || !window.USUARIO_ATUAL || !window.USUARIO_ATUAL.company) {
-        console.warn("Usuário offline ou sem empresa. Usando cache local.");
-        carregarTodosDadosLocais(); // Fallback
+        console.warn("Offline ou sem empresa. Usando cache local.");
+        carregarTodosDadosLocais(); 
         return;
     }
 
     const { db, doc, getDoc } = window.dbRef;
     const companyId = window.USUARIO_ATUAL.company;
 
-    // Função interna para buscar uma coleção específica dentro da empresa
     async function baixarColecao(chave, setter) {
         try {
             const docRef = doc(db, 'companies', companyId, 'data', chave);
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                const lista = data.items || []; // Se for lista
-                // Se for objeto único (minha empresa) ou lista
+                const lista = data.items || [];
                 if (chave === CHAVE_DB_MINHA_EMPRESA) setter(data.items || {}); 
                 else setter(lista);
-                
-                // Atualiza localStorage para backup offline
                 localStorage.setItem(chave, JSON.stringify(data.items || []));
             } else {
-                setter([]); // Nada na nuvem ainda
+                setter([]);
             }
         } catch (e) {
             console.error(`Erro ao baixar ${chave}:`, e);
         }
     }
 
-    // Executa downloads em paralelo para velocidade
     await Promise.all([
         baixarColecao(CHAVE_DB_FUNCIONARIOS, (d) => CACHE_FUNCIONARIOS = d),
         baixarColecao(CHAVE_DB_VEICULOS, (d) => CACHE_VEICULOS = d),
@@ -124,10 +118,9 @@ async function sincronizarDadosComFirebase() {
         baixarColecao(CHAVE_DB_RECIBOS, (d) => CACHE_RECIBOS = d)
     ]);
 
-    console.log(">>> SINCRONIA CONCLUÍDA. Dados Prontos.");
+    console.log(">>> SINCRONIA CONCLUÍDA.");
 }
 
-// Carregamento Local (Apenas Fallback ou Primeira Carga Visual)
 function carregarTodosDadosLocais() {
     function load(k) { try { return JSON.parse(localStorage.getItem(k)) || []; } catch(e){ return []; } }
     CACHE_FUNCIONARIOS = load(CHAVE_DB_FUNCIONARIOS);
@@ -141,15 +134,11 @@ function carregarTodosDadosLocais() {
     CACHE_RECIBOS = load(CHAVE_DB_RECIBOS);
 }
 
-// Salvar Dados (Escreve na Nuvem E no Local)
 async function salvarDadosGenerico(chave, dados, atualizarCacheCallback) {
-    // 1. Atualiza Memória e Local
     atualizarCacheCallback(dados);
     localStorage.setItem(chave, JSON.stringify(dados));
     
-    // 2. Atualiza Nuvem
     if (window.dbRef && window.USUARIO_ATUAL && window.USUARIO_ATUAL.company) {
-        // Bloqueio se vencido (Exceto Master)
         if (window.SYSTEM_STATUS.bloqueado && window.USUARIO_ATUAL.role !== 'admin_master') return;
 
         const { db, doc, setDoc } = window.dbRef;
@@ -159,13 +148,11 @@ async function salvarDadosGenerico(chave, dados, atualizarCacheCallback) {
                 lastUpdate: new Date().toISOString(),
                 updatedBy: window.USUARIO_ATUAL.email
             });
-            // Salva na sub-coleção da empresa
             await setDoc(doc(db, 'companies', window.USUARIO_ATUAL.company, 'data', chave), dadosLimpos);
         } catch (erro) { console.error("Erro Firebase (" + chave + "):", erro); }
     }
 }
 
-// Funções Específicas de Salvamento
 async function salvarListaFuncionarios(lista) { await salvarDadosGenerico(CHAVE_DB_FUNCIONARIOS, lista, (d) => CACHE_FUNCIONARIOS = d); }
 async function salvarListaVeiculos(lista) { await salvarDadosGenerico(CHAVE_DB_VEICULOS, lista, (d) => CACHE_VEICULOS = d); }
 async function salvarListaContratantes(lista) { await salvarDadosGenerico(CHAVE_DB_CONTRATANTES, lista, (d) => CACHE_CONTRATANTES = d); }
@@ -176,34 +163,50 @@ async function salvarListaAtividades(lista) { await salvarDadosGenerico(CHAVE_DB
 async function salvarListaRecibos(lista) { await salvarDadosGenerico(CHAVE_DB_RECIBOS, lista, (d) => CACHE_RECIBOS = d); }
 async function salvarProfileRequests(lista) { await salvarDadosGenerico(CHAVE_DB_PROFILE_REQUESTS, lista, (d) => CACHE_PROFILE_REQUESTS = d); }
 
-// Buscas Helpers
 function buscarFuncionarioPorId(id) { return CACHE_FUNCIONARIOS.find(f => String(f.id) === String(id)); }
 function buscarVeiculoPorPlaca(placa) { return CACHE_VEICULOS.find(v => v.placa === placa); }
 function buscarContratantePorCnpj(cnpj) { return CACHE_CONTRATANTES.find(c => String(c.cnpj) === String(cnpj)); }
 function buscarAtividadePorId(id) { return CACHE_ATIVIDADES.find(a => String(a.id) === String(id)); }
 // =============================================================================
-// PARTE 2: DASHBOARD, PRIVACIDADE E GRÁFICOS (LÓGICA FINANCEIRA CORRIGIDA)
+// PARTE 2: DASHBOARD E FINANCEIRO (NOVA LÓGICA DE COMBUSTÍVEL)
 // =============================================================================
 
 window.toggleDashboardPrivacy = function() {
     const targets = document.querySelectorAll('.privacy-target');
     const icon = document.getElementById('btnPrivacyIcon');
-    if (targets.length === 0) return;
+    if (!targets.length) return;
     const isBlurred = targets[0].classList.contains('privacy-blur');
-    targets.forEach(el => {
-        if (isBlurred) el.classList.remove('privacy-blur');
-        else el.classList.add('privacy-blur');
-    });
-    if (icon) icon.className = isBlurred ? 'fas fa-eye' : 'fas fa-eye-slash';
+    targets.forEach(el => el.classList.toggle('privacy-blur'));
+    if(icon) icon.className = isBlurred ? 'fas fa-eye' : 'fas fa-eye-slash';
 };
 
-// --- NOVA LÓGICA DO DASHBOARD ---
+// HELPER: MÉDIA GLOBAL DE CONSUMO (BASEADO NO HISTÓRICO)
+window.calcularMediaGlobalVeiculo = function(placa) {
+    var ops = CACHE_OPERACOES.filter(o => o.veiculoPlaca === placa && (o.status === 'CONFIRMADA' || o.status === 'FINALIZADA'));
+    if (ops.length === 0) return 0;
+    
+    var totalKm = 0; 
+    var totalLitros = 0;
+    
+    ops.forEach(op => {
+        var km = Number(op.kmRodado) || 0;
+        var combReais = Number(op.combustivel) || 0; // Valor abastecido em R$
+        var preco = Number(op.precoLitro) || 0;
+        
+        // Só considera para média se houve abastecimento real e KM rodado
+        if (km > 0 && combReais > 0 && preco > 0) { 
+            totalKm += km; 
+            totalLitros += (combReais / preco); 
+        }
+    });
+    
+    return totalLitros > 0 ? (totalKm / totalLitros) : 0;
+};
+
+// DASHBOARD
 window.atualizarDashboard = function() {
-    // Bloqueio para Master
     if (window.USUARIO_ATUAL && (window.USUARIO_ATUAL.role === 'admin_master' || window.EMAILS_MESTRES && window.EMAILS_MESTRES.includes(window.USUARIO_ATUAL.email))) return;
 
-    console.log("Calculando Dashboard (Lógica de Consumo Médio)...");
-    
     var mesAtual = window.currentDate.getMonth(); 
     var anoAtual = window.currentDate.getFullYear();
 
@@ -218,35 +221,31 @@ window.atualizarDashboard = function() {
         var teveFalta = (op.checkins && op.checkins.faltaMotorista);
         var valorFat = Number(op.faturamento) || 0;
         
-        // --- CÁLCULO DE COMBUSTÍVEL PELO CONSUMO (GLOBAL) ---
+        // --- CÁLCULO DE COMBUSTÍVEL PELA MÉDIA ---
         var custoCombustivelCalculado = 0;
         
-        // Se a viagem tem KM rodado e Veículo definido, calculamos pelo consumo médio
+        // Se a viagem tem KM e Veículo, usa a média global para diluir o custo
         if (op.kmRodado > 0 && op.veiculoPlaca) {
-            var mediaVeiculo = calcularMediaGlobalVeiculo(op.veiculoPlaca); // Pega média histórica
-            var precoLitro = Number(op.precoLitro) || obterPrecoMedioCombustivel(op.veiculoPlaca) || 6.00; // Pega preço do dia ou médio
+            var mediaVeiculo = calcularMediaGlobalVeiculo(op.veiculoPlaca); 
+            var precoLitro = Number(op.precoLitro) || 6.00; // Se não tiver no registro, chuta 6.00 ou pega média
             
             if (mediaVeiculo > 0) {
                 var litrosEstimados = op.kmRodado / mediaVeiculo;
                 custoCombustivelCalculado = litrosEstimados * precoLitro;
             } else {
-                // Se não tem média histórica (veículo novo), usa o valor declarado se houver
+                // Sem histórico, usa o valor abastecido direto (fallback)
                 custoCombustivelCalculado = Number(op.combustivel) || 0;
             }
-        } else {
-            // Se não rodou (ex: diária parada) ou não tem KM lançado
-            custoCombustivelCalculado = 0; // Não cobra combustível se não rodou, ou usa valor manual se preferir
         }
 
-        // Custos Totais da Operação
         var custoOp = (Number(op.despesas) || 0) + custoCombustivelCalculado;
         
         if (!teveFalta) custoOp += (Number(op.comissao) || 0);
 
         if (op.ajudantes && Array.isArray(op.ajudantes)) {
             op.ajudantes.forEach(aj => {
-                var ajudanteFaltou = (op.checkins && op.checkins.faltas && op.checkins.faltas[aj.id]);
-                if (!ajudanteFaltou) custoOp += (Number(aj.diaria) || 0);
+                var faltou = (op.checkins && op.checkins.faltas && op.checkins.faltas[aj.id]);
+                if (!faltou) custoOp += (Number(aj.diaria) || 0);
             });
         }
 
@@ -285,7 +284,6 @@ window.atualizarDashboard = function() {
     var lucroMes = faturamentoMes - custosMes;
     var margem = faturamentoMes > 0 ? ((lucroMes / faturamentoMes) * 100) : 0;
 
-    // Atualiza Tela
     var elFat = document.getElementById('faturamentoMes');
     var elDesp = document.getElementById('despesasMes');
     var elLucro = document.getElementById('receitaMes');
@@ -301,117 +299,65 @@ window.atualizarDashboard = function() {
     atualizarGraficoPrincipal(mesAtual, anoAtual);
 };
 
-// --- GRÁFICO ---
 function atualizarGraficoPrincipal(mes, ano) {
-    if (window.USUARIO_ATUAL && (window.USUARIO_ATUAL.role === 'admin_master' || window.EMAILS_MESTRES && window.EMAILS_MESTRES.includes(window.USUARIO_ATUAL.email))) return;
-
+    if (window.USUARIO_ATUAL && window.USUARIO_ATUAL.role === 'admin_master') return;
     var ctx = document.getElementById('mainChart');
     if (!ctx) return; 
-
-    var filtroVeiculo = document.getElementById('filtroVeiculoGrafico') ? document.getElementById('filtroVeiculoGrafico').value : "";
-    var filtroMotorista = document.getElementById('filtroMotoristaGrafico') ? document.getElementById('filtroMotoristaGrafico').value : "";
-    var summaryContainer = document.getElementById('chartVehicleSummaryContainer');
 
     var stats = { faturamento: 0, custos: 0, lucro: 0, viagens: 0, faltas: 0, kmTotal: 0, litrosTotal: 0 };
     var gReceita = 0; var gCombustivel = 0; var gPessoal = 0; var gManutencao = 0;
 
     CACHE_OPERACOES.forEach(op => {
         if (op.status === 'CANCELADA') return;
-        if (filtroVeiculo && op.veiculoPlaca !== filtroVeiculo) return;
-        if (filtroMotorista && op.motoristaId !== filtroMotorista) return;
-
         var d = new Date(op.data + 'T12:00:00');
         if (d.getMonth() === mes && d.getFullYear() === ano) {
+            var rec = Number(op.faturamento)||0;
+            var des = Number(op.despesas)||0;
+            var com = 0;
             
-            if (filtroMotorista && op.checkins && op.checkins.faltaMotorista) stats.faltas++;
-
-            var receitaOp = Number(op.faturamento) || 0;
-            
-            // Custo Combustível (Lógica de Consumo)
-            var combustivelOp = 0;
+            // Combustível pela média
+            var custoComb = 0;
             if (op.kmRodado > 0 && op.veiculoPlaca) {
                 var media = calcularMediaGlobalVeiculo(op.veiculoPlaca);
                 var preco = Number(op.precoLitro) || 6.00;
-                if(media > 0) combustivelOp = (op.kmRodado / media) * preco;
-                else combustivelOp = Number(op.combustivel)||0;
+                if(media>0) custoComb = (op.kmRodado / media) * preco;
+                else custoComb = Number(op.combustivel)||0;
             }
 
-            var despesasOp = Number(op.despesas) || 0; 
-            var comissaoOp = 0;
-            if (!op.checkins || !op.checkins.faltaMotorista) comissaoOp = Number(op.comissao) || 0;
-            if (op.ajudantes) op.ajudantes.forEach(aj => { if(!(op.checkins && op.checkins.faltas && op.checkins.faltas[aj.id])) comissaoOp += (Number(aj.diaria)||0); });
+            if (!op.checkins || !op.checkins.faltaMotorista) com += (Number(op.comissao)||0);
+            if (op.ajudantes) op.ajudantes.forEach(aj => { if(!(op.checkins && op.checkins.faltas && op.checkins.faltas[aj.id])) com += (Number(aj.diaria)||0); });
 
-            stats.viagens++;
-            stats.faturamento += receitaOp;
-            stats.custos += (combustivelOp + despesasOp + comissaoOp);
-            stats.kmTotal += (Number(op.kmRodado) || 0);
-
-            gReceita += receitaOp;
-            gCombustivel += combustivelOp;
-            gPessoal += comissaoOp; 
-            gManutencao += despesasOp; 
-
-            var precoReal = Number(op.precoLitro) || 0;
-            var litrosReal = Number(op.combustivel) > 0 && precoReal > 0 ? (Number(op.combustivel)/precoReal) : 0;
-            stats.litrosTotal += litrosReal;
+            gReceita += rec; gCombustivel += custoComb; gPessoal += com; gManutencao += des;
         }
     });
 
-    // Despesas Gerais
     CACHE_DESPESAS.forEach(desp => {
-        if (filtroVeiculo && desp.veiculoPlaca && desp.veiculoPlaca !== filtroVeiculo) return;
-        var valorComputado = 0;
-        var valorTotal = Number(desp.valor) || 0;
+        var valor = 0;
         var dataDesp = new Date(desp.data + 'T12:00:00');
-
         if (desp.modoPagamento === 'parcelado' && desp.parcelasTotal > 1) {
             var qtd = Number(desp.parcelasTotal);
-            var valParc = valorTotal / qtd;
-            var intervalo = Number(desp.intervaloDias) || 30;
-            for (var i = 0; i < qtd; i++) {
-                var dt = new Date(dataDesp);
-                dt.setDate(dt.getDate() + (i * intervalo));
-                if (dt.getMonth() === mes && dt.getFullYear() === ano) valorComputado += valParc;
+            var valParc = (Number(desp.valor)||0) / qtd;
+            for(var i=0; i<qtd; i++){
+                var dt = new Date(dataDesp); dt.setDate(dt.getDate() + (i * 30));
+                if(dt.getMonth()===mes && dt.getFullYear()===ano) valor += valParc;
             }
         } else {
-            if (dataDesp.getMonth() === mes && dataDesp.getFullYear() === ano) valorComputado = valorTotal;
+            if(dataDesp.getMonth()===mes && dataDesp.getFullYear()===ano) valor = Number(desp.valor)||0;
         }
 
-        if (valorComputado > 0) {
-            stats.custos += valorComputado;
+        if(valor > 0) {
             var desc = removerAcentos(desp.descricao || "");
-            if (desc.includes("manutencao") || desc.includes("oleo") || desc.includes("pneu") || desc.includes("peca")) gManutencao += valorComputado;
-            else if (desc.includes("comida") || desc.includes("hotel") || desc.includes("outros")) gPessoal += valorComputado;
-            else gManutencao += valorComputado;
+            if (desc.includes("manutencao") || desc.includes("oleo") || desc.includes("pneu")) gManutencao += valor;
+            else if (desc.includes("comida") || desc.includes("hotel")) gPessoal += valor;
+            else gManutencao += valor;
         }
     });
-
-    stats.lucro = stats.faturamento - stats.custos;
-
-    if (summaryContainer) {
-        summaryContainer.innerHTML = ''; 
-        if (filtroVeiculo || filtroMotorista) {
-            var tituloBox = filtroVeiculo ? "VEÍCULO" : "MOTORISTA";
-            var valorTitulo = filtroVeiculo || (CACHE_FUNCIONARIOS.find(f => f.id == filtroMotorista)?.nome || "Desconhecido");
-            var boxExtraLabel = filtroMotorista ? "FALTAS" : "MÉDIA (REAL)";
-            var boxExtraValue = filtroMotorista ? (stats.faltas + " Faltas") : ((stats.litrosTotal > 0 ? (stats.kmTotal / stats.litrosTotal).toFixed(2) : "0") + " Km/L");
-            
-            summaryContainer.innerHTML = `
-                <div id="chartVehicleSummary">
-                    <div class="veh-stat-box"><small>${tituloBox}</small><span>${valorTitulo}</span></div>
-                    <div class="veh-stat-box"><small>VIAGENS</small><span>${stats.viagens}</span></div>
-                    <div class="veh-stat-box"><small>FATURAMENTO</small><span style="color:var(--success-color)">${formatarValorMoeda(stats.faturamento)}</span></div>
-                    <div class="veh-stat-box"><small>${boxExtraLabel}</small><span style="color:var(--primary-color)">${boxExtraValue}</span></div>
-                    <div class="veh-stat-box"><small>LUCRO EST.</small><span style="color:${stats.lucro >= 0 ? 'var(--success-color)' : 'var(--danger-color)'}">${formatarValorMoeda(stats.lucro)}</span></div>
-                </div>`;
-        }
-    }
 
     if (window.chartInstance) window.chartInstance.destroy();
     window.chartInstance = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ['FATURAMENTO', 'COMBUSTÍVEL (EST.)', 'PESSOAL', 'MANUTENÇÃO', 'LUCRO'],
+            labels: ['FATURAMENTO', 'COMBUSTÍVEL', 'PESSOAL', 'MANUTENÇÃO', 'LUCRO'],
             datasets: [{
                 label: 'R$',
                 data: [gReceita, gCombustivel, gPessoal, gManutencao, (gReceita - (gCombustivel+gPessoal+gManutencao))],
@@ -422,16 +368,15 @@ function atualizarGraficoPrincipal(mes, ano) {
     });
 }
 
-// --- CALENDÁRIO CORRIGIDO ---
+// CALENDÁRIO
 window.renderizarCalendario = function() {
-    if (window.USUARIO_ATUAL && (window.USUARIO_ATUAL.role === 'admin_master' || window.EMAILS_MESTRES && window.EMAILS_MESTRES.includes(window.USUARIO_ATUAL.email))) return;
-
+    if (window.USUARIO_ATUAL && window.USUARIO_ATUAL.role === 'admin_master') return;
     var grid = document.getElementById('calendarGrid');
     var label = document.getElementById('currentMonthYear');
     if (!grid || !label) return;
 
     grid.innerHTML = ''; 
-    var now = window.currentDate || new Date(); // Garante data
+    var now = window.currentDate || new Date();
     var mes = now.getMonth();
     var ano = now.getFullYear();
 
@@ -449,34 +394,23 @@ window.renderizarCalendario = function() {
     for (var dia = 1; dia <= diasNoMes; dia++) {
         var cell = document.createElement('div');
         cell.className = 'day-cell';
-        
         var dateStr = `${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
         var cellContent = `<span>${dia}</span>`;
         
-        // Garante que CACHE_OPERACOES existe antes do filter
-        var opsDoDia = (CACHE_OPERACOES || []).filter(o => o.data === dateStr && o.status !== 'CANCELADA');
+        var opsDoDia = (CACHE_OPERACOES||[]).filter(o => o.data === dateStr && o.status !== 'CANCELADA');
         
         if (opsDoDia.length > 0) {
             cell.classList.add('has-operation');
             var totalDia = opsDoDia.reduce((acc, curr) => acc + (Number(curr.faturamento)||0), 0);
-            var temEmAndamento = opsDoDia.some(o => o.status === 'EM_ANDAMENTO');
-            var dotColor = temEmAndamento ? 'orange' : (opsDoDia.some(o => o.status === 'AGENDADA') ? '#999' : 'green');
-
-            cellContent += `<div class="event-dot" style="background:${dotColor}"></div>`;
-            cellContent += `<div style="font-size:0.65em; color:green; margin-top:auto;">${formatarValorMoeda(totalDia)}</div>`;
-            
-            // Closure para capturar data
-            (function(dStr) {
-                cell.onclick = function() { abrirModalDetalhesDia(dStr); };
-            })(dateStr);
+            var dotColor = opsDoDia.some(o => o.status === 'EM_ANDAMENTO') ? 'orange' : 'green';
+            cellContent += `<div class="event-dot" style="background:${dotColor}"></div><div style="font-size:0.6em; color:green; margin-top:auto;">${formatarValorMoeda(totalDia)}</div>`;
+            (function(d){ cell.onclick = function() { abrirModalDetalhesDia(d); }; })(dateStr);
         } else {
-            (function(dStr) {
-                cell.onclick = function() { 
-                    document.getElementById('operacaoData').value = dStr;
-                    var btn = document.querySelector('[data-page="operacoes"]');
-                    if(btn) btn.click();
-                };
-            })(dateStr);
+            (function(d){ cell.onclick = function() { 
+                var btn = document.querySelector('[data-page="operacoes"]');
+                if(btn) btn.click();
+                document.getElementById('operacaoData').value = d;
+            }; })(dateStr);
         }
         cell.innerHTML = cellContent;
         grid.appendChild(cell);
@@ -489,268 +423,97 @@ window.changeMonth = function(direction) {
     atualizarDashboard(); 
 };
 
-// HELPER: MÉDIA GLOBAL (Vital para o novo cálculo)
-window.calcularMediaGlobalVeiculo = function(placa) {
-    var ops = CACHE_OPERACOES.filter(o => o.veiculoPlaca === placa && (o.status === 'CONFIRMADA' || o.status === 'FINALIZADA'));
-    if (ops.length === 0) return 0;
-    var totalKm = 0; var totalLitros = 0;
-    ops.forEach(op => {
-        var km = Number(op.kmRodado) || 0;
-        var comb = Number(op.combustivel) || 0;
-        var preco = Number(op.precoLitro) || 0;
-        // Só considera abastecimentos reais para a média
-        if (km > 0 && comb > 0 && preco > 0) { 
-            totalKm += km; 
-            totalLitros += (comb / preco); 
-        }
-    });
-    return totalLitros > 0 ? (totalKm / totalLitros) : 0;
-};
-
-window.obterPrecoMedioCombustivel = function(placa) {
-    var ops = CACHE_OPERACOES.filter(o => o.veiculoPlaca === placa && Number(o.precoLitro) > 0);
-    if (ops.length === 0) return 0;
-    var ultimas = ops.slice(-5); // Pega os últimos 5
-    var soma = ultimas.reduce((acc, curr) => acc + Number(curr.precoLitro), 0);
-    return soma / ultimas.length;
-};
-
 window.abrirModalDetalhesDia = function(dataString) {
-    var operacoesDoDia = CACHE_OPERACOES.filter(o => o.data === dataString && o.status !== 'CANCELADA');
-    var modalBody = document.getElementById('modalDayBody');
-    var modalTitle = document.getElementById('modalDayTitle');
-    if (!modalBody) return;
-
-    if (modalTitle) modalTitle.textContent = 'DETALHES: ' + formatarDataParaBrasileiro(dataString);
-    var htmlLista = '<div style="max-height:400px; overflow-y:auto;"><table class="data-table" style="width:100%; font-size:0.75rem;"><thead><tr style="background:#263238; color:white;"><th>CLIENTE</th><th>VEÍCULO</th><th>MOTORISTA</th><th>FATURAMENTO</th></tr></thead><tbody>';
-    
-    operacoesDoDia.forEach(function(op) {
-        var mot = buscarFuncionarioPorId(op.motoristaId)?.nome || '---';
-        var cli = buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial || 'CLIENTE';
-        htmlLista += `<tr><td>${cli}</td><td>${op.veiculoPlaca}</td><td>${mot}</td><td>${formatarValorMoeda(op.faturamento)}</td></tr>`;
+    var ops = CACHE_OPERACOES.filter(o => o.data === dataString && o.status !== 'CANCELADA');
+    var mb = document.getElementById('modalDayBody');
+    var mt = document.getElementById('modalDayTitle');
+    if (!mb) return;
+    if (mt) mt.textContent = 'DETALHES: ' + formatarDataParaBrasileiro(dataString);
+    var html = '<div style="max-height:400px; overflow-y:auto;"><table class="data-table" style="width:100%; font-size:0.75rem;"><thead><tr style="background:#263238; color:white;"><th>CLIENTE</th><th>VEÍCULO</th><th>MOTORISTA</th><th>VALOR</th></tr></thead><tbody>';
+    ops.forEach(op => {
+        var m = buscarFuncionarioPorId(op.motoristaId)?.nome || '-';
+        var c = buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial || '-';
+        html += `<tr><td>${c}</td><td>${op.veiculoPlaca}</td><td>${m}</td><td>${formatarValorMoeda(op.faturamento)}</td></tr>`;
     });
-    htmlLista += '</tbody></table></div>';
-    
-    modalBody.innerHTML = htmlLista || '<p style="text-align:center;">Sem operações.</p>';
+    html += '</tbody></table></div>';
+    mb.innerHTML = html;
     document.getElementById('modalDayOperations').style.display = 'block';
 };
 // =============================================================================
-// PARTE 3: GESTÃO DE CADASTROS, INTERFACE DE FORMULÁRIOS E FUNÇÕES DE UI
+// PARTE 3: CADASTROS E INTERFACE
 // =============================================================================
 
-// -----------------------------------------------------------------------------
-// EVENT LISTENERS DE FORMULÁRIOS (CRUD)
-// -----------------------------------------------------------------------------
-
-// CADASTRO DE FUNCIONÁRIOS (CRIAÇÃO NO AUTH + FIRESTORE)
+// SALVAR FUNCIONÁRIO
 document.addEventListener('submit', async function(e) {
     if (e.target.id === 'formFuncionario') {
         e.preventDefault();
-        var btnSubmit = e.target.querySelector('button[type="submit"]');
-        var textoOriginal = btnSubmit.innerHTML;
-        btnSubmit.disabled = true;
-        btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
+        var btn = e.target.querySelector('button[type="submit"]');
+        btn.disabled = true; btn.innerHTML = 'AGUARDE...';
 
         try {
             var id = document.getElementById('funcionarioId').value || Date.now().toString();
             var email = document.getElementById('funcEmail').value.toLowerCase().trim();
             var senha = document.getElementById('funcSenha').value; 
             var funcao = document.getElementById('funcFuncao').value;
-            var nome = document.getElementById('funcNome').value.toUpperCase();
-            var criarLogin = (!document.getElementById('funcionarioId').value && senha);
             var novoUID = id; 
 
-            // 1. Criar Usuário no Auth (Apenas se for novo)
-            if (criarLogin) {
-                if(senha.length < 6) throw new Error("A senha deve ter no mínimo 6 dígitos.");
-                console.log("Criando usuário no Auth...");
+            if (!document.getElementById('funcionarioId').value && senha) {
+                if(senha.length < 6) throw new Error("Senha mín 6 dígitos.");
                 novoUID = await window.dbRef.criarAuthUsuario(email, senha);
-                
-                // 2. Salvar metadados do usuário na coleção 'users' (para login)
                 await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "users", novoUID), {
-                    uid: novoUID, 
-                    name: nome, 
-                    email: email, 
-                    role: funcao,
-                    company: window.USUARIO_ATUAL.company, 
-                    createdAt: new Date().toISOString(), 
-                    approved: true,
-                    senhaVisual: senha // Apenas para visualização do admin
+                    uid: novoUID, name: document.getElementById('funcNome').value.toUpperCase(), email: email, role: funcao,
+                    company: window.USUARIO_ATUAL.company, createdAt: new Date().toISOString(), approved: true, senhaVisual: senha
                 });
             }
 
-            // 3. Objeto do Funcionário (Dados do Sistema)
-            var funcionarioObj = {
-                id: novoUID, 
-                nome: nome, 
-                funcao: funcao, 
-                documento: document.getElementById('funcDocumento').value,
-                email: email, 
-                telefone: document.getElementById('funcTelefone').value, 
-                pix: document.getElementById('funcPix').value,
-                endereco: document.getElementById('funcEndereco').value,
-                // Dados Motorista
-                cnh: document.getElementById('funcCNH').value, 
-                validadeCNH: document.getElementById('funcValidadeCNH').value,
-                categoriaCNH: document.getElementById('funcCategoriaCNH').value, 
-                cursoDescricao: document.getElementById('funcCursoDescricao').value
+            var obj = {
+                id: novoUID, nome: document.getElementById('funcNome').value.toUpperCase(), funcao: funcao,
+                documento: document.getElementById('funcDocumento').value, email: email,
+                telefone: document.getElementById('funcTelefone').value, pix: document.getElementById('funcPix').value,
+                endereco: document.getElementById('funcEndereco').value, cnh: document.getElementById('funcCNH').value,
+                validadeCNH: document.getElementById('funcValidadeCNH').value, categoriaCNH: document.getElementById('funcCategoriaCNH').value
             };
-            
-            if (senha) { funcionarioObj.senhaVisual = senha; }
+            if (senha) obj.senhaVisual = senha;
 
-            // Atualiza lista local e salva na nuvem
             var lista = CACHE_FUNCIONARIOS.filter(f => f.email !== email && f.id !== id);
-            lista.push(funcionarioObj);
-            
+            lista.push(obj);
             await salvarListaFuncionarios(lista);
             
-            alert("Funcionário Salvo e Sincronizado!");
-            e.target.reset(); 
-            document.getElementById('funcionarioId').value = '';
-            toggleDriverFields(); 
-            
-            // Atualiza Tabelas Imediatamente
+            alert("Salvo!"); e.target.reset(); document.getElementById('funcionarioId').value = '';
             preencherTodosSelects();
 
-        } catch (erro) { 
-            console.error(erro); 
-            alert("Erro: " + erro.message); 
-        } finally { 
-            btnSubmit.disabled = false; 
-            btnSubmit.innerHTML = textoOriginal; 
-        }
+        } catch (erro) { alert("Erro: " + erro.message); } finally { btn.disabled = false; btn.innerHTML = 'SALVAR'; }
     }
 });
 
-// CADASTRO DE VEÍCULOS
+// OUTROS LISTENERS (VEÍCULO, CLIENTE, ETC - MANTIDOS PADRÃO)
 document.addEventListener('submit', function(e) { 
     if (e.target.id === 'formVeiculo') { 
         e.preventDefault(); 
         var placa = document.getElementById('veiculoPlaca').value.toUpperCase(); 
-        var novo = { 
-            placa: placa, 
-            modelo: document.getElementById('veiculoModelo').value.toUpperCase(), 
-            ano: document.getElementById('veiculoAno').value, 
-            renavam: document.getElementById('veiculoRenavam').value, 
-            chassi: document.getElementById('veiculoChassi').value 
-        }; 
-        var lista = CACHE_VEICULOS.filter(v => v.placa !== placa); 
-        lista.push(novo); 
-        salvarListaVeiculos(lista).then(() => { 
-            alert("Veículo Salvo!"); 
-            e.target.reset(); 
-            preencherTodosSelects(); 
-        }); 
+        var novo = { placa: placa, modelo: document.getElementById('veiculoModelo').value.toUpperCase(), ano: document.getElementById('veiculoAno').value, renavam: document.getElementById('veiculoRenavam').value, chassi: document.getElementById('veiculoChassi').value }; 
+        var lista = CACHE_VEICULOS.filter(v => v.placa !== placa); lista.push(novo); 
+        salvarListaVeiculos(lista).then(() => { alert("Veículo Salvo!"); e.target.reset(); preencherTodosSelects(); }); 
     } 
 });
 
-// CADASTRO DE CLIENTES
 document.addEventListener('submit', function(e) { 
-    if (e.target.id === 'formContratante') { 
-        e.preventDefault(); 
-        var cnpj = document.getElementById('contratanteCNPJ').value; 
-        var novo = { 
-            cnpj: cnpj, 
-            razaoSocial: document.getElementById('contratanteRazaoSocial').value.toUpperCase(), 
-            telefone: document.getElementById('contratanteTelefone').value 
-        }; 
-        var lista = CACHE_CONTRATANTES.filter(c => c.cnpj !== cnpj); 
-        lista.push(novo); 
-        salvarListaContratantes(lista).then(() => { 
-            alert("Cliente Salvo!"); 
-            e.target.reset(); 
-            preencherTodosSelects(); 
-        }); 
-    } 
+    if (e.target.id === 'formContratante') { e.preventDefault(); var cnpj = document.getElementById('contratanteCNPJ').value; var novo = { cnpj: cnpj, razaoSocial: document.getElementById('contratanteRazaoSocial').value.toUpperCase(), telefone: document.getElementById('contratanteTelefone').value }; var lista = CACHE_CONTRATANTES.filter(c => c.cnpj !== cnpj); lista.push(novo); salvarListaContratantes(lista).then(() => { alert("Cliente Salvo!"); e.target.reset(); preencherTodosSelects(); }); } 
 });
 
-// CADASTRO DE SERVIÇOS
 document.addEventListener('submit', function(e) { 
-    if (e.target.id === 'formAtividade') { 
-        e.preventDefault(); 
-        var id = document.getElementById('atividadeId').value || Date.now().toString(); 
-        var novo = { 
-            id: id, 
-            nome: document.getElementById('atividadeNome').value.toUpperCase() 
-        }; 
-        var lista = CACHE_ATIVIDADES.filter(a => String(a.id) !== String(id)); 
-        lista.push(novo); 
-        salvarListaAtividades(lista).then(() => { 
-            alert("Atividade Salva!"); 
-            e.target.reset(); 
-            document.getElementById('atividadeId').value = ''; 
-            preencherTodosSelects(); 
-        }); 
-    } 
+    if (e.target.id === 'formAtividade') { e.preventDefault(); var id = document.getElementById('atividadeId').value || Date.now().toString(); var novo = { id: id, nome: document.getElementById('atividadeNome').value.toUpperCase() }; var lista = CACHE_ATIVIDADES.filter(a => String(a.id) !== String(id)); lista.push(novo); salvarListaAtividades(lista).then(() => { alert("Serviço Salvo!"); e.target.reset(); document.getElementById('atividadeId').value=''; preencherTodosSelects(); }); } 
 });
 
-// DADOS DA EMPRESA
-document.addEventListener('submit', function(e) { 
-    if (e.target.id === 'formMinhaEmpresa') { 
-        e.preventDefault(); 
-        var dados = { 
-            razaoSocial: document.getElementById('minhaEmpresaRazaoSocial').value.toUpperCase(), 
-            cnpj: document.getElementById('minhaEmpresaCNPJ').value, 
-            telefone: document.getElementById('minhaEmpresaTelefone').value 
-        }; 
-        salvarDadosMinhaEmpresa(dados).then(() => { 
-            alert("Dados da Empresa Atualizados!"); 
-            renderizarInformacoesEmpresa(); 
-        }); 
-    } 
-});
-
-// CADASTRO DE DESPESAS GERAIS (COM DETALHES DE PARCELAS)
-document.addEventListener('submit', function(e) {
-    if (e.target.id === 'formDespesaGeral') {
-        e.preventDefault(); 
-
-        var id = document.getElementById('despesaGeralId').value || Date.now().toString();
-        var novaDespesa = {
-            id: id,
-            data: document.getElementById('despesaGeralData').value,
-            veiculoPlaca: document.getElementById('selectVeiculoDespesaGeral').value,
-            descricao: document.getElementById('despesaGeralDescricao').value.toUpperCase(),
-            valor: Number(document.getElementById('despesaGeralValor').value),
-            formaPagamento: document.getElementById('despesaFormaPagamento').value,
-            modoPagamento: document.getElementById('despesaModoPagamento').value,
-            parcelasTotal: document.getElementById('despesaParcelas').value,
-            parcelasPagas: document.getElementById('despesaParcelasPagas').value,
-            intervaloDias: document.getElementById('despesaIntervaloDias').value
-        };
-
-        var lista = CACHE_DESPESAS.filter(d => String(d.id) !== String(id));
-        lista.push(novaDespesa);
-
-        salvarListaDespesas(lista).then(() => {
-            alert("Despesa Lançada e Sincronizada!");
-            e.target.reset();
-            document.getElementById('despesaGeralId').value = '';
-            toggleDespesaParcelas(); 
-            renderizarTabelaDespesasGerais(); 
-            atualizarDashboard(); 
-        });
-    }
-});
-
-// SALVAR OPERAÇÃO (VIAGEM)
+// SALVAR OPERAÇÃO
 document.addEventListener('submit', function(e) {
     if (e.target.id === 'formOperacao') {
         e.preventDefault();
         var idHidden = document.getElementById('operacaoId').value;
         var opAntiga = idHidden ? CACHE_OPERACOES.find(o => String(o.id) === String(idHidden)) : null;
+        var statusFinal = document.getElementById('operacaoIsAgendamento').checked ? 'AGENDADA' : 'CONFIRMADA';
+        if (opAntiga && statusFinal === 'CONFIRMADA' && (opAntiga.status === 'EM_ANDAMENTO' || opAntiga.status === 'FINALIZADA')) statusFinal = opAntiga.status;
         
-        var isAgendamento = document.getElementById('operacaoIsAgendamento').checked;
-        var statusFinal = isAgendamento ? 'AGENDADA' : 'CONFIRMADA';
-        
-        // Preserva status se já estava em execução
-        if (opAntiga && !isAgendamento) {
-            if (opAntiga.status === 'EM_ANDAMENTO' || opAntiga.status === 'FINALIZADA') {
-                statusFinal = opAntiga.status; 
-            }
-        }
-        
-        // Mantém checkins anteriores ou inicia limpo
         var checkinsData = (opAntiga && opAntiga.checkins) ? opAntiga.checkins : { motorista: false, faltaMotorista: false, ajudantes: {} };
 
         var novaOp = {
@@ -769,274 +532,85 @@ document.addEventListener('submit', function(e) {
             kmRodado: document.getElementById('operacaoKmRodado').value,
             status: statusFinal,
             checkins: checkinsData,
-            ajudantes: window._operacaoAjudantesTempList || [],
-            kmInicial: opAntiga ? opAntiga.kmInicial : 0,
-            kmFinal: opAntiga ? opAntiga.kmFinal : 0
+            ajudantes: window._operacaoAjudantesTempList || []
         };
 
         var lista = CACHE_OPERACOES.filter(o => String(o.id) !== String(novaOp.id));
         lista.push(novaOp);
         
         salvarListaOperacoes(lista).then(() => {
-            var msg = isAgendamento ? "Agendada! O funcionário já pode ver no check-in." : "Operação Salva!";
-            alert(msg);
+            alert("Operação Salva!");
             e.target.reset(); document.getElementById('operacaoId').value = '';
             document.getElementById('operacaoIsAgendamento').checked = false;
-            window._operacaoAjudantesTempList = []; 
+            window._operacaoAjudantesTempList = [];
             renderizarListaAjudantesAdicionados();
-            
-            // Força atualização da UI
-            preencherTodosSelects(); 
-            renderizarCalendario(); 
-            atualizarDashboard();
+            preencherTodosSelects(); atualizarDashboard(); renderizarCalendario();
         });
     }
 });
 
-// -----------------------------------------------------------------------------
-// FUNÇÕES AUXILIARES E RENDERIZAÇÃO
-// -----------------------------------------------------------------------------
-
-window.toggleDriverFields = function() { var select = document.getElementById('funcFuncao'); var divMotorista = document.getElementById('driverSpecificFields'); if (select && divMotorista) { divMotorista.style.display = (select.value === 'motorista') ? 'block' : 'none'; } };
-window.toggleDespesaParcelas = function() { var modo = document.getElementById('despesaModoPagamento').value; var div = document.getElementById('divDespesaParcelas'); if (div) div.style.display = (modo === 'parcelado') ? 'flex' : 'none'; };
-window.renderizarListaAjudantesAdicionados = function() { var ul = document.getElementById('listaAjudantesAdicionados'); if (!ul) return; ul.innerHTML = ''; (window._operacaoAjudantesTempList || []).forEach(item => { var func = buscarFuncionarioPorId(item.id); var nome = func ? func.nome : 'Desconhecido'; var li = document.createElement('li'); li.innerHTML = `<span>${nome} <small>(Diária: ${formatarValorMoeda(item.diaria)})</small></span><button type="button" class="btn-mini delete-btn" onclick="removerAjudanteTemp('${item.id}')">X</button>`; ul.appendChild(li); }); };
+// UI HELPERS E TABELAS
+window.toggleDriverFields = function() { var s = document.getElementById('funcFuncao'); var d = document.getElementById('driverSpecificFields'); if(s && d) d.style.display = (s.value === 'motorista') ? 'block' : 'none'; };
+window.toggleDespesaParcelas = function() { var m = document.getElementById('despesaModoPagamento').value; var d = document.getElementById('divDespesaParcelas'); if(d) d.style.display = (m === 'parcelado') ? 'flex' : 'none'; };
+window.renderizarListaAjudantesAdicionados = function() { var ul = document.getElementById('listaAjudantesAdicionados'); if (!ul) return; ul.innerHTML = ''; (window._operacaoAjudantesTempList || []).forEach(item => { var f = buscarFuncionarioPorId(item.id); var n = f ? f.nome : 'Unknown'; ul.innerHTML += `<li>${n} (R$ ${formatarValorMoeda(item.diaria)}) <button type="button" class="btn-mini delete-btn" onclick="removerAjudanteTemp('${item.id}')">X</button></li>`; }); };
 window.removerAjudanteTemp = function(id) { window._operacaoAjudantesTempList = window._operacaoAjudantesTempList.filter(x => String(x.id) !== String(id)); renderizarListaAjudantesAdicionados(); };
-document.getElementById('btnManualAddAjudante')?.addEventListener('click', function() { var sel = document.getElementById('selectAjudantesOperacao'); var idAj = sel.value; if (!idAj) return alert("Selecione um ajudante."); if (window._operacaoAjudantesTempList.find(x => x.id === idAj)) return alert("Já está na lista."); var valor = prompt("Valor da Diária:"); if (valor) { window._operacaoAjudantesTempList.push({ id: idAj, diaria: Number(valor.replace(',', '.')) }); renderizarListaAjudantesAdicionados(); sel.value = ""; } });
+document.getElementById('btnManualAddAjudante')?.addEventListener('click', function() { var s = document.getElementById('selectAjudantesOperacao'); var id = s.value; if (!id) return alert("Selecione ajudante"); var v = prompt("Valor Diária:"); if (v) { window._operacaoAjudantesTempList.push({ id: id, diaria: Number(v.replace(',', '.')) }); renderizarListaAjudantesAdicionados(); s.value=""; } });
 
-window.limparOutroFiltro = function(tipo) {
-    if (tipo === 'motorista') {
-        document.getElementById('filtroMotoristaGrafico').value = "";
-    } else {
-        document.getElementById('filtroVeiculoGrafico').value = "";
-    }
-};
-
-// FUNÇÃO MESTRE DE ATUALIZAÇÃO UI
 function preencherTodosSelects() {
-    console.log("Atualizando tabelas e selects...");
-    const fill = (id, dados, valKey, textKey, defText) => { var el = document.getElementById(id); if (!el) return; var atual = el.value; el.innerHTML = `<option value="">${defText}</option>` + dados.map(d => `<option value="${d[valKey]}">${d[textKey]}</option>`).join(''); if(atual) el.value = atual; };
-    fill('selectMotoristaOperacao', CACHE_FUNCIONARIOS.filter(f => f.funcao === 'motorista'), 'id', 'nome', 'SELECIONE MOTORISTA...');
-    fill('selectVeiculoOperacao', CACHE_VEICULOS, 'placa', 'placa', 'SELECIONE VEÍCULO...');
-    fill('selectContratanteOperacao', CACHE_CONTRATANTES, 'cnpj', 'razaoSocial', 'SELECIONE CLIENTE...');
-    fill('selectAtividadeOperacao', CACHE_ATIVIDADES, 'id', 'nome', 'SELECIONE TIPO DE SERVIÇO...');
-    fill('selectAjudantesOperacao', CACHE_FUNCIONARIOS.filter(f => f.funcao === 'ajudante'), 'id', 'nome', 'ADICIONAR AJUDANTE...');
-    
-    // Filtros
-    fill('selectMotoristaRelatorio', CACHE_FUNCIONARIOS, 'id', 'nome', 'TODOS OS FUNCIONÁRIOS');
-    fill('selectVeiculoRelatorio', CACHE_VEICULOS, 'placa', 'placa', 'TODOS OS VEÍCULOS');
-    fill('selectContratanteRelatorio', CACHE_CONTRATANTES, 'cnpj', 'razaoSocial', 'TODOS OS CLIENTES');
-    fill('selectAtividadeRelatorio', CACHE_ATIVIDADES, 'id', 'nome', 'TODAS AS ATIVIDADES');
-    fill('filtroVeiculoGrafico', CACHE_VEICULOS, 'placa', 'placa', 'TODOS OS VEÍCULOS');
-    fill('filtroMotoristaGrafico', CACHE_FUNCIONARIOS, 'id', 'nome', 'TODOS OS MOTORISTAS');
-    fill('selectMotoristaRecibo', CACHE_FUNCIONARIOS, 'id', 'nome', 'SELECIONE O FUNCIONÁRIO...');
-    fill('selectVeiculoRecibo', CACHE_VEICULOS, 'placa', 'placa', 'TODOS');
-    fill('selectContratanteRecibo', CACHE_CONTRATANTES, 'cnpj', 'razaoSocial', 'TODOS');
-    fill('selectVeiculoDespesaGeral', CACHE_VEICULOS, 'placa', 'placa', 'SEM VÍNCULO (GERAL)');
+    const fill = (id, dados, valKey, textKey, defText) => { var el = document.getElementById(id); if (!el) return; var v = el.value; el.innerHTML = `<option value="">${defText}</option>` + dados.map(d => `<option value="${d[valKey]}">${d[textKey]}</option>`).join(''); if(v) el.value = v; };
+    fill('selectMotoristaOperacao', CACHE_FUNCIONARIOS.filter(f => f.funcao === 'motorista'), 'id', 'nome', 'SELECIONE...');
+    fill('selectVeiculoOperacao', CACHE_VEICULOS, 'placa', 'placa', 'SELECIONE...');
+    fill('selectContratanteOperacao', CACHE_CONTRATANTES, 'cnpj', 'razaoSocial', 'SELECIONE...');
+    fill('selectAtividadeOperacao', CACHE_ATIVIDADES, 'id', 'nome', 'SELECIONE...');
+    fill('selectAjudantesOperacao', CACHE_FUNCIONARIOS.filter(f => f.funcao === 'ajudante'), 'id', 'nome', 'ADICIONAR...');
+    fill('selectMotoristaRelatorio', CACHE_FUNCIONARIOS, 'id', 'nome', 'TODOS');
+    fill('selectVeiculoRelatorio', CACHE_VEICULOS, 'placa', 'placa', 'TODOS');
+    fill('selectContratanteRelatorio', CACHE_CONTRATANTES, 'cnpj', 'razaoSocial', 'TODOS');
+    fill('filtroVeiculoGrafico', CACHE_VEICULOS, 'placa', 'placa', 'TODOS');
+    fill('filtroMotoristaGrafico', CACHE_FUNCIONARIOS, 'id', 'nome', 'TODOS');
+    fill('selectMotoristaRecibo', CACHE_FUNCIONARIOS, 'id', 'nome', 'SELECIONE...');
+    fill('selectVeiculoDespesaGeral', CACHE_VEICULOS, 'placa', 'placa', 'GERAL');
 
     renderizarTabelaFuncionarios();
     renderizarTabelaVeiculos();
     renderizarTabelaContratantes();
     renderizarTabelaAtividades();
     renderizarTabelaOperacoes();
-    renderizarInformacoesEmpresa();
-    
-    if(typeof renderizarTabelaDespesasGerais === 'function') renderizarTabelaDespesasGerais();
-    if(typeof renderizarTabelaMonitoramento === 'function') {
-        renderizarTabelaMonitoramento();
-        renderizarTabelaFaltas(); 
-    }
+    if(typeof renderizarTabelaMonitoramento === 'function') { renderizarTabelaMonitoramento(); renderizarTabelaFaltas(); }
+    if(typeof renderizarPainelEquipe === 'function') renderizarPainelEquipe();
 }
-
-// -----------------------------------------------------------------------------
-// RENDERIZAÇÃO DE TABELAS
-// -----------------------------------------------------------------------------
-
-function renderizarTabelaDespesasGerais() {
-    var tbody = document.querySelector('#tabelaDespesasGerais tbody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    
-    CACHE_DESPESAS.sort((a,b) => new Date(b.data) - new Date(a.data)).forEach(d => {
-        var tr = document.createElement('tr');
-        var btnDelete = window.MODO_APENAS_LEITURA ? '' : 
-            `<button class="btn-mini delete-btn" onclick="excluirDespesa('${d.id}')"><i class="fas fa-trash"></i></button>`;
-        
-        var textoPgto = d.modoPagamento === 'parcelado' ? `PARCELADO (${d.parcelasTotal}x)` : 'À VISTA';
-        
-        tr.innerHTML = `
-            <td>${formatarDataParaBrasileiro(d.data)}</td>
-            <td>${d.veiculoPlaca || 'GERAL'}</td>
-            <td>${d.descricao}</td>
-            <td style="color:var(--danger-color); font-weight:bold;">${formatarValorMoeda(d.valor)}</td>
-            <td>${textoPgto}</td>
-            <td>${btnDelete}</td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
-window.excluirDespesa = function(id) {
-    if(!confirm("Excluir esta despesa?")) return;
-    var lista = CACHE_DESPESAS.filter(d => String(d.id) !== String(id));
-    salvarListaDespesas(lista).then(() => {
-        renderizarTabelaDespesasGerais();
-        atualizarDashboard();
-    });
-};
 
 function renderizarTabelaFuncionarios() { 
     var tbody = document.querySelector('#tabelaFuncionarios tbody'); 
     if (!tbody) return; 
     tbody.innerHTML = ''; 
     CACHE_FUNCIONARIOS.forEach(f => { 
-        var tr = document.createElement('tr'); 
-        
-        var btnActions = window.MODO_APENAS_LEITURA ? '' : `
-            <button class="btn-mini btn-primary" onclick="visualizarFuncionario('${f.id}')" title="Visualizar"><i class="fas fa-eye"></i></button>
-            <button class="btn-mini btn-warning" onclick="resetarSenhaFuncionario('${f.id}')" title="Resetar Senha"><i class="fas fa-key"></i></button>
-            <button class="btn-mini edit-btn" onclick="preencherFormularioFuncionario('${f.id}')"><i class="fas fa-edit"></i></button>
-            <button class="btn-mini delete-btn" onclick="excluirFuncionario('${f.id}')"><i class="fas fa-trash"></i></button>
-        `; 
-        
-        tr.innerHTML = `<td>${f.nome}</td><td>${f.funcao}</td><td>${f.email||'-'}</td><td>${btnActions}</td>`; 
-        tbody.appendChild(tr); 
+        tbody.innerHTML += `<tr><td>${f.nome}</td><td>${f.funcao}</td><td>${f.email||'-'}</td><td><button class="btn-mini edit-btn" onclick="preencherFormularioFuncionario('${f.id}')">EDITAR</button> <button class="btn-mini delete-btn" onclick="excluirFuncionario('${f.id}')">DEL</button></td></tr>`; 
     }); 
 }
+function renderizarTabelaVeiculos() { var t = document.querySelector('#tabelaVeiculos tbody'); if(t) { t.innerHTML=''; CACHE_VEICULOS.forEach(v => t.innerHTML+=`<tr><td>${v.placa}</td><td>${v.modelo}</td><td>${v.ano}</td><td><button class="btn-mini delete-btn" onclick="excluirVeiculo('${v.placa}')">DEL</button></td></tr>`); } }
+function renderizarTabelaContratantes() { var t = document.querySelector('#tabelaContratantes tbody'); if(t) { t.innerHTML=''; CACHE_CONTRATANTES.forEach(c => t.innerHTML+=`<tr><td>${c.razaoSocial}</td><td>${c.cnpj}</td><td>${c.telefone}</td><td><button class="btn-mini delete-btn" onclick="excluirContratante('${c.cnpj}')">DEL</button></td></tr>`); } }
+function renderizarTabelaAtividades() { var t = document.querySelector('#tabelaAtividades tbody'); if(t) { t.innerHTML=''; CACHE_ATIVIDADES.forEach(a => t.innerHTML+=`<tr><td>${a.id.substr(-4)}</td><td>${a.nome}</td><td><button class="btn-mini delete-btn" onclick="excluirAtividade('${a.id}')">DEL</button></td></tr>`); } }
+function renderizarTabelaOperacoes() { 
+    var t = document.querySelector('#tabelaOperacoes tbody'); 
+    if(t) { 
+        t.innerHTML=''; 
+        var lista = CACHE_OPERACOES.slice().sort((a,b) => new Date(b.data) - new Date(a.data)); 
+        lista.forEach(op => { 
+            if(op.status==='CANCELADA') return;
+            var m = buscarFuncionarioPorId(op.motoristaId)?.nome || '-';
+            t.innerHTML+=`<tr><td>${formatarDataParaBrasileiro(op.data)}</td><td>${m}<br><small>${op.veiculoPlaca}</small></td><td>${op.status}</td><td>${formatarValorMoeda(op.faturamento)}</td><td><button class="btn-mini delete-btn" onclick="excluirOperacao('${op.id}')">DEL</button></td></tr>`; 
+        }); 
+    } 
+}
 
-window.visualizarFuncionario = function(id) {
-    var f = buscarFuncionarioPorId(id);
-    if (!f) return;
-
-    const createCopyRow = (label, value) => {
-        if (!value) return '';
-        const valSafe = value.toString().replace(/'/g, "\\'");
-        return `
-            <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #eee; padding:8px 0;">
-                <div><strong>${label}:</strong> <span style="color:#555;">${value}</span></div>
-                <button onclick="copiarTexto('${valSafe}')" class="btn-mini btn-secondary" title="Copiar"><i class="fas fa-copy"></i></button>
-            </div>
-        `;
-    };
-
-    var html = `
-        <div style="padding:10px;">
-            <div style="text-align:center; margin-bottom:20px;">
-                <i class="fas fa-user-circle" style="font-size:3rem; color:var(--primary-color);"></i>
-                <h3 style="margin:10px 0 0 0;">${f.nome}</h3>
-                <span class="status-pill pill-active">${f.funcao}</span>
-                <p style="font-size:0.8rem; color:#888;">ID: ${f.id}</p>
-            </div>
-            ${createCopyRow('E-mail (Login)', f.email)}
-            ${createCopyRow('Senha (Cadastro)', f.senhaVisual || '******')}
-            ${createCopyRow('Telefone', f.telefone)}
-            ${createCopyRow('CPF/RG', f.documento)}
-            ${createCopyRow('Chave PIX', f.pix)}
-            ${createCopyRow('Endereço', f.endereco)}
-    `;
-
-    if (f.funcao === 'motorista') {
-        html += `
-            <h4 style="margin-top:20px; color:var(--success-color); border-bottom:2px solid #eee;">DADOS CNH</h4>
-            ${createCopyRow('Nº CNH', f.cnh)}
-            ${createCopyRow('Validade', formatarDataParaBrasileiro(f.validadeCNH))}
-            ${createCopyRow('Categoria', f.categoriaCNH)}
-            ${createCopyRow('Cursos', f.cursoDescricao)}
-        `;
-    }
-    html += `</div>`;
-    var mb = document.getElementById('viewItemBody');
-    if(mb) { mb.innerHTML = html; document.getElementById('viewItemModal').style.display = 'flex'; }
-};
-
-window.copiarTexto = function(texto) {
-    navigator.clipboard.writeText(texto).then(() => { alert("Copiado: " + texto); });
-};
-
-window.resetarSenhaFuncionario = async function(id) {
-    var f = buscarFuncionarioPorId(id);
-    if (!f) return;
-    var novaSenha = prompt(`DIGITE A NOVA SENHA PARA ${f.nome}:\n(Mínimo 6 caracteres)`);
-    if (!novaSenha || novaSenha.length < 6) return alert("Senha inválida.");
-
-    f.senhaVisual = novaSenha;
-    await salvarListaFuncionarios(CACHE_FUNCIONARIOS);
-    if (window.dbRef) {
-        try {
-            await window.dbRef.updateDoc(window.dbRef.doc(window.dbRef.db, "users", f.id), { senhaVisual: novaSenha });
-            alert("Senha atualizada.");
-        } catch (e) { alert("Senha salva localmente. Erro nuvem."); }
-    }
-};
-
-function renderizarTabelaVeiculos() { var tbody = document.querySelector('#tabelaVeiculos tbody'); if (!tbody) return; tbody.innerHTML = ''; CACHE_VEICULOS.forEach(v => { var tr = document.createElement('tr'); var btnActions = window.MODO_APENAS_LEITURA ? '' : `<button class="btn-mini edit-btn" onclick="preencherFormularioVeiculo('${v.placa}')"><i class="fas fa-edit"></i></button><button class="btn-mini delete-btn" onclick="excluirVeiculo('${v.placa}')"><i class="fas fa-trash"></i></button>`; tr.innerHTML = `<td>${v.placa}</td><td>${v.modelo}</td><td>${v.ano}</td><td>${btnActions}</td>`; tbody.appendChild(tr); }); }
-function renderizarTabelaContratantes() { var tbody = document.querySelector('#tabelaContratantes tbody'); if (!tbody) return; tbody.innerHTML = ''; CACHE_CONTRATANTES.forEach(c => { var tr = document.createElement('tr'); var btnActions = window.MODO_APENAS_LEITURA ? '' : `<button class="btn-mini edit-btn" onclick="preencherFormularioContratante('${c.cnpj}')"><i class="fas fa-edit"></i></button><button class="btn-mini delete-btn" onclick="excluirContratante('${c.cnpj}')"><i class="fas fa-trash"></i></button>`; tr.innerHTML = `<td>${c.razaoSocial}</td><td>${c.cnpj}</td><td>${formatarTelefoneBrasil(c.telefone)}</td><td>${btnActions}</td>`; tbody.appendChild(tr); }); }
-function renderizarTabelaAtividades() { var tbody = document.querySelector('#tabelaAtividades tbody'); if (!tbody) return; tbody.innerHTML = ''; CACHE_ATIVIDADES.forEach(a => { var tr = document.createElement('tr'); var btnActions = window.MODO_APENAS_LEITURA ? '' : `<button class="btn-mini delete-btn" onclick="excluirAtividade('${a.id}')"><i class="fas fa-trash"></i></button>`; tr.innerHTML = `<td>${a.id.substr(-4)}</td><td>${a.nome}</td><td>${btnActions}</td>`; tbody.appendChild(tr); }); }
-
-// EXCLUSÃO
-window.excluirFuncionario = async function(id) { 
-    if(!confirm("Excluir funcionário e revogar acesso?")) return; 
-    if (window.dbRef) { try { await window.dbRef.deleteDoc(window.dbRef.doc(window.dbRef.db, "users", id)); } catch(e) {} }
-    var lista = CACHE_FUNCIONARIOS.filter(f => String(f.id) !== String(id)); 
-    await salvarListaFuncionarios(lista); 
-    alert("Funcionário removido."); preencherTodosSelects(); 
-};
-window.excluirVeiculo = function(placa) { if(!confirm("Excluir?")) return; salvarListaVeiculos(CACHE_VEICULOS.filter(v => v.placa !== placa)).then(() => preencherTodosSelects()); };
-window.excluirContratante = function(cnpj) { if(!confirm("Excluir?")) return; salvarListaContratantes(CACHE_CONTRATANTES.filter(c => c.cnpj !== cnpj)).then(() => preencherTodosSelects()); };
-window.excluirAtividade = function(id) { if(!confirm("Excluir?")) return; salvarListaAtividades(CACHE_ATIVIDADES.filter(a => String(a.id) !== String(id))).then(() => preencherTodosSelects()); };
-window.excluirOperacao = function(id) { if(!confirm("Excluir?")) return; salvarListaOperacoes(CACHE_OPERACOES.filter(o => String(o.id) !== String(id))).then(() => { preencherTodosSelects(); renderizarCalendario(); atualizarDashboard(); }); };
-
-window.preencherFormularioFuncionario = function(id) { var f = buscarFuncionarioPorId(id); if (!f) return; document.getElementById('funcionarioId').value = f.id; document.getElementById('funcNome').value = f.nome; document.getElementById('funcFuncao').value = f.funcao; document.getElementById('funcDocumento').value = f.documento; document.getElementById('funcEmail').value = f.email || ''; document.getElementById('funcTelefone').value = f.telefone; document.getElementById('funcPix').value = f.pix || ''; document.getElementById('funcEndereco').value = f.endereco || ''; toggleDriverFields(); if (f.funcao === 'motorista') { document.getElementById('funcCNH').value = f.cnh || ''; document.getElementById('funcValidadeCNH').value = f.validadeCNH || ''; document.getElementById('funcCategoriaCNH').value = f.categoriaCNH || ''; document.getElementById('funcCursoDescricao').value = f.cursoDescricao || ''; } document.querySelector('[data-page="cadastros"]').click(); document.querySelector('[data-tab="funcionarios"]').click(); };
-window.preencherFormularioVeiculo = function(placa) { var v = buscarVeiculoPorPlaca(placa); if (!v) return; document.getElementById('veiculoPlaca').value = v.placa; document.getElementById('veiculoModelo').value = v.modelo; document.getElementById('veiculoAno').value = v.ano; document.getElementById('veiculoRenavam').value = v.renavam || ''; document.getElementById('veiculoChassi').value = v.chassi || ''; document.querySelector('[data-page="cadastros"]').click(); document.querySelector('[data-tab="veiculos"]').click(); };
-window.preencherFormularioContratante = function(cnpj) { var c = buscarContratantePorCnpj(cnpj); if (!c) return; document.getElementById('contratanteCNPJ').value = c.cnpj; document.getElementById('contratanteRazaoSocial').value = c.razaoSocial; document.getElementById('contratanteTelefone').value = c.telefone; document.querySelector('[data-page="cadastros"]').click(); document.querySelector('[data-tab="contratantes"]').click(); };
-window.preencherFormularioOperacao = function(id) { var op = CACHE_OPERACOES.find(o => String(o.id) === String(id)); if (!op) return; document.getElementById('operacaoId').value = op.id; document.getElementById('operacaoData').value = op.data; document.getElementById('selectMotoristaOperacao').value = op.motoristaId; document.getElementById('selectVeiculoOperacao').value = op.veiculoPlaca; document.getElementById('selectContratanteOperacao').value = op.contratanteCNPJ; document.getElementById('selectAtividadeOperacao').value = op.atividadeId; document.getElementById('operacaoFaturamento').value = op.faturamento; document.getElementById('operacaoAdiantamento').value = op.adiantamento || ''; document.getElementById('operacaoComissao').value = op.comissao || ''; document.getElementById('operacaoDespesas').value = op.despesas || ''; document.getElementById('operacaoCombustivel').value = op.combustivel || ''; document.getElementById('operacaoPrecoLitro').value = op.precoLitro || ''; document.getElementById('operacaoKmRodado').value = op.kmRodado || ''; window._operacaoAjudantesTempList = op.ajudantes || []; renderizarListaAjudantesAdicionados(); document.getElementById('operacaoIsAgendamento').checked = (op.status === 'AGENDADA' || op.status === 'EM_ANDAMENTO'); document.querySelector('[data-page="operacoes"]').click(); };
-
-window.visualizarOperacao = function(id) {
-    var op = CACHE_OPERACOES.find(o => String(o.id) === String(id));
-    if (!op) return;
-    var mot = buscarFuncionarioPorId(op.motoristaId);
-    var nomeMot = mot ? mot.nome : 'N/A';
-    var cliente = buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial || 'N/A';
-    var atividade = buscarAtividadePorId(op.atividadeId)?.nome || 'N/A';
-    var htmlAjudantes = 'Nenhum';
-    if(op.ajudantes && op.ajudantes.length > 0) { htmlAjudantes = '<ul style="margin:0; padding-left:20px;">' + op.ajudantes.map(aj => { var f = buscarFuncionarioPorId(aj.id); return `<li>${f ? f.nome : 'Excluído'} (R$ ${formatarValorMoeda(aj.diaria)})</li>`; }).join('') + '</ul>'; }
-
-    var html = `<div style="font-size: 0.95rem; color:#333;"><div style="background:#f5f5f5; padding:10px; border-radius:6px; margin-bottom:15px; border-left: 4px solid var(--primary-color);"><h4 style="margin:0 0 5px 0; color:var(--primary-color);">RESUMO DA VIAGEM #${op.id.substr(-4)}</h4><p><strong>Status:</strong> ${op.status}</p><p><strong>Data:</strong> ${formatarDataParaBrasileiro(op.data)}</p><p><strong>Cliente:</strong> ${cliente}</p><p><strong>Atividade:</strong> ${atividade}</p><p><strong>Veículo:</strong> ${op.veiculoPlaca}</p></div><div style="margin-bottom:15px;"><h4 style="border-bottom:1px solid #eee; padding-bottom:5px;">EQUIPE</h4><p><strong>Motorista:</strong> ${nomeMot}</p><p><strong>Ajudantes:</strong></p>${htmlAjudantes}</div><div style="background:#e8f5e9; padding:10px; border-radius:6px; margin-bottom:15px;"><h4 style="margin:0 0 10px 0; color:var(--success-color);">FINANCEIRO (ADMIN)</h4><p><strong>Faturamento:</strong> ${formatarValorMoeda(op.faturamento)}</p><p><strong>Adiantamento:</strong> ${formatarValorMoeda(op.adiantamento)}</p><p><strong>Comissão Mot.:</strong> ${formatarValorMoeda(op.comissao)}</p></div><div style="background:#fff3e0; padding:10px; border-radius:6px; border:1px solid #ffe0b2;"><h4 style="margin:0 0 10px 0; color:#e65100;">DADOS DO MOTORISTA (CHECK-IN)</h4><div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;"><div><strong>KM Inicial:</strong> ${op.kmInicial || '-'}</div><div><strong>KM Final:</strong> ${op.kmFinal || '-'}</div><div><strong>KM Rodado:</strong> ${op.kmRodado || '-'}</div><div><strong>Abastecimento:</strong> ${formatarValorMoeda(op.combustivel)}</div><div><strong>Despesas/Pedágio:</strong> ${formatarValorMoeda(op.despesas)}</div><div><strong>Preço Litro:</strong> R$ ${op.precoLitro || '0,00'}</div></div></div></div>`;
-    var modalContent = document.getElementById('viewItemBody');
-    if(modalContent) { modalContent.innerHTML = html; document.getElementById('viewItemModal').style.display = 'flex'; }
-};
-
-window.renderizarTabelaOperacoes = function() { 
-    var tbody = document.querySelector('#tabelaOperacoes tbody'); 
-    if (!tbody) return; 
-    tbody.innerHTML = ''; 
-    var lista = CACHE_OPERACOES.slice().sort((a,b) => new Date(b.data) - new Date(a.data)); 
-    lista.forEach(op => { 
-        if(op.status === 'CANCELADA') return; 
-        var mot = buscarFuncionarioPorId(op.motoristaId); 
-        var nomeMot = mot ? mot.nome : 'Excluído'; 
-        var statusLabel = op.status === 'FINALIZADA' ? 'FINALIZADA' : (op.status === 'CONFIRMADA' ? 'CONFIRMADA' : (op.status === 'EM_ANDAMENTO' ? 'EM ROTA' : 'AGENDADA'));
-        var statusClass = (op.status === 'FINALIZADA' || op.status === 'CONFIRMADA') ? 'pill-active' : 'pill-pending';
-        var styleAdd = (op.status === 'EM_ANDAMENTO') ? 'style="background:orange; color:white;"' : '';
-        var btnView = `<button class="btn-mini btn-primary" onclick="visualizarOperacao('${op.id}')" title="Ver Detalhes"><i class="fas fa-eye"></i></button>`;
-        var btnActions = btnView; 
-        if (!window.MODO_APENAS_LEITURA) { btnActions += ` <button class="btn-mini edit-btn" onclick="preencherFormularioOperacao('${op.id}')"><i class="fas fa-edit"></i></button> <button class="btn-mini delete-btn" onclick="excluirOperacao('${op.id}')"><i class="fas fa-trash"></i></button>`; } 
-        var tr = document.createElement('tr'); 
-        tr.innerHTML = `<td>${formatarDataParaBrasileiro(op.data)}</td><td><strong>${nomeMot}</strong><br><small>${op.veiculoPlaca}</small></td><td><span class="status-pill ${statusClass}" ${styleAdd}>${statusLabel}</span></td><td style="color:green; font-weight:bold;">${formatarValorMoeda(op.faturamento)}</td><td>${btnActions}</td>`; 
-        tbody.appendChild(tr); 
-    }); 
-};
-
-// Fechar Modais
-window.closeViewModal = function() { document.getElementById('viewItemModal').style.display = 'none'; };
-window.closeModal = function() { document.getElementById('operationDetailsModal').style.display = 'none'; };
-window.closeCheckinConfirmModal = function() { document.getElementById('modalCheckinConfirm').style.display = 'none'; };
-window.closeAdicionarAjudanteModal = function() { document.getElementById('modalAdicionarAjudante').style.display = 'none'; };
-function renderizarInformacoesEmpresa() { var div = document.getElementById('viewMinhaEmpresaContent'); if (CACHE_MINHA_EMPRESA.razaoSocial) { div.innerHTML = `<strong>${CACHE_MINHA_EMPRESA.razaoSocial}</strong><br>CNPJ: ${CACHE_MINHA_EMPRESA.cnpj}<br>Tel: ${formatarTelefoneBrasil(CACHE_MINHA_EMPRESA.telefone)}`; } else { div.innerHTML = "Nenhum dado cadastrado."; } }
+window.excluirFuncionario = async function(id) { if(confirm("Excluir?")) { var l = CACHE_FUNCIONARIOS.filter(f=>String(f.id)!==String(id)); await salvarListaFuncionarios(l); preencherTodosSelects(); }};
+window.preencherFormularioFuncionario = function(id) { var f = buscarFuncionarioPorId(id); if(!f) return; document.getElementById('funcionarioId').value=f.id; document.getElementById('funcNome').value=f.nome; document.getElementById('funcFuncao').value=f.funcao; document.getElementById('funcDocumento').value=f.documento; document.getElementById('funcEmail').value=f.email; document.querySelector('[data-tab="funcionarios"]').click(); };
+window.excluirOperacao = async function(id) { if(confirm("Excluir viagem?")) { var l = CACHE_OPERACOES.filter(o=>String(o.id)!==String(id)); await salvarListaOperacoes(l); preencherTodosSelects(); atualizarDashboard(); renderizarCalendario(); }};
 // =============================================================================
-// PARTE 4: MONITORAMENTO, RELATÓRIOS, RECIBOS E LÓGICA DO FUNCIONÁRIO
+// PARTE 4: MONITORAMENTO E FUNCIONÁRIO
 // =============================================================================
 
-// --- MONITORAMENTO ---
 window.renderizarTabelaMonitoramento = function() {
     var tbody = document.querySelector('#tabelaCheckinsPendentes tbody');
     if (!tbody) return;
@@ -1046,35 +620,22 @@ window.renderizarTabelaMonitoramento = function() {
         return (op.status === 'AGENDADA' || op.status === 'EM_ANDAMENTO');
     }).sort((a,b) => new Date(a.data) - new Date(b.data));
 
-    if (pendentes.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Nenhuma rota ativa.</td></tr>';
-        document.getElementById('badgeCheckins').style.display = 'none';
-        return;
-    }
+    if (pendentes.length === 0) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Nenhuma rota ativa.</td></tr>';
 
     var badge = document.getElementById('badgeCheckins');
-    if (badge) {
-        badge.textContent = pendentes.length;
-        badge.style.display = 'inline-block';
-    }
+    if (badge) { badge.textContent = pendentes.length; badge.style.display = pendentes.length > 0 ? 'inline-block' : 'none'; }
 
     pendentes.forEach(function(op) {
         var cliente = buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial || 'CLIENTE';
-        var statusHtml = op.status === 'EM_ANDAMENTO' 
-            ? '<span class="status-pill" style="background:orange; color:white; animation: pulse 2s infinite;">EM ROTA</span>' 
-            : '<span class="status-pill pill-pending">AGENDADA</span>';
+        var statusHtml = op.status === 'EM_ANDAMENTO' ? '<span class="status-pill" style="background:orange;">EM ROTA</span>' : '<span class="status-pill pill-pending">AGENDADA</span>';
 
         var mot = buscarFuncionarioPorId(op.motoristaId);
         if (mot) {
             var checkInFeito = (op.checkins && op.checkins.motorista);
             var faltou = (op.checkins && op.checkins.faltaMotorista);
-            var statusEq = faltou ? '<span style="color:red">FALTA</span>' : (checkInFeito ? '<span style="color:green">OK</span>' : '...');
-            
+            var statusEq = faltou ? '<span style="color:red">FALTA</span>' : (checkInFeito ? '<span style="color:green">OK</span>' : 'AGUARDANDO');
             var btnFalta = faltou ? '-' : `<button class="btn-mini btn-danger" onclick="registrarFalta('${op.id}','${mot.id}','motorista')">FALTA</button>`;
-            
-            var tr = document.createElement('tr');
-            tr.innerHTML = `<td>${formatarDataParaBrasileiro(op.data)}</td><td><strong>${mot.nome}</strong><br><small>${op.veiculoPlaca}</small></td><td>${cliente}</td><td>${statusHtml}</td><td>${statusEq}</td><td>${btnFalta}</td>`;
-            tbody.appendChild(tr);
+            tbody.innerHTML += `<tr><td>${formatarDataParaBrasileiro(op.data)}</td><td>${mot.nome}<br><small>${op.veiculoPlaca}</small></td><td>${cliente}</td><td>${statusHtml}</td><td>${statusEq}</td><td>${btnFalta}</td></tr>`;
         }
         
         if (op.ajudantes) {
@@ -1083,10 +644,7 @@ window.renderizarTabelaMonitoramento = function() {
                 if(aj) {
                     var faltouAj = (op.checkins && op.checkins.faltas && op.checkins.faltas[aj.id]);
                     var btnFaltaAj = faltouAj ? '-' : `<button class="btn-mini btn-danger" onclick="registrarFalta('${op.id}','${aj.id}','ajudante')">FALTA</button>`;
-                    var trAj = document.createElement('tr');
-                    trAj.style.background = "#f9f9f9";
-                    trAj.innerHTML = `<td style="border:none;"></td><td>${aj.nome} (Ajud)</td><td colspan="3" style="color:#777;"><small>^ Vinculado</small></td><td>${btnFaltaAj}</td>`;
-                    tbody.appendChild(trAj);
+                    tbody.innerHTML += `<tr style="background:#f9f9f9"><td style="border:none;"></td><td>${aj.nome} (Ajud)</td><td colspan="3" style="color:#777;"><small>^ Vinculado</small></td><td>${btnFaltaAj}</td></tr>`;
                 }
             });
         }
@@ -1116,398 +674,303 @@ window.renderizarTabelaFaltas = function() {
         if (!op.checkins) return;
         if (op.checkins.faltaMotorista) {
             var m = buscarFuncionarioPorId(op.motoristaId);
-            if(m) tbody.innerHTML += `<tr><td>${formatarDataParaBrasileiro(op.data)}</td><td style="color:red;">${m.nome}</td><td>MOTORISTA</td><td>FALTA</td><td><button class="btn-mini btn-secondary">VER</button></td></tr>`;
-        }
-        if(op.checkins.faltas) {
-            Object.keys(op.checkins.faltas).forEach(k => {
-                if(op.checkins.faltas[k]) {
-                    var a = buscarFuncionarioPorId(k);
-                    if(a) tbody.innerHTML += `<tr><td>${formatarDataParaBrasileiro(op.data)}</td><td style="color:red;">${a.nome}</td><td>AJUDANTE</td><td>FALTA</td><td><button class="btn-mini btn-secondary">VER</button></td></tr>`;
-                }
-            });
+            if(m) tbody.innerHTML += `<tr><td>${formatarDataParaBrasileiro(op.data)}</td><td style="color:red;">${m.nome}</td><td>MOTORISTA</td><td>FALTA</td><td>-</td></tr>`;
         }
     });
 };
 
-// --- GESTÃO DE EQUIPE (FUNCIONÁRIOS ATIVOS) ---
-window.renderizarPainelEquipe = async function() {
-    // 1. Tabela Funcionários Ativos (Local)
-    var tbodyAtivos = document.querySelector('#tabelaCompanyAtivos tbody');
-    if (tbodyAtivos) {
-        tbodyAtivos.innerHTML = '';
-        if (CACHE_FUNCIONARIOS.length === 0) {
-            tbodyAtivos.innerHTML = '<tr><td colspan="4" style="text-align:center;">Nenhum funcionário cadastrado.</td></tr>';
-        } else {
-            CACHE_FUNCIONARIOS.forEach(f => {
-                var tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${f.nome}</td>
-                    <td>${f.funcao.toUpperCase()}</td>
-                    <td><span class="status-pill pill-active">ATIVO</span></td>
-                    <td><button class="btn-mini edit-btn" onclick="preencherFormularioFuncionario('${f.id}')"><i class="fas fa-edit"></i></button></td>
-                `;
-                tbodyAtivos.appendChild(tr);
-            });
-        }
-    }
+// RECIBOS (ADMIN)
+window.gerarReciboPagamento = function() {
+    var motId = document.getElementById('selectMotoristaRecibo').value;
+    var ini = document.getElementById('dataInicioRecibo').value;
+    var fim = document.getElementById('dataFimRecibo').value;
+    if (!motId || !ini || !fim) return alert("Preencha tudo.");
+    var func = buscarFuncionarioPorId(motId);
+    
+    var total = 0; var lista = [];
+    CACHE_OPERACOES.forEach(op => {
+        if (op.status === 'CANCELADA' || op.data < ini || op.data > fim) return;
+        var val = 0;
+        if (op.motoristaId === motId && (!op.checkins || !op.checkins.faltaMotorista)) val = Number(op.comissao)||0;
+        else if (op.ajudantes && op.ajudantes.find(a=>a.id===motId) && !(op.checkins?.faltas?.[motId])) val = Number(op.ajudantes.find(a=>a.id===motId).diaria)||0;
+        
+        if (val > 0) { total += val; lista.push({d:op.data, v:val}); }
+    });
 
-    // 2. Pendentes (Nuvem)
-    if (window.dbRef && window.USUARIO_ATUAL) {
-        try {
-            const { db, collection, query, where, getDocs } = window.dbRef;
-            const q = query(collection(db, "users"), where("company", "==", window.USUARIO_ATUAL.company), where("approved", "==", false));
-            const snap = await getDocs(q);
-            var tbodyPend = document.querySelector('#tabelaCompanyPendentes tbody');
-            if (tbodyPend) {
-                tbodyPend.innerHTML = '';
-                if (snap.empty) tbodyPend.innerHTML = '<tr><td colspan="3" style="text-align:center;">Nenhum pendente.</td></tr>';
-                snap.forEach(doc => {
-                    var u = doc.data();
-                    tbodyPend.innerHTML += `<tr><td>${u.name}</td><td>${u.email}</td><td><button class="btn-mini btn-success" onclick="aprovarUsuario('${u.uid}')">OK</button></td></tr>`;
-                });
-            }
-        } catch(e) { console.error(e); }
+    var html = `<div style="padding:20px; font-family:monospace;"><h3>RECIBO - ${func.nome}</h3><p>Período: ${formatarDataParaBrasileiro(ini)} a ${formatarDataParaBrasileiro(fim)}</p><hr>${lista.map(i=>`<div style="display:flex;justify-content:space-between;"><span>${formatarDataParaBrasileiro(i.d)}</span><span>${formatarValorMoeda(i.v)}</span></div>`).join('')}<hr><h3>TOTAL: ${formatarValorMoeda(total)}</h3></div>`;
+    document.getElementById('modalReciboContent').innerHTML = html;
+    document.getElementById('modalReciboActions').innerHTML = `<button class="btn-success" onclick="salvarRecibo('${func.id}','${func.nome}','${ini}','${fim}',${total})">SALVAR E DISPONIBILIZAR</button>`;
+    document.getElementById('modalRecibo').style.display = 'flex';
+};
+
+window.salvarRecibo = async function(id, nome, i, f, val) {
+    CACHE_RECIBOS.push({ id: Date.now().toString(), dataEmissao: new Date().toISOString(), funcionarioId: id, funcionarioNome: nome, periodo: i+' a '+f, valorTotal: val, enviado: false });
+    await salvarListaRecibos(CACHE_RECIBOS);
+    alert("Salvo!"); document.getElementById('modalRecibo').style.display='none'; renderizarHistoricoRecibos();
+};
+
+window.renderizarHistoricoRecibos = function() {
+    var t = document.querySelector('#tabelaHistoricoRecibos tbody'); if(!t) return;
+    t.innerHTML = '';
+    CACHE_RECIBOS.forEach(r => {
+        var btn = r.enviado ? 'ENVIADO' : `<button class="btn-primary" onclick="enviarRecibo('${r.id}')">ENVIAR</button>`;
+        t.innerHTML += `<tr><td>${new Date(r.dataEmissao).toLocaleDateString()}</td><td>${r.funcionarioNome}</td><td>${formatarValorMoeda(r.valorTotal)}</td><td>${btn}</td></tr>`;
+    });
+};
+
+window.enviarRecibo = async function(id) {
+    var r = CACHE_RECIBOS.find(x => x.id === id);
+    if(r) { r.enviado = true; await salvarListaRecibos(CACHE_RECIBOS); renderizarHistoricoRecibos(); alert("Enviado ao funcionário!"); }
+};
+
+// CHECK-IN FUNCIONÁRIO
+window.renderizarCheckinFuncionario = function() {
+    var c = document.getElementById('checkin-container'); if(!c) return;
+    var uid = window.USUARIO_ATUAL.uid;
+    var ops = CACHE_OPERACOES.filter(o => o.motoristaId === uid && o.status !== 'CANCELADA' && (o.status === 'AGENDADA' || o.status === 'EM_ANDAMENTO'));
+    
+    if (ops.length === 0) { c.innerHTML = '<p style="text-align:center;">Nenhuma viagem pendente.</p>'; return; }
+    
+    var html = '';
+    ops.forEach(op => {
+        var btn = op.status === 'AGENDADA' ? `<button class="btn-success" onclick="iniciarViagem('${op.id}')">INICIAR VIAGEM</button>` : `<button class="btn-warning" onclick="finalizarViagem('${op.id}')">FINALIZAR VIAGEM</button>`;
+        html += `<div style="border:1px solid #ccc; padding:15px; margin-bottom:10px; border-radius:5px;"><h4>${op.veiculoPlaca} - ${formatarDataParaBrasileiro(op.data)}</h4><p>Rota: ${buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial}</p>${btn}</div>`;
+    });
+    c.innerHTML = html;
+};
+
+window.iniciarViagem = async function(id) {
+    if(!confirm("Iniciar?")) return;
+    var op = CACHE_OPERACOES.find(o => String(o.id) === String(id));
+    if(op) { op.status = 'EM_ANDAMENTO'; if(!op.checkins) op.checkins={}; op.checkins.motorista=true; await salvarListaOperacoes(CACHE_OPERACOES); renderizarCheckinFuncionario(); }
+};
+
+window.finalizarViagem = async function(id) {
+    var km = prompt("KM Final:"); if(!km) return;
+    var op = CACHE_OPERACOES.find(o => String(o.id) === String(id));
+    if(op) { 
+        op.status = 'FINALIZADA'; op.kmFinal = km; 
+        op.kmRodado = Number(km) - Number(op.kmInicial || 0); // Ajuste se houver km inicial
+        await salvarListaOperacoes(CACHE_OPERACOES); renderizarCheckinFuncionario(); 
+    }
+};
+
+window.filtrarServicosFuncionario = function(uid) {
+    var ini = document.getElementById('dataInicioServicosFunc')?.value;
+    var fim = document.getElementById('dataFimServicosFunc')?.value;
+    
+    var ops = CACHE_OPERACOES.filter(o => {
+        var isMe = (o.motoristaId === uid) || (o.ajudantes && o.ajudantes.some(a=>a.id===uid));
+        var dateOk = (!ini || o.data >= ini) && (!fim || o.data <= fim);
+        return isMe && o.status !== 'CANCELADA' && dateOk;
+    });
+
+    var t = document.getElementById('tabelaMeusServicos')?.querySelector('tbody');
+    if(t) {
+        t.innerHTML = '';
+        ops.forEach(o => {
+            var val = (o.motoristaId === uid) ? (Number(o.comissao)||0) : (Number(o.ajudantes.find(a=>a.id===uid).diaria)||0);
+            t.innerHTML += `<tr><td>${formatarDataParaBrasileiro(o.data)}</td><td>${o.veiculoPlaca}</td><td>${formatarValorMoeda(val)}</td></tr>`;
+        });
     }
     
-    // 3. Solicitações de Perfil
-    var tbodyReq = document.getElementById('tabelaProfileRequests')?.querySelector('tbody');
-    if(tbodyReq) {
-        tbodyReq.innerHTML = '';
-        CACHE_PROFILE_REQUESTS.filter(r => r.status === 'PENDENTE').forEach(req => {
-            var f = buscarFuncionarioPorId(req.funcionarioId);
-            tbodyReq.innerHTML += `<tr><td>${formatarDataParaBrasileiro(req.data)}</td><td>${f?f.nome:'-'}</td><td>${req.campo}</td><td>${req.valorNovo}</td><td><button class="btn-mini btn-success" onclick="aprovarProfileRequest('${req.id}')">OK</button></td></tr>`;
+    var tr = document.getElementById('tabelaMeusRecibos')?.querySelector('tbody');
+    if(tr) {
+        tr.innerHTML = '';
+        CACHE_RECIBOS.filter(r => String(r.funcionarioId) === String(uid) && r.enviado).forEach(r => {
+            tr.innerHTML += `<tr><td>${formatarDataParaBrasileiro(r.dataEmissao.split('T')[0])}</td><td>${r.periodo}</td><td>${formatarValorMoeda(r.valorTotal)}</td><td>OK</td></tr>`;
         });
     }
 };
 
-window.aprovarUsuario = async function(uid) {
-    if(!confirm("Aprovar?")) return;
-    try { await window.dbRef.updateDoc(window.dbRef.doc(window.dbRef.db, "users", uid), { approved: true }); renderizarPainelEquipe(); } catch(e){alert(e.message);}
+window.renderizarPainelEquipe = async function() {
+    var t = document.querySelector('#tabelaCompanyAtivos tbody');
+    if(t) {
+        t.innerHTML = '';
+        CACHE_FUNCIONARIOS.forEach(f => t.innerHTML += `<tr><td>${f.nome}</td><td>${f.funcao}</td><td>ATIVO</td><td>-</td></tr>`);
+    }
+    
+    // Busca Pendentes
+    if (window.dbRef) {
+        try {
+            const q = window.dbRef.query(window.dbRef.collection(window.dbRef.db, "users"), window.dbRef.where("company", "==", window.USUARIO_ATUAL.company), window.dbRef.where("approved", "==", false));
+            const snap = await window.dbRef.getDocs(q);
+            var tp = document.querySelector('#tabelaCompanyPendentes tbody');
+            if(tp) {
+                tp.innerHTML = '';
+                snap.forEach(d => {
+                    var u = d.data();
+                    tp.innerHTML += `<tr><td>${u.name}</td><td>${u.email}</td><td><button class="btn-success" onclick="aprovarUsuario('${u.uid}')">APROVAR</button></td></tr>`;
+                });
+            }
+        } catch(e) {}
+    }
 };
-
-// ... (Restante das funções de Relatórios e Recibos mantidas iguais, omitidas para brevidade pois já estão ok) ...
-// Certifique-se de que gerarRelatorioGeral, gerarRelatorioCobranca, gerarReciboPagamento, etc. estejam aqui conforme Parte 4 anterior.
+window.aprovarUsuario = async function(uid) {
+    await window.dbRef.updateDoc(window.dbRef.doc(window.dbRef.db, "users", uid), { approved: true });
+    renderizarPainelEquipe();
+};
 // =============================================================================
-// PARTE 5: SUPER ADMIN, MEUS DADOS E INICIALIZAÇÃO (FIX FINAL)
+// PARTE 5: SUPER ADMIN, MEUS DADOS E INICIALIZAÇÃO (FIXED)
 // =============================================================================
 
 const EMAILS_MESTRES = ["admin@logimaster.com", "suporte@logimaster.com", "08caveira@gmail.com"]; 
 
-// -----------------------------------------------------------------------------
-// PAINEL SUPER ADMIN (MASTER)
-// -----------------------------------------------------------------------------
-
+// SUPER ADMIN
 window.carregarPainelSuperAdmin = async function() {
-    const container = document.getElementById('superAdminContainer');
-    if(!container) return;
-    
-    container.innerHTML = '<p style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Atualizando lista...</p>';
-
+    const c = document.getElementById('superAdminContainer'); if(!c) return;
+    c.innerHTML = 'Carregando...';
     try {
         const { db, collection, getDocs } = window.dbRef;
+        const compSnap = await getDocs(collection(db, "companies"));
+        const userSnap = await getDocs(collection(db, "users"));
+        const comps = []; compSnap.forEach(d => comps.push({id:d.id, ...d.data()}));
+        const users = []; userSnap.forEach(d => users.push({uid:d.id, ...d.data()}));
         
-        // Busca Forçada na Nuvem
-        const companiesSnap = await getDocs(collection(db, "companies"));
-        const usersSnap = await getDocs(collection(db, "users"));
-        
-        const companies = [];
-        companiesSnap.forEach(doc => companies.push({ id: doc.id, ...doc.data() }));
-        const users = [];
-        usersSnap.forEach(doc => users.push({ uid: doc.id, ...doc.data() }));
+        c.innerHTML = '';
+        if(comps.length === 0) c.innerHTML = 'Nada encontrado.';
 
-        container.innerHTML = '';
-
-        if(companies.length === 0) {
-            container.innerHTML = '<div class="alert alert-info">Nenhuma empresa encontrada.</div>';
-            return;
-        }
-
-        companies.forEach(comp => {
-            const usersDaEmpresa = users.filter(u => u.company === comp.id);
-            const admin = usersDaEmpresa.find(u => u.role === 'admin');
+        comps.forEach(cp => {
+            const uss = users.filter(u => u.company === cp.id);
+            const adm = uss.find(u => u.role === 'admin');
             
-            // Tratamento de Erros Visuais
-            let statusBadge = comp.isBlocked ? 
-                `<span class="status-pill pill-paused">BLOQUEADO</span>` : 
-                (comp.isVitalicio ? `<span class="status-pill pill-active">VITALÍCIO</span>` : 
-                (comp.systemValidity && new Date(comp.systemValidity) < new Date() ? `<span class="status-pill pill-blocked">VENCIDO</span>` : `<span class="status-pill pill-active">ATIVO</span>`));
-            
-            let validadeTexto = comp.isVitalicio ? "VITALÍCIO" : (comp.systemValidity ? formatarDataParaBrasileiro(comp.systemValidity) : "SEM DADOS");
-            let borderColor = comp.isBlocked ? "var(--danger-color)" : (comp.isVitalicio ? "gold" : "#ddd");
+            // Segurança contra NULL no modal
+            const safeVal = cp.systemValidity || '';
+            const safeVit = cp.isVitalicio || false;
+            const safeBlk = cp.isBlocked || false;
 
-            const div = document.createElement('div');
+            var div = document.createElement('div');
             div.className = 'company-wrapper';
-            div.style.cssText = `margin-bottom:15px; border:1px solid ${borderColor}; border-radius:8px; background:white; overflow:hidden;`;
-
+            div.style.cssText = "margin-bottom:10px; border:1px solid #ccc; padding:10px; background:white;";
             div.innerHTML = `
-                <div class="company-header" onclick="toggleCompanyDetails(this)" style="padding:15px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#f8f9fa;">
-                    <div style="display:flex; align-items:center; gap:15px;">
-                        <div style="background:var(--primary-color); color:white; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;">
-                            ${comp.id.substring(0,2).toUpperCase()}
-                        </div>
-                        <div>
-                            <h4 style="margin:0; text-transform:uppercase;">${comp.id}</h4>
-                            <small style="color:#666;">Admin: ${admin ? admin.email : '<span style="color:red">Não Identificado / Erro</span>'}</small>
-                        </div>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:15px;">
-                        <div style="text-align:right;">
-                            <div style="font-size:0.7rem; color:#888;">VALIDADE</div>
-                            <strong style="font-size:0.9rem;">${validadeTexto}</strong>
-                        </div>
-                        ${statusBadge}
-                        <button class="btn-mini btn-primary" onclick="event.stopPropagation(); abrirModalCreditos('${comp.id}', '${comp.systemValidity||''}', ${comp.isVitalicio||false}, ${comp.isBlocked||false})" title="Editar">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn-mini btn-danger" onclick="event.stopPropagation(); excluirEmpresaTotal('${comp.id}')" title="Excluir">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
+                <div onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'" style="cursor:pointer; font-weight:bold; display:flex; justify-content:space-between;">
+                    <span>${cp.id.toUpperCase()} (Admin: ${adm?adm.email:'-'})</span>
+                    <span>${safeBlk?'BLOQUEADO':(safeVit?'VITALICIO':'ATIVO')}</span>
                 </div>
-                <div class="company-body" style="display:none; padding:20px; border-top:1px solid #eee;">
-                    <h5 style="color:#666;">USUÁRIOS (${usersDaEmpresa.length})</h5>
-                    <table class="data-table" style="width:100%;">
-                        <thead><tr><th>NOME</th><th>EMAIL</th><th>SENHA</th><th>AÇÃO</th></tr></thead>
-                        <tbody>
-                            ${usersDaEmpresa.map(u => `
-                                <tr>
-                                    <td>${u.name}</td>
-                                    <td>${u.email}</td>
-                                    <td style="font-family:monospace; color:#007bff;">${u.senhaVisual || '***'}</td>
-                                    <td>
-                                        <button class="btn-mini btn-warning" onclick="resetarSenhaComMigracao('${u.uid}', '${u.email}', '${u.name}')">RESET</button>
-                                        <button class="btn-mini btn-danger" onclick="excluirUsuarioGlobal('${u.uid}')">DEL</button>
-                                    </td>
-                                </tr>`).join('')}
-                        </tbody>
-                    </table>
+                <div style="display:none; padding-top:10px;">
+                    <button class="btn-primary" onclick="abrirModalCreditos('${cp.id}','${safeVal}',${safeVit},${safeBlk})">EDITAR</button>
+                    <button class="btn-danger" onclick="excluirEmpresaTotal('${cp.id}')">EXCLUIR</button>
+                    <hr>
+                    <small>USUÁRIOS:</small>
+                    ${uss.map(u=>`<div>${u.name} (${u.email}) - Pass: ${u.senhaVisual||'***'}</div>`).join('')}
                 </div>
             `;
-            container.appendChild(div);
+            c.appendChild(div);
         });
-    } catch (e) {
-        console.error(e);
-        container.innerHTML = `<p style="color:red">Erro: ${e.message}</p>`;
-    }
+    } catch(e) { c.innerHTML = 'Erro: '+e.message; }
 };
 
-window.toggleCompanyDetails = function(header) {
-    const body = header.nextElementSibling;
-    body.style.display = body.style.display === 'none' ? 'block' : 'none';
-};
-
-// --- FUNÇÃO CRÍTICA: CRIAR EMPRESA (COM RECUPERAÇÃO DE ERRO) ---
 document.addEventListener('submit', async function(e) {
     if (e.target.id === 'formCreateCompany') {
         e.preventDefault();
-        var dominio = document.getElementById('newCompanyDomain').value.trim().toLowerCase();
+        var dom = document.getElementById('newCompanyDomain').value.trim().toLowerCase();
         var email = document.getElementById('newAdminEmail').value.trim();
-        var senha = document.getElementById('newAdminPassword').value.trim();
+        var pass = document.getElementById('newAdminPassword').value.trim();
         
-        if (dominio.length < 3) return alert("Domínio inválido.");
-
-        const { db, doc, setDoc, getDocs, query, collection, where } = window.dbRef;
-
+        if (dom.length < 3) return alert("Domínio curto.");
+        
         try {
-            // 1. Tenta criar Auth
-            var uid = await window.dbRef.criarAuthUsuario(email, senha);
-            
-            // 2. Se passar, cria Usuário Admin no DB
-            await setDoc(doc(db, "users", uid), {
-                uid: uid, name: "ADMIN " + dominio.toUpperCase(), email: email, role: 'admin', 
-                company: dominio, createdAt: new Date().toISOString(), approved: true, 
-                isVitalicio: false, isBlocked: false, senhaVisual: senha,
-                systemValidity: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
+            var uid = await window.dbRef.criarAuthUsuario(email, pass);
+            await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "users", uid), {
+                uid: uid, name: "ADMIN "+dom.toUpperCase(), email: email, role: 'admin', company: dom,
+                createdAt: new Date().toISOString(), approved: true, isVitalicio: false, isBlocked: false, senhaVisual: pass,
+                systemValidity: new Date(new Date().setDate(new Date().getDate()+30)).toISOString()
             });
-
         } catch (erro) {
-            // SE O EMAIL JÁ EXISTE (O Erro da imagem)
-            if (erro.code === 'auth/email-already-in-use') {
-                if(!confirm(`O e-mail ${email} JÁ EXISTE no sistema.\n\nDeseja criar apenas a empresa "${dominio}" e tentar vincular esse usuário depois?`)) {
-                    return;
-                }
-                // Prossegue para criar apenas a empresa
-            } else {
-                return alert("Erro fatal: " + erro.message);
-            }
+            if (erro.code !== 'auth/email-already-in-use') return alert(erro.message);
+            if(!confirm("Email já existe. Criar apenas a empresa?")) return;
         }
 
-        try {
-            // 3. Cria/Garante Documento da Empresa (Para aparecer na lista)
-            await setDoc(doc(db, "companies", dominio), { 
-                id: dominio, createdAt: new Date().toISOString(),
-                isBlocked: false, isVitalicio: false,
-                systemValidity: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
-            }, { merge: true }); // Merge evita sobrescrever se já existir
+        await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "companies", dom), { 
+            id: dom, createdAt: new Date().toISOString(), isBlocked: false, isVitalicio: false,
+            systemValidity: new Date(new Date().setDate(new Date().getDate()+30)).toISOString()
+        }, { merge: true });
 
-            alert(`Processo concluído para: ${dominio}`);
-            e.target.reset();
-            carregarPainelSuperAdmin();
-
-        } catch (dbError) {
-            alert("Erro ao salvar dados da empresa: " + dbError.message);
-        }
+        alert("Criado!"); e.target.reset(); carregarPainelSuperAdmin();
     }
 });
 
-// --- GESTÃO DE CRÉDITOS E BLOQUEIO ---
-window.abrirModalCreditos = function(companyId, validade, isVitalicio, isBlocked) {
-    document.getElementById('empresaIdCredito').value = companyId;
-    document.getElementById('nomeEmpresaCredito').textContent = companyId.toUpperCase();
+// MODAL CRÉDITOS SEGURO
+window.abrirModalCreditos = function(id, val, vit, blk) {
+    document.getElementById('empresaIdCredito').value = id;
+    document.getElementById('nomeEmpresaCredito').textContent = id.toUpperCase();
     
-    var texto = isVitalicio ? "VITALÍCIO" : (validade ? formatarDataParaBrasileiro(validade.split('T')[0]) : "SEM REGISTRO");
-    document.getElementById('validadeAtualCredito').textContent = texto;
-    
-    // Verificações de segurança (Evita erro null)
-    var elVitalicio = document.getElementById('checkVitalicio');
-    var elBloqueado = document.getElementById('checkBloqueado');
-    var elDivAdd = document.getElementById('divAddCreditos');
-
-    if(elVitalicio) elVitalicio.checked = isVitalicio;
-    if(elBloqueado) elBloqueado.checked = isBlocked;
-    if(elDivAdd) elDivAdd.style.display = isVitalicio ? 'none' : 'block';
-    
-    if(elVitalicio) {
-        elVitalicio.onchange = function() { 
-            if(elDivAdd) elDivAdd.style.display = this.checked ? 'none' : 'block'; 
-        };
-    }
+    var elVit = document.getElementById('checkVitalicio');
+    var elBlk = document.getElementById('checkBloqueado');
+    if(elVit) elVit.checked = vit;
+    if(elBlk) elBlk.checked = blk;
     
     document.getElementById('modalCreditos').style.display = 'flex';
 };
 
 window.salvarCreditosEmpresa = async function() {
-    var companyId = document.getElementById('empresaIdCredito').value;
-    
-    // Leitura Segura
-    var elVitalicio = document.getElementById('checkVitalicio');
-    var elBloqueado = document.getElementById('checkBloqueado');
-    var isVitalicio = elVitalicio ? elVitalicio.checked : false;
-    var isBloqueado = elBloqueado ? elBloqueado.checked : false;
-    
-    var meses = parseInt(document.getElementById('qtdCreditosAdd').value);
+    var id = document.getElementById('empresaIdCredito').value;
+    var vit = document.getElementById('checkVitalicio').checked;
+    var blk = document.getElementById('checkBloqueado').checked;
+    var mes = parseInt(document.getElementById('qtdCreditosAdd').value);
     
     try {
-        const { db, collection, query, where, getDocs, updateDoc, doc, setDoc, writeBatch } = window.dbRef;
-        
-        var dadosEmpresa = { isVitalicio: isVitalicio, isBlocked: isBloqueado };
+        var data = { isVitalicio: vit, isBlocked: blk };
         var novaData = null;
-
-        if (!isVitalicio && !isBloqueado) {
-            const q = query(collection(db, "users"), where("company", "==", companyId), where("role", "==", "admin"));
-            const snap = await getDocs(q);
+        
+        if(!vit && !blk) {
             var base = new Date();
-            // Se já tem validade futura, soma nela
-            if(!snap.empty) {
-                var adm = snap.docs[0].data();
-                if(adm.systemValidity && new Date(adm.systemValidity) > base) base = new Date(adm.systemValidity);
+            // Tenta pegar data atual
+            const q = window.dbRef.query(window.dbRef.collection(window.dbRef.db, "users"), window.dbRef.where("company", "==", id), window.dbRef.where("role", "==", "admin"));
+            const s = await window.dbRef.getDocs(q);
+            if(!s.empty && s.docs[0].data().systemValidity) {
+                var dv = new Date(s.docs[0].data().systemValidity);
+                if(dv > base) base = dv;
             }
-            // Soma os meses
-            if (meses > 0) base.setDate(base.getDate() + (meses * 30));
-            
+            if(mes > 0) base.setDate(base.getDate() + (mes * 30));
             novaData = base.toISOString();
-            dadosEmpresa.systemValidity = novaData;
+            data.systemValidity = novaData;
         }
-
-        // 1. Atualiza Empresa
-        await setDoc(doc(db, "companies", companyId), dadosEmpresa, { merge: true });
-
-        // 2. Atualiza Usuários (Batch)
-        const qUsers = query(collection(db, "users"), where("company", "==", companyId));
-        const snapUsers = await getDocs(qUsers);
-        const batch = writeBatch(db);
         
-        snapUsers.forEach(uDoc => {
-            let updateData = { isBlocked: isBloqueado, isVitalicio: isVitalicio };
-            if (novaData) updateData.systemValidity = novaData;
-            batch.update(uDoc.ref, updateData);
+        await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "companies", id), data, { merge: true });
+        
+        // Atualiza usuarios em batch
+        const qu = window.dbRef.query(window.dbRef.collection(window.dbRef.db, "users"), window.dbRef.where("company", "==", id));
+        const su = await window.dbRef.getDocs(qu);
+        const b = window.dbRef.writeBatch(window.dbRef.db);
+        su.forEach(doc => {
+            let up = { isBlocked: blk, isVitalicio: vit };
+            if(novaData) up.systemValidity = novaData;
+            b.update(doc.ref, up);
         });
-        await batch.commit();
-
-        alert("Empresa atualizada com sucesso!");
-        document.getElementById('modalCreditos').style.display = 'none';
-        carregarPainelSuperAdmin();
-    } catch(e) { alert("Erro: " + e.message); }
-};
-
-window.excluirEmpresaTotal = async function(companyId) {
-    if (prompt(`Digite "DELETAR" para apagar a empresa ${companyId} e TODOS os usuários:`) !== "DELETAR") return;
-    try {
-        const { db, collection, query, where, getDocs, doc, writeBatch } = window.dbRef;
-        const batch = writeBatch(db);
+        await b.commit();
         
-        // Deleta usuários
-        const q = query(collection(db, "users"), where("company", "==", companyId));
-        const snap = await getDocs(q);
-        snap.forEach(d => batch.delete(d.ref));
-        
-        // Deleta empresa
-        batch.delete(doc(db, "companies", companyId));
-        
-        await batch.commit();
-        alert("Empresa excluída.");
-        carregarPainelSuperAdmin();
-    } catch (e) { alert("Erro: " + e.message); }
+        alert("Salvo!"); document.getElementById('modalCreditos').style.display = 'none'; carregarPainelSuperAdmin();
+    } catch(e) { alert(e.message); }
 };
 
-// ... (Funções Reset Senha e Excluir Usuário Global mantidas iguais à versão anterior) ...
-window.resetarSenhaComMigracao = async function(oldUid, email, nome) {
-    var novaSenha = prompt(`NOVA SENHA PARA ${nome}:`);
-    if(!novaSenha || novaSenha.length < 6) return alert("Mín 6 dígitos.");
-    try {
-        let newUid = await window.dbRef.criarAuthUsuario(email, novaSenha);
-        const { db, doc, getDoc, setDoc, deleteDoc } = window.dbRef;
-        const oldRef = doc(db, "users", oldUid);
-        const oldSnap = await getDoc(oldRef);
-        if (oldSnap.exists()) {
-            const data = oldSnap.data();
-            data.uid = newUid; data.senhaVisual = novaSenha;
-            await setDoc(doc(db, "users", newUid), data);
-            await deleteDoc(oldRef);
-        }
-        alert("Senha alterada."); carregarPainelSuperAdmin();
-    } catch (e) { alert("Erro: " + e.message); }
+window.excluirEmpresaTotal = async function(id) {
+    if(prompt(`Digite DELETAR para apagar ${id}:`) !== "DELETAR") return;
+    const b = window.dbRef.writeBatch(window.dbRef.db);
+    const q = window.dbRef.query(window.dbRef.collection(window.dbRef.db, "users"), window.dbRef.where("company", "==", id));
+    const s = await window.dbRef.getDocs(q);
+    s.forEach(d => b.delete(d.ref));
+    b.delete(window.dbRef.doc(window.dbRef.db, "companies", id));
+    await b.commit();
+    alert("Excluído!"); carregarPainelSuperAdmin();
 };
 
-window.excluirUsuarioGlobal = async function(uid) {
-    if(!confirm("Remover usuário?")) return;
-    try { await window.dbRef.deleteDoc(window.dbRef.doc(window.dbRef.db, "users", uid)); carregarPainelSuperAdmin(); } 
-    catch(e) { alert(e.message); }
-};
-
-// -----------------------------------------------------------------------------
-// MEUS DADOS (FUNCIONÁRIO)
-// -----------------------------------------------------------------------------
+// MEUS DADOS
 window.renderizarMeusDados = function() {
-    var user = window.USUARIO_ATUAL;
-    var dados = CACHE_FUNCIONARIOS.find(f => String(f.id) === String(user.uid)) || user;
-    var html = `
-        <div style="background:white; padding:20px; border-radius:8px; text-align:center;">
-            <i class="fas fa-user-circle" style="font-size:3rem; color:var(--primary-color);"></i>
-            <h3>${dados.nome || dados.name}</h3><span class="status-pill pill-active">${dados.funcao || dados.role}</span>
-            <div style="margin-top:20px; text-align:left;">
-                ${makeLine('Telefone', dados.telefone, 'TELEFONE')}
-                ${makeLine('Endereço', dados.endereco, 'ENDERECO')}
-                ${makeLine('PIX', dados.pix, 'PIX')}
-            </div>
-        </div>`;
-    var c = document.getElementById('meusDadosContainer'); if(c) c.innerHTML = html;
+    var u = window.USUARIO_ATUAL;
+    var d = CACHE_FUNCIONARIOS.find(f => String(f.id) === String(u.uid)) || u;
+    var c = document.getElementById('meusDadosContainer');
+    if(c) c.innerHTML = `<div style="text-align:center; padding:20px; background:white;"><h3>${d.nome||d.name}</h3><p>${d.funcao||d.role}</p><hr><p>Tel: ${d.telefone||'-'}</p><p>End: ${d.endereco||'-'}</p><p>Pix: ${d.pix||'-'}</p></div>`;
 };
-function makeLine(l, v, f) { return `<div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #eee;"><div><strong>${l}:</strong> ${v||'-'}</div><button class="btn-mini btn-secondary" onclick="solicitarAlt('${f}','${v}')"><i class="fas fa-pen"></i></button></div>`; }
-window.solicitarAlt = function(c, v) { var n=prompt("Novo valor:",v); if(n&&n!==v) { var r={id:Date.now().toString(), data:new Date().toISOString(), funcionarioId:window.USUARIO_ATUAL.uid, funcionarioEmail:window.USUARIO_ATUAL.email, campo:c, valorAntigo:v, valorNovo:n, status:'PENDENTE'}; CACHE_PROFILE_REQUESTS.push(r); salvarProfileRequests(CACHE_PROFILE_REQUESTS).then(()=>alert("Solicitado!")); }};
 
-// -----------------------------------------------------------------------------
 // INICIALIZAÇÃO
-// -----------------------------------------------------------------------------
 window.initSystemByRole = async function(user) {
     console.log("INIT:", user.role);
     window.USUARIO_ATUAL = user;
     
-    // 1. Esconde tudo
     document.querySelectorAll('.page').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); });
     document.querySelectorAll('.sidebar ul').forEach(ul => ul.style.display = 'none');
 
-    // 2. Super Admin (Bypass Sync)
     if (EMAILS_MESTRES.includes(user.email) || user.role === 'admin_master') {
         document.getElementById('menu-super-admin').style.display = 'block';
         var p = document.getElementById('super-admin');
@@ -1516,7 +979,6 @@ window.initSystemByRole = async function(user) {
         return;
     }
 
-    // 3. Sync Dados (Admin/Func)
     await sincronizarDadosComFirebase();
     preencherTodosSelects();
 
@@ -1526,6 +988,7 @@ window.initSystemByRole = async function(user) {
         var h = document.getElementById('home');
         if(h) { h.style.display='block'; setTimeout(()=>h.classList.add('active'), 50); }
         atualizarDashboard();
+        renderizarCalendario();
     } else {
         document.getElementById('menu-employee').style.display = 'block';
         window.MODO_APENAS_LEITURA = true;
@@ -1536,7 +999,7 @@ window.initSystemByRole = async function(user) {
     }
 };
 
-// Navegação
+// NAVEGAÇÃO E BACKUP
 document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', function() {
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -1553,3 +1016,26 @@ document.querySelectorAll('.nav-item').forEach(item => {
 });
 document.getElementById('mobileMenuBtn')?.addEventListener('click', ()=>document.getElementById('sidebar').classList.toggle('active'));
 document.getElementById('sidebarOverlay')?.addEventListener('click', ()=>document.getElementById('sidebar').classList.remove('active'));
+
+window.exportDataBackup = function() {
+    var data = { meta: { date: new Date(), user: window.USUARIO_ATUAL.email }, data: { funcionarios: CACHE_FUNCIONARIOS, veiculos: CACHE_VEICULOS, operacoes: CACHE_OPERACOES, despesas: CACHE_DESPESAS } };
+    var a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data)); a.download = "backup.json"; a.click();
+};
+
+window.importDataBackup = function(event) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        if(confirm("Restaurar backup?")) {
+            var json = JSON.parse(e.target.result);
+            if(json.data) {
+                localStorage.setItem(CHAVE_DB_FUNCIONARIOS, JSON.stringify(json.data.funcionarios));
+                localStorage.setItem(CHAVE_DB_VEICULOS, JSON.stringify(json.data.veiculos));
+                localStorage.setItem(CHAVE_DB_OPERACOES, JSON.stringify(json.data.operacoes));
+                localStorage.setItem(CHAVE_DB_DESPESAS, JSON.stringify(json.data.despesas));
+                alert("Backup restaurado! Recarregando...");
+                window.location.reload();
+            }
+        }
+    };
+    reader.readAsText(event.target.files[0]);
+};
