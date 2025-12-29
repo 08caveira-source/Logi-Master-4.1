@@ -154,7 +154,6 @@ function buscarReciboPorId(id) { return CACHE_RECIBOS.find(r => String(r.id) ===
 
 // Inicialização Inicial de Dados (Local)
 carregarTodosDadosLocais();
-
 // =============================================================================
 // PARTE 2: DASHBOARD, PRIVACIDADE E GRÁFICOS
 // =============================================================================
@@ -184,6 +183,11 @@ window.toggleDashboardPrivacy = function() {
 };
 
 window.atualizarDashboard = function() {
+    // PROTEÇÃO SUPER ADMIN: Não executa cálculos de dashboard comum se for Master
+    if (window.USUARIO_ATUAL && (window.USUARIO_ATUAL.role === 'admin_master' || window.EMAILS_MESTRES && window.EMAILS_MESTRES.includes(window.USUARIO_ATUAL.email))) {
+        return;
+    }
+
     console.log("Calculando métricas do Dashboard...");
     
     var mesAtual = window.currentDate.getMonth(); 
@@ -246,6 +250,11 @@ window.atualizarDashboard = function() {
 
 // --- NOVA FUNÇÃO DE GRÁFICO: SUPORTA FILTRO DE VEÍCULO E MOTORISTA ---
 function atualizarGraficoPrincipal(mes, ano) {
+    // PROTEÇÃO SUPER ADMIN
+    if (window.USUARIO_ATUAL && (window.USUARIO_ATUAL.role === 'admin_master' || window.EMAILS_MESTRES && window.EMAILS_MESTRES.includes(window.USUARIO_ATUAL.email))) {
+        return;
+    }
+
     var ctx = document.getElementById('mainChart');
     if (!ctx) return; 
 
@@ -388,6 +397,11 @@ function atualizarGraficoPrincipal(mes, ano) {
 // -----------------------------------------------------------------------------
 
 window.renderizarCalendario = function() {
+    // PROTEÇÃO SUPER ADMIN
+    if (window.USUARIO_ATUAL && (window.USUARIO_ATUAL.role === 'admin_master' || window.EMAILS_MESTRES && window.EMAILS_MESTRES.includes(window.USUARIO_ATUAL.email))) {
+        return;
+    }
+
     var grid = document.getElementById('calendarGrid');
     var label = document.getElementById('currentMonthYear');
     if (!grid || !label) return;
@@ -645,7 +659,6 @@ window.abrirModalDetalhesDia = function(dataString) {
     modalBody.innerHTML = htmlLista || '<p style="text-align:center; padding:20px;">Nenhuma operação registrada neste dia.</p>';
     document.getElementById('modalDayOperations').style.display = 'block';
 };
-
 // =============================================================================
 // PARTE 3: GESTÃO DE CADASTROS, INTERFACE DE FORMULÁRIOS E FUNÇÕES DE UI
 // =============================================================================
@@ -1107,7 +1120,6 @@ window.closeModal = function() { document.getElementById('operationDetailsModal'
 window.closeCheckinConfirmModal = function() { document.getElementById('modalCheckinConfirm').style.display = 'none'; };
 window.closeAdicionarAjudanteModal = function() { document.getElementById('modalAdicionarAjudante').style.display = 'none'; };
 function renderizarInformacoesEmpresa() { var div = document.getElementById('viewMinhaEmpresaContent'); if (CACHE_MINHA_EMPRESA.razaoSocial) { div.innerHTML = `<strong>${CACHE_MINHA_EMPRESA.razaoSocial}</strong><br>CNPJ: ${CACHE_MINHA_EMPRESA.cnpj}<br>Tel: ${formatarTelefoneBrasil(CACHE_MINHA_EMPRESA.telefone)}`; } else { div.innerHTML = "Nenhum dado cadastrado."; } }
-
 // =============================================================================
 // PARTE 4: MONITORAMENTO, GESTÃO DE EQUIPE, RELATÓRIOS E RECIBOS
 // =============================================================================
@@ -1697,7 +1709,6 @@ window.renderizarHistoricoRecibos = function() {
         tbody.appendChild(tr);
     });
 };
-
 // =============================================================================
 // PARTE 5: SUPER ADMIN (MASTER), CRÉDITOS E INICIALIZAÇÃO
 // =============================================================================
@@ -2055,6 +2066,13 @@ window.initSystemByRole = async function(user) {
         document.getElementById('super-admin').style.display = 'block';
         document.getElementById('super-admin').classList.add('active');
         
+        // CORREÇÃO: Limpar dados de empresas específicas da memória para não misturar no cálculo
+        CACHE_OPERACOES = [];
+        CACHE_FUNCIONARIOS = [];
+        CACHE_DESPESAS = [];
+        CACHE_VEICULOS = [];
+        console.log("Memória operacional limpa para modo Super Admin.");
+
         carregarPainelSuperAdmin(true);
         return; // BLOQUEIA A EXECUÇÃO DO RESTO (CORREÇÃO DO FLASH)
     }
