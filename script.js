@@ -1841,25 +1841,24 @@ const EMAILS_MESTRES = ["admin@logimaster.com", "suporte@logimaster.com"];
 var _cacheGlobalUsers = [];
 
 // =============================================================================
-// ATUALIZAÇÃO: FUNÇÕES DO SUPER ADMIN (COM RESET DE SENHA)
+// ATUALIZAÇÃO: SUPER ADMIN - RESET DE SENHA (RECRIAÇÃO INTELIGENTE)
 // =============================================================================
 
 window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
     const container = document.getElementById('superAdminContainer');
     if(!container) return;
     
-    container.innerHTML = '<p style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Carregando ecossistema...</p>';
+    container.innerHTML = '<p style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Carregando dados...</p>';
 
     try {
         const { db, collection, getDocs } = window.dbRef;
         
-        // 1. Busca Todas as Empresas
+        // Carrega dados
         const companiesSnap = await getDocs(collection(db, "companies"));
+        const usersSnap = await getDocs(collection(db, "users"));
+        
         const companies = [];
         companiesSnap.forEach(doc => companies.push({ id: doc.id, ...doc.data() }));
-
-        // 2. Busca Todos os Usuários
-        const usersSnap = await getDocs(collection(db, "users"));
         const users = [];
         usersSnap.forEach(doc => users.push({ uid: doc.id, ...doc.data() }));
 
@@ -1871,28 +1870,25 @@ window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
         }
 
         companies.forEach(comp => {
-            // Filtra usuários desta empresa
             const usersDaEmpresa = users.filter(u => u.company === comp.id);
             const admin = usersDaEmpresa.find(u => u.role === 'admin');
 
-            // Status da Validade
-            let validadeTexto = "SEM DADOS";
+            // Visual Status
             let statusPill = "";
-
+            let validadeTexto = "SEM DADOS";
+            
             if (comp.isBlocked) {
-                validadeTexto = "BLOQUEADO (PAUSADO)";
-                statusPill = `<span class="status-pill pill-paused"><i class="fas fa-pause-circle"></i> PAUSADO</span>`;
+                validadeTexto = "BLOQUEADO";
+                statusPill = `<span class="status-pill pill-paused"><i class="fas fa-pause"></i></span>`;
             } else if (comp.isVitalicio) {
                 validadeTexto = "VITALÍCIO";
-                statusPill = `<span class="status-pill pill-active">VITALÍCIO</span>`;
+                statusPill = `<span class="status-pill pill-active">OK</span>`;
             } else if (comp.systemValidity) {
                 const val = new Date(comp.systemValidity);
-                const hoje = new Date();
-                validadeTexto = formatarDataParaBrasileiro(comp.systemValidity);
-                if (val < hoje) {
-                    statusPill = `<span class="status-pill pill-blocked">VENCIDO</span>`;
-                } else {
-                    statusPill = `<span class="status-pill pill-active">ATIVO</span>`;
+                if (val < new Date()) statusPill = `<span class="status-pill pill-blocked">EXP</span>`;
+                else {
+                    statusPill = `<span class="status-pill pill-active">OK</span>`;
+                    validadeTexto = formatarDataParaBrasileiro(comp.systemValidity);
                 }
             }
 
@@ -1909,22 +1905,22 @@ window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
                     </div>
                     <div class="company-meta">
                         ${statusPill}
-                        <span>Validade: <strong>${validadeTexto}</strong></span>
+                        <span>Val: <strong>${validadeTexto}</strong></span>
                         <button class="btn-primary btn-super-action" onclick="event.stopPropagation(); abrirModalCreditos('${comp.id}')">
-                            <i class="fas fa-calendar-alt"></i> GERENCIAR
+                            <i class="fas fa-cog"></i>
                         </button>
                     </div>
                 </div>
                 <div class="company-content">
-                    <h5>USUÁRIOS CADASTRADOS (${usersDaEmpresa.length})</h5>
+                    <h5>USUÁRIOS (${usersDaEmpresa.length})</h5>
                     <table class="data-table">
                         <thead>
                             <tr>
                                 <th>NOME</th>
                                 <th>EMAIL</th>
                                 <th>FUNÇÃO</th>
-                                <th>SENHA (REF)</th>
-                                <th>AÇÃO</th>
+                                <th>SENHA VISUAL</th>
+                                <th>RESETAR</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1933,10 +1929,10 @@ window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
                                     <td>${u.name}</td>
                                     <td>${u.email}</td>
                                     <td>${u.role}</td>
-                                    <td style="font-family:monospace; color:#555;">${u.senhaVisual || '***'}</td>
+                                    <td style="color:#777;">${u.senhaVisual || '***'}</td>
                                     <td>
-                                        <button class="btn-mini btn-warning" onclick="resetarSenhaAdminEmpresa('${u.uid}', '${u.name}')" title="Resetar Senha Manualmente">
-                                            <i class="fas fa-key"></i>
+                                        <button class="btn-mini btn-warning" onclick="resetarSenhaComMigracao('${u.uid}', '${u.email}', '${u.name}')" title="Forçar Nova Senha">
+                                            <i class="fas fa-key"></i> NOVA SENHA
                                         </button>
                                     </td>
                                 </tr>
@@ -1950,37 +1946,125 @@ window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
 
     } catch (e) {
         console.error(e);
-        container.innerHTML = '<p style="color:red">Erro ao carregar dados.</p>';
+        container.innerHTML = '<p style="color:red">Erro ao carregar.</p>';
     }
 };
 
-// --- NOVA FUNÇÃO: RESET DE SENHA PELO SUPER ADMIN ---
-window.resetarSenhaAdminEmpresa = async function(uid, nomeUser) {
-    // 1. Solicita a nova senha
-    var novaSenha = prompt("RESET DE SENHA (SUPER ADMIN)\n\nDefina a nova senha para o usuário " + nomeUser + ":\n(A senha antiga será substituída no registro)");
+// --- LÓGICA DE RESET FORÇADO (MIGRAÇÃO DE DADOS) ---
+window.resetarSenhaComMigracao = async function(oldUid, email, nome) {
+    // 1. Pedir a nova senha
+    var novaSenha = prompt(`RESETAR SENHA DE: ${nome}\n(${email})\n\nComo o e-mail é fictício, vamos recriar o acesso mantendo os dados.\n\nDIGITE A NOVA SENHA (Mín 6 dígitos):`);
     
-    if (novaSenha === null) return; // Cancelou
-    if (novaSenha.trim().length < 6) {
-        alert("A nova senha deve ter no mínimo 6 caracteres.");
+    if(!novaSenha || novaSenha.length < 6) {
+        if(novaSenha !== null) alert("Senha muito curta. Cancelado.");
         return;
     }
 
+    // Feedback visual
+    const btn = document.activeElement; // Botão clicado
+    if(btn) btn.textContent = "PROCESSANDO...";
+
     try {
-        const { db, doc, updateDoc } = window.dbRef;
+        // 2. Tentar Criar Novo Usuário (Secondary App)
+        // Isso vai falhar se o email já existir no Authentication
+        let newUid = null;
+        try {
+            newUid = await window.dbRef.criarAuthUsuario(email, novaSenha);
+        } catch (authError) {
+            if (authError.code === 'auth/email-already-in-use') {
+                // 3. FALHA ESPERADA: O e-mail está preso no Auth.
+                alert(`IMPORTANTE: O e-mail "${email}" já está travado no sistema de Autenticação.\n\nPARA CONTINUAR:\n1. Abra uma nova aba no FIREBASE CONSOLE.\n2. Vá em 'Authentication' e EXCLUA a linha do e-mail: ${email}.\n3. Volte aqui e clique em OK nesta mensagem.`);
+                
+                // Tenta de novo após o admin excluir manualmente
+                try {
+                    newUid = await window.dbRef.criarAuthUsuario(email, novaSenha);
+                } catch (retryError) {
+                    alert("Ainda não foi possível criar. Verifique se excluiu corretamente no Console e tente novamente.");
+                    if(btn) btn.innerHTML = '<i class="fas fa-key"></i> NOVA SENHA';
+                    return;
+                }
+            } else {
+                throw authError;
+            }
+        }
+
+        // 4. Se chegou aqui, temos o newUid e o usuário foi recriado com a nova senha.
+        // Agora precisamos mover os DADOS do oldUid para o newUid.
         
-        // 2. Atualiza no Firestore (Banco de Dados)
-        await updateDoc(doc(db, "users", uid), {
-            senhaVisual: novaSenha
+        console.log(`Migrando dados de ${oldUid} para ${newUid}...`);
+        
+        const { db, doc, getDoc, setDoc, deleteDoc } = window.dbRef;
+
+        // A. Migrar Perfil do Usuário
+        const oldUserRef = doc(db, "users", oldUid);
+        const oldUserSnap = await getDoc(oldUserRef);
+        
+        if (oldUserSnap.exists()) {
+            const userData = oldUserSnap.data();
+            // Atualiza com os novos dados de acesso
+            userData.uid = newUid;
+            userData.senhaVisual = novaSenha;
+            userData.migratedAt = new Date().toISOString();
+            
+            // Salva no novo ID
+            await setDoc(doc(db, "users", newUid), userData);
+            // Deleta o perfil antigo
+            await deleteDoc(oldUserRef);
+        }
+
+        // B. Atualizar Referências nas Operações e Recibos (Localmente + Cloud)
+        // Como o sistema é híbrido, atualizamos as listas locais e salvamos tudo.
+        // Isso é mais eficiente que buscar documento por documento no Firestore.
+        
+        let migrouOps = 0;
+        let migrouRecibos = 0;
+
+        // Atualiza Operações (Motorista ID e Ajudantes)
+        CACHE_OPERACOES.forEach(op => {
+            let mudou = false;
+            if (op.motoristaId === oldUid) {
+                op.motoristaId = newUid;
+                mudou = true;
+                migrouOps++;
+            }
+            if (op.ajudantes) {
+                op.ajudantes.forEach(aj => {
+                    if (aj.id === oldUid) {
+                        aj.id = newUid;
+                        mudou = true;
+                    }
+                });
+            }
         });
 
-        alert("SUCESSO!\n\nA senha de cadastro foi atualizada para: " + novaSenha + "\n\nIMPORTANTE: Informe esta senha ao usuário. Caso ele não consiga logar, peça para usar a função 'Esqueci minha senha' com o e-mail cadastrado.");
+        // Atualiza Recibos
+        CACHE_RECIBOS.forEach(rec => {
+            if (rec.funcionarioId === oldUid) {
+                rec.funcionarioId = newUid;
+                migrouRecibos++;
+            }
+        });
+
+        // Atualiza Lista de Funcionários
+        const idx = CACHE_FUNCIONARIOS.findIndex(f => f.id === oldUid);
+        if (idx !== -1) {
+            CACHE_FUNCIONARIOS[idx].id = newUid;
+            CACHE_FUNCIONARIOS[idx].senhaVisual = novaSenha; // Atualiza visualmente também
+        }
+
+        // Salva tudo na nuvem
+        await salvarListaOperacoes(CACHE_OPERACOES);
+        await salvarListaRecibos(CACHE_RECIBOS);
+        await salvarListaFuncionarios(CACHE_FUNCIONARIOS);
+
+        alert(`SUCESSO!\n\nSenha alterada para: ${novaSenha}\n\nO usuário foi recriado e ${migrouOps} operações + ${migrouRecibos} recibos foram migrados para o novo acesso.`);
         
-        // 3. Recarrega o painel para mostrar a nova senha na tabela
         carregarPainelSuperAdmin(true);
 
-    } catch (e) {
-        console.error(e);
-        alert("Erro ao atualizar senha no banco de dados: " + e.message);
+    } catch (erro) {
+        console.error(erro);
+        alert("Erro fatal durante a migração: " + erro.message);
+        if(btn) btn.innerHTML = '<i class="fas fa-key"></i> NOVA SENHA';
     }
 };
 
