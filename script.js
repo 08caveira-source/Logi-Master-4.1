@@ -156,184 +156,61 @@ function buscarReciboPorId(id) { return CACHE_RECIBOS.find(r => String(r.id) ===
 // Inicialização Inicial de Dados (Local)
 carregarTodosDadosLocais();
 // =============================================================================
-// ARQUIVO: script.js
-// PARTE 2/5: LÓGICA DE DASHBOARD, CÁLCULOS FINANCEIROS E GRÁFICOS INTERATIVOS
 // =============================================================================
-// =============================================================================
-// CORREÇÃO: FUNÇÕES DE CONFIGURAÇÃO (BACKUP E RESET)
+// PARTE 2/5 (ATUALIZADA): DASHBOARD, PRIVACIDADE E GRÁFICOS
 // =============================================================================
 
-// 1. EXPORTAR DADOS (BACKUP JSON)
-window.exportDataBackup = function() {
-    // Reúne todos os caches atuais em um objeto
-    var backupData = {
-        funcionarios: CACHE_FUNCIONARIOS || [],
-        veiculos: CACHE_VEICULOS || [],
-        contratantes: CACHE_CONTRATANTES || [],
-        operacoes: CACHE_OPERACOES || [],
-        minhaEmpresa: CACHE_MINHA_EMPRESA || {},
-        despesas: CACHE_DESPESAS || [],
-        atividades: CACHE_ATIVIDADES || [],
-        recibos: CACHE_RECIBOS || [],
-        profileRequests: CACHE_PROFILE_REQUESTS || [],
-        exportDate: new Date().toISOString(),
-        version: "22.0"
-    };
-
-    // Cria o arquivo virtual para download
-    var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData));
-    var downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", "backup_logimaster_" + new Date().toISOString().slice(0,10) + ".json");
-    document.body.appendChild(downloadAnchorNode); // Necessário para Firefox
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
-};
-
-// 2. IMPORTAR DADOS (RESTORE)
-window.importDataBackup = function(event) {
-    var file = event.target.files[0];
-    if (!file) return;
-
-    var reader = new FileReader();
-    reader.onload = async function(e) {
-        try {
-            var data = JSON.parse(e.target.result);
-            
-            if(!confirm("ATENÇÃO: Importar um backup substituirá os dados atuais da tela (mesclagem).\nDeseja continuar?")) {
-                event.target.value = ''; // Limpa input
-                return;
-            }
-
-            // Atualiza memória e salva (Isso dispara atualização no Firebase também)
-            if(data.funcionarios) await salvarListaFuncionarios(data.funcionarios);
-            if(data.veiculos) await salvarListaVeiculos(data.veiculos);
-            if(data.contratantes) await salvarListaContratantes(data.contratantes);
-            if(data.operacoes) await salvarListaOperacoes(data.operacoes);
-            if(data.minhaEmpresa) await salvarDadosMinhaEmpresa(data.minhaEmpresa);
-            if(data.despesas) await salvarListaDespesas(data.despesas);
-            if(data.atividades) await salvarListaAtividades(data.atividades);
-            if(data.recibos) await salvarListaRecibos(data.recibos);
-
-            alert("Backup importado com sucesso! A página será recarregada.");
-            location.reload();
-            
-        } catch (error) {
-            console.error(error);
-            alert("Erro ao ler arquivo de backup: " + error.message);
-        }
-    };
-    reader.readAsText(file);
-};
-
-// 3. ZERAR SISTEMA (COM PROTEÇÃO POR SENHA)
-window.resetSystemData = async function() {
-    // 1. Confirmação Inicial
-    if(!confirm("PERIGO: Isso apagará TODOS os dados (Funcionários, Veículos, Operações, Financeiro) desta empresa.\n\nA ação é irreversível. Deseja continuar?")) return;
+// --- NOVA FUNÇÃO: TOGGLE PRIVACIDADE DASHBOARD ---
+window.toggleDashboardPrivacy = function() {
+    const targets = document.querySelectorAll('.privacy-target');
+    const icon = document.getElementById('btnPrivacyIcon');
     
-    // 2. Solicitação da Senha
-    var senhaConfirmacao = prompt("SEGURANÇA: Para prosseguir com a exclusão total, digite sua SENHA DE LOGIN:");
-    
-    if (!senhaConfirmacao) return; // Cancelou ou deixou vazio
+    if (targets.length === 0) return;
 
-    var btn = document.querySelector('button[onclick="resetSystemData()"]');
-    if(btn) {
-        btn.disabled = true;
-        btn.textContent = "VERIFICANDO...";
-    }
+    // Verifica estado atual baseado no primeiro elemento
+    const isBlurred = targets[0].classList.contains('privacy-blur');
 
-    try {
-        // 3. Reautenticação no Firebase para validar a senha
-        const user = window.dbRef.auth.currentUser;
-        if (!user) throw new Error("Usuário não autenticado.");
-
-        // Cria a credencial com a senha digitada
-        const credential = window.dbRef.EmailAuthProvider.credential(user.email, senhaConfirmacao);
-        
-        // Tenta reautenticar. Se a senha estiver errada, vai cair no catch.
-        await window.dbRef.reauthenticateWithCredential(user, credential);
-
-        // --- SE PASSOU DAQUI, A SENHA ESTÁ CORRETA ---
-        
-        btn.textContent = "LIMPANDO DADOS...";
-
-        // Salva listas vazias para limpar o LocalStorage E o Firebase
-        await salvarListaFuncionarios([]);
-        await salvarListaVeiculos([]);
-        await salvarListaContratantes([]);
-        await salvarListaOperacoes([]);
-        await salvarDadosMinhaEmpresa({});
-        await salvarListaDespesas([]);
-        await salvarListaAtividades([]);
-        await salvarListaRecibos([]);
-        await salvarProfileRequests([]);
-
-        alert("SISTEMA ZERADO COM SUCESSO!\n\nTodos os registros foram apagados.");
-        location.reload();
-
-    } catch (e) {
-        console.error(e);
-        // Tratamento de erros comuns de senha
-        if (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password') {
-            alert("SENHA INCORRETA.\nAção cancelada por segurança.");
-        } else if (e.code === 'auth/too-many-requests') {
-            alert("Muitas tentativas falhas. Tente novamente mais tarde.");
+    targets.forEach(el => {
+        if (isBlurred) {
+            el.classList.remove('privacy-blur');
         } else {
-            alert("Erro ao zerar sistema: " + e.message);
+            el.classList.add('privacy-blur');
         }
-        
-        if(btn) {
-            btn.disabled = false;
-            btn.textContent = "ZERAR SISTEMA"; // Restaura texto original
-            // Re-adiciona o ícone se necessário, ou apenas deixa o texto
-            btn.innerHTML = '<i class="fas fa-trash-alt"></i> ZERAR SISTEMA'; 
-        }
+    });
+
+    // Alterna ícone
+    if (icon) {
+        icon.className = isBlurred ? 'fas fa-eye' : 'fas fa-eye-slash';
     }
 };
-// -----------------------------------------------------------------------------
-// 6. CÁLCULOS FINANCEIROS E ATUALIZAÇÃO DO DASHBOARD (HOME)
-// -----------------------------------------------------------------------------
 
 window.atualizarDashboard = function() {
     console.log("Calculando métricas do Dashboard...");
     
-    var mesAtual = window.currentDate.getMonth(); // 0 a 11
+    var mesAtual = window.currentDate.getMonth(); 
     var anoAtual = window.currentDate.getFullYear();
 
     var faturamentoMes = 0;
     var custosMes = 0; 
     var receitaHistorico = 0;
     
-    // Cálculo Global para os Cards do Dashboard (Home)
     CACHE_OPERACOES.forEach(function(op) {
         if (op.status === 'CANCELADA') return;
         
         var teveFalta = (op.checkins && op.checkins.faltaMotorista);
         var valorFat = Number(op.faturamento) || 0;
-        
-        // Custo Operacional (Combustível + Despesas Extras)
         var custoOp = (Number(op.despesas) || 0) + (Number(op.combustivel) || 0);
         
-        // Custo com Motorista (Comissão)
-        if (!teveFalta) {
-            custoOp += (Number(op.comissao) || 0);
-        }
+        if (!teveFalta) custoOp += (Number(op.comissao) || 0);
 
-        // Custo com Ajudantes
         if (op.ajudantes && Array.isArray(op.ajudantes)) {
             op.ajudantes.forEach(aj => {
-                // Se o ajudante específico não teve falta registrada, soma
                 var ajudanteFaltou = (op.checkins && op.checkins.faltas && op.checkins.faltas[aj.id]);
-                if (!ajudanteFaltou) {
-                    custoOp += (Number(aj.diaria) || 0);
-                }
+                if (!ajudanteFaltou) custoOp += (Number(aj.diaria) || 0);
             });
         }
 
-        // Histórico Global (Confirmadas/Finalizadas)
-        if (op.status === 'CONFIRMADA' || op.status === 'FINALIZADA') {
-            receitaHistorico += valorFat;
-        }
+        if (op.status === 'CONFIRMADA' || op.status === 'FINALIZADA') receitaHistorico += valorFat;
 
         var dataOp = new Date(op.data + 'T12:00:00'); 
         if (dataOp.getMonth() === mesAtual && dataOp.getFullYear() === anoAtual) {
@@ -342,7 +219,6 @@ window.atualizarDashboard = function() {
         }
     });
 
-    // Soma Despesas Gerais do Mês
     CACHE_DESPESAS.forEach(function(desp) {
         var dataDesp = new Date(desp.data + 'T12:00:00');
         if (dataDesp.getMonth() === mesAtual && dataDesp.getFullYear() === anoAtual) {
@@ -353,7 +229,7 @@ window.atualizarDashboard = function() {
     var lucroMes = faturamentoMes - custosMes;
     var margem = faturamentoMes > 0 ? ((lucroMes / faturamentoMes) * 100) : 0;
 
-    // Atualiza DOM dos Cards
+    // Atualiza DOM
     var elFat = document.getElementById('faturamentoMes');
     var elDesp = document.getElementById('despesasMes');
     var elLucro = document.getElementById('receitaMes');
@@ -362,129 +238,89 @@ window.atualizarDashboard = function() {
 
     if (elFat) elFat.textContent = formatarValorMoeda(faturamentoMes);
     if (elDesp) elDesp.textContent = formatarValorMoeda(custosMes);
-    
-    if (elLucro) {
-        elLucro.textContent = formatarValorMoeda(lucroMes);
-        elLucro.style.color = lucroMes >= 0 ? 'var(--success-color)' : 'var(--danger-color)';
-    }
-
+    if (elLucro) elLucro.textContent = formatarValorMoeda(lucroMes);
     if (elHist) elHist.textContent = formatarValorMoeda(receitaHistorico);
     if (elMargem) elMargem.textContent = margem.toFixed(1) + '%';
 
-    // Atualiza o Gráfico
     atualizarGraficoPrincipal(mesAtual, anoAtual);
 };
 
-// -----------------------------------------------------------------------------
-// 7. GRÁFICOS (CHART.JS) COM PAINEL DE DADOS DO VEÍCULO
-// -----------------------------------------------------------------------------
-
+// --- ATUALIZADA: GRÁFICO COM RESUMO DETALHADO DO VEÍCULO ---
 function atualizarGraficoPrincipal(mes, ano) {
     var ctx = document.getElementById('mainChart');
     if (!ctx) return; 
 
-    // Verifica filtro de veículo selecionado
     var elSelect = document.getElementById('filtroVeiculoGrafico');
     var filtroVeiculo = elSelect ? elSelect.value : "";
+    var summaryContainer = document.getElementById('chartVehicleSummaryContainer');
 
-    // === INJEÇÃO DE RESUMO DO VEÍCULO ===
-    // Remove resumo anterior se existir
-    var existingSummary = document.getElementById('chartVehicleSummary');
-    if (existingSummary) existingSummary.remove();
+    // 1. GERAÇÃO DO CARD DE RESUMO (Se veículo selecionado)
+    if (summaryContainer) {
+        summaryContainer.innerHTML = ''; // Limpa anterior
+        
+        if (filtroVeiculo) {
+            var kmMes = 0;
+            var faturamentoVeiculo = 0;
+            var custoTotalVeiculo = 0;
+            var litrosTotal = 0;
 
-    if (filtroVeiculo) {
-        // Calcula Estatísticas do Veículo no Mês Selecionado
-        var kmMes = 0;
-        var custoTotalVeiculo = 0;
-        var litrosTotal = 0;
-
-        CACHE_OPERACOES.forEach(op => {
-            if (op.veiculoPlaca !== filtroVeiculo || op.status === 'CANCELADA') return;
-            var d = new Date(op.data + 'T12:00:00');
-            if (d.getMonth() === mes && d.getFullYear() === ano) {
-                kmMes += (Number(op.kmRodado) || 0);
-                custoTotalVeiculo += (Number(op.combustivel) || 0) + (Number(op.despesas) || 0);
-                
-                // Soma Litros para média
-                var preco = Number(op.precoLitro) || 0;
-                var valorAbast = Number(op.combustivel) || 0;
-                if (preco > 0 && valorAbast > 0) litrosTotal += (valorAbast / preco);
-            }
-        });
-
-        // Adiciona Despesas Gerais do Veículo
-        CACHE_DESPESAS.forEach(d => {
-            if (d.veiculoPlaca === filtroVeiculo) {
-                var dt = new Date(d.data + 'T12:00:00');
-                if (dt.getMonth() === mes && dt.getFullYear() === ano) {
-                    custoTotalVeiculo += (Number(d.valor) || 0);
+            CACHE_OPERACOES.forEach(op => {
+                if (op.veiculoPlaca !== filtroVeiculo || op.status === 'CANCELADA') return;
+                var d = new Date(op.data + 'T12:00:00');
+                if (d.getMonth() === mes && d.getFullYear() === ano) {
+                    kmMes += (Number(op.kmRodado) || 0);
+                    faturamentoVeiculo += (Number(op.faturamento) || 0);
+                    custoTotalVeiculo += (Number(op.combustivel) || 0) + (Number(op.despesas) || 0); // + Comissao se quiser refinar
+                    
+                    var preco = Number(op.precoLitro) || 0;
+                    var valorAbast = Number(op.combustivel) || 0;
+                    if (preco > 0 && valorAbast > 0) litrosTotal += (valorAbast / preco);
                 }
-            }
-        });
+            });
 
-        var media = (litrosTotal > 0) ? (kmMes / litrosTotal) : 0;
+            var media = (litrosTotal > 0) ? (kmMes / litrosTotal) : 0;
+            var lucroLiquidoVeiculo = faturamentoVeiculo - custoTotalVeiculo;
 
-        // Cria o HTML do Card
-        var summaryDiv = document.createElement('div');
-        summaryDiv.id = 'chartVehicleSummary';
-        summaryDiv.style.marginBottom = '15px';
-        summaryDiv.style.padding = '10px';
-        summaryDiv.style.background = '#e3f2fd';
-        summaryDiv.style.border = '1px solid #90caf9';
-        summaryDiv.style.borderRadius = '6px';
-        summaryDiv.style.display = 'flex';
-        summaryDiv.style.justifyContent = 'space-around';
-        summaryDiv.style.fontSize = '0.9rem';
-
-        summaryDiv.innerHTML = `
-            <div style="text-align:center;"><strong>VEÍCULO:</strong><br>${filtroVeiculo}</div>
-            <div style="text-align:center;"><strong>KM (MÊS):</strong><br>${kmMes.toFixed(1)} km</div>
-            <div style="text-align:center;"><strong>MÉDIA:</strong><br>${media > 0 ? media.toFixed(2) + ' Km/L' : 'N/A'}</div>
-            <div style="text-align:center;"><strong>CUSTO (MÊS):</strong><br>${formatarValorMoeda(custoTotalVeiculo)}</div>
-        `;
-
-        // Insere antes do canvas
-        ctx.parentNode.insertBefore(summaryDiv, ctx);
+            // HTML do Resumo Detalhado
+            summaryContainer.innerHTML = `
+                <div id="chartVehicleSummary">
+                    <div class="veh-stat-box"><small>VEÍCULO</small><span>${filtroVeiculo}</span></div>
+                    <div class="veh-stat-box"><small>FATURAMENTO</small><span style="color:var(--success-color)">${formatarValorMoeda(faturamentoVeiculo)}</span></div>
+                    <div class="veh-stat-box"><small>KM RODADO</small><span>${kmMes.toFixed(1)} km</span></div>
+                    <div class="veh-stat-box"><small>MÉDIA GLOBAL</small><span style="color:var(--primary-color)">${media.toFixed(2)} Km/L</span></div>
+                    <div class="veh-stat-box"><small>LUCRO LÍQUIDO</small><span style="color:${lucroLiquidoVeiculo >= 0 ? 'var(--success-color)' : 'var(--danger-color)'}">${formatarValorMoeda(lucroLiquidoVeiculo)}</span></div>
+                </div>
+            `;
+        }
     }
-    // === FIM INJEÇÃO ===
 
-    if (window.chartInstance) {
-        window.chartInstance.destroy();
-    }
+    // 2. RENDERIZAÇÃO DO GRÁFICO (Chart.js)
+    if (window.chartInstance) window.chartInstance.destroy();
 
     var receita = 0;
     var combustivel = 0;
     var pessoal = 0; 
     var manutencaoGeral = 0; 
     
-    // Itera Operações para o Gráfico
     CACHE_OPERACOES.forEach(op => {
         if (filtroVeiculo && op.veiculoPlaca !== filtroVeiculo) return;
-
         var d = new Date(op.data + 'T12:00:00');
-        
         if ((op.status === 'CONFIRMADA' || op.status === 'FINALIZADA') && d.getMonth() === mes && d.getFullYear() === ano) {
             receita += Number(op.faturamento || 0);
             combustivel += Number(op.combustivel || 0);
-            
-            if (!op.checkins || !op.checkins.faltaMotorista) {
-                pessoal += Number(op.comissao || 0);
-            }
-            
+            if (!op.checkins || !op.checkins.faltaMotorista) pessoal += Number(op.comissao || 0);
             if (op.ajudantes) {
                 op.ajudantes.forEach(aj => {
                     var faltou = (op.checkins && op.checkins.faltas && op.checkins.faltas[aj.id]);
                     if (!faltou) pessoal += (Number(aj.diaria)||0);
                 });
             }
-
             manutencaoGeral += Number(op.despesas || 0);
         }
     });
 
     CACHE_DESPESAS.forEach(d => {
         if (filtroVeiculo && d.veiculoPlaca !== filtroVeiculo) return;
-
         var dt = new Date(d.data + 'T12:00:00');
         if (dt.getMonth() === mes && dt.getFullYear() === ano) {
             manutencaoGeral += Number(d.valor || 0);
@@ -496,27 +332,14 @@ function atualizarGraficoPrincipal(mes, ano) {
     window.chartInstance = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ['FATURAMENTO', 'CUSTO COMBUSTÍVEL', 'PESSOAL', 'MANUTENÇÃO/GERAL', 'LUCRO LÍQUIDO'],
+            labels: ['FATURAMENTO', 'COMBUSTÍVEL', 'PESSOAL', 'MANUTENÇÃO', 'LUCRO'],
             datasets: [{
-                label: filtroVeiculo ? 'Dados: ' + filtroVeiculo : 'Resultados Gerais',
+                label: filtroVeiculo ? 'Dados: ' + filtroVeiculo : 'Geral',
                 data: [receita, combustivel, pessoal, manutencaoGeral, lucro],
-                backgroundColor: [
-                    'rgba(46, 125, 50, 0.7)',
-                    'rgba(198, 40, 40, 0.7)',
-                    'rgba(255, 152, 0, 0.7)',
-                    'rgba(156, 39, 176, 0.7)',
-                    (lucro >= 0 ? 'rgba(0, 200, 83, 0.9)' : 'rgba(183, 28, 28, 0.9)')
-                ],
-                borderColor: [ '#1b5e20', '#b71c1c', '#e65100', '#4a148c', '#000' ],
-                borderWidth: 1
+                backgroundColor: ['#28a745', '#dc3545', '#ffc107', '#17a2b8', (lucro >= 0 ? '#20c997' : '#e83e8c')]
             }]
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(context) { return formatarValorMoeda(context.raw); } } } },
-            scales: { y: { beginAtZero: true, ticks: { callback: function(value) { return 'R$ ' + value; } } } }
-        }
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
     });
 }
 
@@ -2346,6 +2169,17 @@ document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
         this.classList.add('active');
         var tabId = this.getAttribute('data-tab');
         document.getElementById(tabId).classList.add('active');
+    });
+});
+
+document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', function() {
+        // ... (código existente de navegação) ...
+        
+        // NOVO: Fecha menu no mobile ao clicar
+        if (window.innerWidth <= 768) {
+            document.getElementById('sidebar').classList.remove('active');
+        }
     });
 });
 
