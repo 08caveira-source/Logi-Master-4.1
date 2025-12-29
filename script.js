@@ -226,24 +226,37 @@ window.importDataBackup = function(event) {
     reader.readAsText(file);
 };
 
-// 3. ZERAR SISTEMA (WIPE COMPLETO)
+// 3. ZERAR SISTEMA (COM PROTEÇÃO POR SENHA)
 window.resetSystemData = async function() {
-    // Camada de segurança dupla
-    if(!confirm("PERIGO: Isso apagará TODOS os dados (Funcionários, Veículos, Operações, Financeiro) desta empresa.\n\nTem certeza absoluta?")) return;
+    // 1. Confirmação Inicial
+    if(!confirm("PERIGO: Isso apagará TODOS os dados (Funcionários, Veículos, Operações, Financeiro) desta empresa.\n\nA ação é irreversível. Deseja continuar?")) return;
     
-    var confirmacao = prompt("Para confirmar, digite 'ZERAR' na caixa abaixo:");
-    if(confirmacao !== 'ZERAR') {
-        alert("Ação cancelada. O código de confirmação estava incorreto.");
-        return;
-    }
+    // 2. Solicitação da Senha
+    var senhaConfirmacao = prompt("SEGURANÇA: Para prosseguir com a exclusão total, digite sua SENHA DE LOGIN:");
+    
+    if (!senhaConfirmacao) return; // Cancelou ou deixou vazio
 
     var btn = document.querySelector('button[onclick="resetSystemData()"]');
     if(btn) {
         btn.disabled = true;
-        btn.textContent = "LIMPANDO...";
+        btn.textContent = "VERIFICANDO...";
     }
 
     try {
+        // 3. Reautenticação no Firebase para validar a senha
+        const user = window.dbRef.auth.currentUser;
+        if (!user) throw new Error("Usuário não autenticado.");
+
+        // Cria a credencial com a senha digitada
+        const credential = window.dbRef.EmailAuthProvider.credential(user.email, senhaConfirmacao);
+        
+        // Tenta reautenticar. Se a senha estiver errada, vai cair no catch.
+        await window.dbRef.reauthenticateWithCredential(user, credential);
+
+        // --- SE PASSOU DAQUI, A SENHA ESTÁ CORRETA ---
+        
+        btn.textContent = "LIMPANDO DADOS...";
+
         // Salva listas vazias para limpar o LocalStorage E o Firebase
         await salvarListaFuncionarios([]);
         await salvarListaVeiculos([]);
@@ -255,13 +268,25 @@ window.resetSystemData = async function() {
         await salvarListaRecibos([]);
         await salvarProfileRequests([]);
 
-        alert("Sistema limpo com sucesso.");
+        alert("SISTEMA ZERADO COM SUCESSO!\n\nTodos os registros foram apagados.");
         location.reload();
+
     } catch (e) {
-        alert("Erro ao zerar sistema: " + e.message);
+        console.error(e);
+        // Tratamento de erros comuns de senha
+        if (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password') {
+            alert("SENHA INCORRETA.\nAção cancelada por segurança.");
+        } else if (e.code === 'auth/too-many-requests') {
+            alert("Muitas tentativas falhas. Tente novamente mais tarde.");
+        } else {
+            alert("Erro ao zerar sistema: " + e.message);
+        }
+        
         if(btn) {
             btn.disabled = false;
-            btn.textContent = "ZERAR SISTEMA";
+            btn.textContent = "ZERAR SISTEMA"; // Restaura texto original
+            // Re-adiciona o ícone se necessário, ou apenas deixa o texto
+            btn.innerHTML = '<i class="fas fa-trash-alt"></i> ZERAR SISTEMA'; 
         }
     }
 };
