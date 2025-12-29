@@ -1480,7 +1480,7 @@ window.filtrarServicosFuncionario = function(uid) {
     }
 };
 // =============================================================================
-// PARTE 5: SUPER ADMIN, MEUS DADOS E INICIALIZAÇÃO ASSÍNCRONA
+// PARTE 5: SUPER ADMIN (GESTÃO TOTAL), MEUS DADOS E INICIALIZAÇÃO
 // =============================================================================
 
 // --- CONFIGURAÇÃO DE SEGURANÇA ---
@@ -1499,7 +1499,7 @@ window.carregarPainelSuperAdmin = async function() {
     try {
         const { db, collection, getDocs } = window.dbRef;
         
-        // Busca global direta no Firestore (Bypassing cache local)
+        // 1. Busca global direta no Firestore
         const companiesSnap = await getDocs(collection(db, "companies"));
         const usersSnap = await getDocs(collection(db, "users"));
         
@@ -1511,64 +1511,96 @@ window.carregarPainelSuperAdmin = async function() {
         container.innerHTML = '';
 
         if(companies.length === 0) {
-            container.innerHTML = '<div class="alert alert-info">Nenhuma empresa cadastrada.</div>';
+            container.innerHTML = '<div class="alert alert-info">Nenhuma empresa cadastrada. Utilize o formulário acima para criar.</div>';
             return;
         }
 
-        // Renderização (Acordeão)
+        // 2. Renderização (Lista de Empresas)
         companies.forEach(comp => {
             const usersDaEmpresa = users.filter(u => u.company === comp.id);
             const admin = usersDaEmpresa.find(u => u.role === 'admin');
             
-            // Status e Validade
+            // Status Visual e Validade
             let statusBadge = "";
             let validadeTexto = "SEM DADOS";
+            let borderColor = "#ddd";
             
             if (comp.isBlocked) {
                 validadeTexto = "BLOQUEADO";
                 statusBadge = `<span class="status-pill pill-paused">BLOQUEADO</span>`;
+                borderColor = "var(--danger-color)";
             } else if (comp.isVitalicio) {
                 validadeTexto = "VITALÍCIO";
                 statusBadge = `<span class="status-pill pill-active">VITALÍCIO</span>`;
+                borderColor = "gold";
             } else if (comp.systemValidity) {
                 const val = new Date(comp.systemValidity);
                 if (val < new Date()) {
                     statusBadge = `<span class="status-pill pill-blocked">VENCIDO</span>`;
                     validadeTexto = formatarDataParaBrasileiro(comp.systemValidity);
+                    borderColor = "var(--danger-color)";
                 } else {
                     statusBadge = `<span class="status-pill pill-active">ATIVO</span>`;
                     validadeTexto = formatarDataParaBrasileiro(comp.systemValidity);
+                    borderColor = "var(--success-color)";
                 }
             }
 
             const div = document.createElement('div');
             div.className = 'company-wrapper';
             div.style.marginBottom = "15px";
-            div.style.border = "1px solid #ddd";
+            div.style.border = `1px solid ${borderColor}`;
             div.style.borderRadius = "8px";
             div.style.backgroundColor = "white";
+            div.style.overflow = "hidden";
 
             div.innerHTML = `
-                <div class="company-header" onclick="this.nextElementSibling.style.display = (this.nextElementSibling.style.display === 'none' ? 'block' : 'none')" style="padding:15px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#f8f9fa;">
+                <div class="company-header" onclick="toggleCompanyDetails(this)" style="padding:15px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#f8f9fa;">
                     <div style="display:flex; align-items:center; gap:15px;">
-                        <div style="background:var(--primary-color); color:white; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;">${comp.id.substring(0,2).toUpperCase()}</div>
-                        <div><h4 style="margin:0;">${comp.id.toUpperCase()}</h4><small>Admin: ${admin ? admin.email : '---'}</small></div>
+                        <div style="background:var(--primary-color); color:white; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:1.2rem;">
+                            ${comp.id.substring(0,2).toUpperCase()}
+                        </div>
+                        <div>
+                            <h4 style="margin:0; text-transform:uppercase;">${comp.id}</h4>
+                            <small style="color:#666;">Admin: ${admin ? admin.email : '<span style="color:red">Sem Admin</span>'}</small>
+                        </div>
                     </div>
-                    <div style="text-align:right;"><small>${validadeTexto}</small><br>${statusBadge}</div>
+                    
+                    <div style="display:flex; align-items:center; gap:15px;">
+                        <div style="text-align:right;">
+                            <div style="font-size:0.7rem; color:#888;">VALIDADE</div>
+                            <strong style="font-size:0.9rem;">${validadeTexto}</strong>
+                        </div>
+                        ${statusBadge}
+                        <button class="btn-mini btn-primary" onclick="event.stopPropagation(); abrirModalCreditos('${comp.id}', '${comp.systemValidity||''}', ${comp.isVitalicio||false})" title="Editar Créditos/Bloqueio">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn-mini btn-danger" onclick="event.stopPropagation(); excluirEmpresaTotal('${comp.id}')" title="Excluir Empresa e Usuários">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                        <i class="fas fa-chevron-down" style="color:#ccc; margin-left:5px;"></i>
+                    </div>
                 </div>
-                <div class="company-body" style="display:none; padding:20px; border-top:1px solid #eee;">
-                    <div style="margin-bottom:15px; text-align:right;">
-                        <button class="btn-mini btn-primary" onclick="abrirModalCreditos('${comp.id}', '${comp.systemValidity||''}', ${comp.isVitalicio||false})">GERENCIAR CRÉDITOS</button>
-                    </div>
-                    <table class="data-table" style="width:100%;">
-                        <thead><tr><th>NOME</th><th>EMAIL</th><th>SENHA</th><th>AÇÃO</th></tr></thead>
+                
+                <div class="company-body" style="display:none; padding:20px; border-top:1px solid #eee; background:#fff;">
+                    <h5 style="margin-bottom:10px; color:#666;">USUÁRIOS VINCULADOS (${usersDaEmpresa.length})</h5>
+                    <table class="data-table" style="width:100%; font-size:0.9rem;">
+                        <thead><tr><th>NOME</th><th>EMAIL</th><th>SENHA (VISUAL)</th><th>FUNÇÃO</th><th>AÇÃO</th></tr></thead>
                         <tbody>
                             ${usersDaEmpresa.map(u => `
                                 <tr>
                                     <td>${u.name}</td>
                                     <td>${u.email}</td>
-                                    <td>${u.senhaVisual || '***'}</td>
-                                    <td><button class="btn-mini btn-warning" onclick="resetarSenhaComMigracao('${u.uid}', '${u.email}', '${u.name}')">RESET</button></td>
+                                    <td style="font-family:monospace; color:#007bff;">${u.senhaVisual || '***'}</td>
+                                    <td>${u.role.toUpperCase()}</td>
+                                    <td>
+                                        <button class="btn-mini btn-warning" onclick="resetarSenhaComMigracao('${u.uid}', '${u.email}', '${u.name}')" title="Resetar Senha">
+                                            <i class="fas fa-key"></i>
+                                        </button>
+                                        <button class="btn-mini btn-danger" onclick="excluirUsuarioGlobal('${u.uid}')" title="Remover Usuário">
+                                            <i class="fas fa-user-times"></i>
+                                        </button>
+                                    </td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -1580,21 +1612,72 @@ window.carregarPainelSuperAdmin = async function() {
 
     } catch (e) {
         console.error(e);
-        container.innerHTML = '<p style="color:red">Erro ao carregar lista.</p>';
+        container.innerHTML = '<p style="color:red">Erro ao carregar lista de empresas: ' + e.message + '</p>';
     }
 };
 
-// Funções de Gestão Master
+window.toggleCompanyDetails = function(headerElement) {
+    const body = headerElement.nextElementSibling;
+    const icon = headerElement.querySelector('.fa-chevron-down');
+    
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+        if(icon) icon.style.transform = 'rotate(180deg)';
+        headerElement.style.borderBottom = '1px solid #ddd'; 
+    } else {
+        body.style.display = 'none';
+        if(icon) icon.style.transform = 'rotate(0deg)';
+        headerElement.style.borderBottom = 'none';
+    }
+};
+
+// --- AÇÕES GLOBAIS DE GESTÃO ---
+
+// 1. EXCLUIR EMPRESA TOTAL (Domínio + Usuários)
+window.excluirEmpresaTotal = async function(companyId) {
+    var confirmacao = prompt(`ATENÇÃO PERIGO!\n\nVocê está prestes a excluir a empresa "${companyId.toUpperCase()}" e TODOS os seus usuários.\n\nEsta ação é irreversível.\n\nDigite "DELETAR" para confirmar:`);
+    
+    if (confirmacao !== "DELETAR") return;
+
+    try {
+        const { db, collection, query, where, getDocs, deleteDoc, doc, writeBatch } = window.dbRef;
+        
+        // A. Buscar todos os usuários da empresa
+        const q = query(collection(db, "users"), where("company", "==", companyId));
+        const snapshot = await getDocs(q);
+        
+        const batch = writeBatch(db);
+        let count = 0;
+
+        // B. Deletar usuários (Batch)
+        snapshot.forEach((documento) => {
+            batch.delete(documento.ref);
+            count++;
+        });
+
+        // C. Deletar documento da empresa
+        const companyRef = doc(db, "companies", companyId);
+        batch.delete(companyRef);
+
+        await batch.commit();
+        
+        alert(`SUCESSO!\nEmpresa ${companyId} e ${count} usuários foram removidos.`);
+        carregarPainelSuperAdmin();
+
+    } catch (e) {
+        alert("Erro ao excluir: " + e.message);
+    }
+};
+
+// 2. RESETAR SENHA (GLOBAL)
 window.resetarSenhaComMigracao = async function(oldUid, email, nome) {
-    var novaSenha = prompt(`NOVA SENHA PARA ${nome}:`);
+    var novaSenha = prompt(`RESETAR SENHA DE: ${nome}\n(${email})\n\nDIGITE A NOVA SENHA (Mín 6 dígitos):`);
     if(!novaSenha || novaSenha.length < 6) return alert("Mínimo 6 dígitos.");
     
     try {
-        // Recria no Auth
         let newUid = await window.dbRef.criarAuthUsuario(email, novaSenha);
-        
-        // Migra Dados no Firestore
         const { db, doc, getDoc, setDoc, deleteDoc } = window.dbRef;
+        
         const oldRef = doc(db, "users", oldUid);
         const oldSnap = await getDoc(oldRef);
         
@@ -1602,6 +1685,8 @@ window.resetarSenhaComMigracao = async function(oldUid, email, nome) {
             const data = oldSnap.data();
             data.uid = newUid;
             data.senhaVisual = novaSenha;
+            data.migratedAt = new Date().toISOString();
+            
             await setDoc(doc(db, "users", newUid), data);
             await deleteDoc(oldRef);
         }
@@ -1610,88 +1695,138 @@ window.resetarSenhaComMigracao = async function(oldUid, email, nome) {
     } catch (e) { alert("Erro: " + e.message); }
 };
 
+// 3. GERENCIAR CRÉDITOS E BLOQUEIO
 window.abrirModalCreditos = function(companyId, validade, isVitalicio) {
     document.getElementById('empresaIdCredito').value = companyId;
     document.getElementById('nomeEmpresaCredito').textContent = companyId.toUpperCase();
+    
+    var texto = isVitalicio ? "VITALÍCIO" : (validade ? formatarDataParaBrasileiro(validade.split('T')[0]) : "SEM REGISTRO");
+    document.getElementById('validadeAtualCredito').textContent = texto;
+    
     document.getElementById('checkVitalicio').checked = isVitalicio;
     document.getElementById('divAddCreditos').style.display = isVitalicio ? 'none' : 'block';
+    
+    document.getElementById('checkVitalicio').onchange = function() { 
+        document.getElementById('divAddCreditos').style.display = this.checked ? 'none' : 'block'; 
+    };
+    
     document.getElementById('modalCreditos').style.display = 'flex';
 };
 
 window.salvarCreditosEmpresa = async function() {
     var companyId = document.getElementById('empresaIdCredito').value;
     var isVitalicio = document.getElementById('checkVitalicio').checked;
+    var isBloqueado = document.getElementById('checkBloqueado').checked;
     var meses = parseInt(document.getElementById('qtdCreditosAdd').value);
     
     try {
-        const { db, collection, query, where, getDocs, updateDoc, doc } = window.dbRef;
-        const q = query(collection(db, "users"), where("company", "==", companyId), where("role", "==", "admin"));
-        const snap = await getDocs(q);
-        if(snap.empty) return alert("Admin não encontrado.");
+        const { db, collection, query, where, getDocs, updateDoc, doc, setDoc } = window.dbRef;
         
-        var userDoc = snap.docs[0];
-        var atual = userDoc.data();
+        // Atualiza a empresa na collection 'companies'
+        var dadosEmpresa = { isVitalicio: isVitalicio, isBlocked: isBloqueado };
         var novaData = null;
 
-        if (!isVitalicio) {
+        if (!isVitalicio && !isBloqueado) {
+            // Busca Admin para ver validade atual e somar
+            const q = query(collection(db, "users"), where("company", "==", companyId), where("role", "==", "admin"));
+            const snap = await getDocs(q);
+            
             var base = new Date();
-            if (atual.systemValidity && new Date(atual.systemValidity) > base) base = new Date(atual.systemValidity);
+            if(!snap.empty) {
+                var adminData = snap.docs[0].data();
+                if(adminData.systemValidity && new Date(adminData.systemValidity) > base) {
+                    base = new Date(adminData.systemValidity);
+                }
+            }
             base.setDate(base.getDate() + (meses * 30));
             novaData = base.toISOString();
+            dadosEmpresa.systemValidity = novaData;
         }
-        
-        // Atualiza Admin User
-        await updateDoc(doc(db, "users", userDoc.id), { systemValidity: novaData, isVitalicio: isVitalicio });
-        
-        // Atualiza Company Doc (Para facilitar listagem)
-        await window.dbRef.setDoc(doc(db, "companies", companyId), { 
-            systemValidity: novaData, 
-            isVitalicio: isVitalicio,
-            isBlocked: false 
-        }, { merge: true });
 
-        alert("Atualizado!");
+        // 1. Atualiza Doc da Empresa
+        await setDoc(doc(db, "companies", companyId), dadosEmpresa, { merge: true });
+
+        // 2. Atualiza TODOS os usuários daquela empresa (para garantir bloqueio/desbloqueio em massa)
+        const qUsers = query(collection(db, "users"), where("company", "==", companyId));
+        const snapUsers = await getDocs(qUsers);
+        
+        const batch = window.dbRef.writeBatch(db);
+        snapUsers.forEach(uDoc => {
+            let updateData = { isBlocked: isBloqueado, isVitalicio: isVitalicio };
+            if (novaData) updateData.systemValidity = novaData;
+            batch.update(uDoc.ref, updateData);
+        });
+        await batch.commit();
+
+        alert("Alterações salvas e aplicadas a todos os usuários da empresa!");
         document.getElementById('modalCreditos').style.display = 'none';
         carregarPainelSuperAdmin();
     } catch(e) { alert("Erro: " + e.message); }
 };
 
-// Listener Criação de Empresa
+window.excluirUsuarioGlobal = async function(uid) {
+    if (!confirm("Remover apenas este usuário?")) return;
+    try {
+        const { db, doc, deleteDoc } = window.dbRef;
+        await deleteDoc(doc(db, "users", uid));
+        carregarPainelSuperAdmin(); 
+    } catch(e) { alert("Erro: " + e.message); }
+};
+
+// Listener Criar Nova Empresa
 document.addEventListener('submit', async function(e) {
     if (e.target.id === 'formCreateCompany') {
         e.preventDefault();
-        var dominio = document.getElementById('newCompanyDomain').value.trim();
+        var dominio = document.getElementById('newCompanyDomain').value.trim().toLowerCase(); // Força minúsculo
         var email = document.getElementById('newAdminEmail').value.trim();
         var senha = document.getElementById('newAdminPassword').value.trim();
         
+        if (dominio.length < 3) return alert("Domínio muito curto.");
+
         try {
             var uid = await window.dbRef.criarAuthUsuario(email, senha);
             const { db, doc, setDoc } = window.dbRef;
             
-            // Cria Usuário Admin
+            // 1. Cria Usuário Admin
             await setDoc(doc(db, "users", uid), {
-                uid: uid, name: "ADMIN " + dominio, email: email, role: 'admin', company: dominio,
-                createdAt: new Date().toISOString(), approved: true, isVitalicio: false,
+                uid: uid, 
+                name: "ADMIN " + dominio.toUpperCase(), 
+                email: email, 
+                role: 'admin', 
+                company: dominio,
+                createdAt: new Date().toISOString(), 
+                approved: true, 
+                isVitalicio: false,
+                isBlocked: false,
+                systemValidity: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString(),
+                senhaVisual: senha
+            });
+            
+            // 2. Cria Documento da Empresa (Para listagem)
+            await setDoc(doc(db, "companies", dominio), { 
+                id: dominio, 
+                createdAt: new Date().toISOString(),
+                isBlocked: false,
+                isVitalicio: false,
                 systemValidity: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
             });
             
-            // Cria Empresa
-            await setDoc(doc(db, "companies", dominio), { id: dominio, createdAt: new Date().toISOString() });
-            
-            alert("Empresa criada!");
+            alert(`Empresa "${dominio}" criada com sucesso!\nLogin Admin: ${email}`);
             e.target.reset();
             carregarPainelSuperAdmin();
-        } catch (erro) { alert(erro.message); }
+            
+        } catch (erro) { 
+            alert("Erro ao criar: " + erro.message); 
+        }
     }
 });
 
 // -----------------------------------------------------------------------------
-// MEUS DADOS (FUNCIONÁRIO)
+// MEUS DADOS (FUNCIONÁRIO - VISUALIZAÇÃO APENAS)
 // -----------------------------------------------------------------------------
 
 window.renderizarMeusDados = function() {
     var user = window.USUARIO_ATUAL;
-    // Puxa do Cache (que foi sincronizado no inicio)
     var dados = CACHE_FUNCIONARIOS.find(f => String(f.id) === String(user.uid)) || user;
     
     var html = `
@@ -1704,9 +1839,10 @@ window.renderizarMeusDados = function() {
             ${makeLine('Telefone', dados.telefone, 'TELEFONE')}
             ${makeLine('Endereço', dados.endereco, 'ENDERECO')}
             ${makeLine('PIX', dados.pix, 'PIX')}
+            ${makeLine('Email', dados.email, 'EMAIL')}
     `;
     if(dados.funcao === 'motorista') {
-        html += `<h4 style="margin-top:20px;">CNH</h4>${makeLine('CNH', dados.cnh, 'CNH')}${makeLine('Validade', formatarDataParaBrasileiro(dados.validadeCNH), 'VALIDADE_CNH')}`;
+        html += `<h4 style="margin-top:20px;">DADOS CNH</h4>${makeLine('CNH', dados.cnh, 'CNH')}${makeLine('Validade', formatarDataParaBrasileiro(dados.validadeCNH), 'VALIDADE_CNH')}`;
     }
     html += `</div>`;
     
@@ -1722,46 +1858,45 @@ function makeLine(label, val, field) {
 }
 
 window.solicitarAlteracao = function(campo, atual) {
-    var novo = prompt("Novo valor:", atual);
+    var novo = prompt("Novo valor desejado:", atual);
     if(novo && novo !== atual) {
         var req = { id: Date.now().toString(), data: new Date().toISOString(), funcionarioId: window.USUARIO_ATUAL.uid, funcionarioEmail: window.USUARIO_ATUAL.email, campo: campo, valorAntigo: atual, valorNovo: novo, status: 'PENDENTE' };
         var lista = CACHE_PROFILE_REQUESTS || [];
         lista.push(req);
-        salvarProfileRequests(lista).then(() => alert("Solicitação enviada!"));
+        salvarProfileRequests(lista).then(() => alert("Solicitação enviada ao administrador!"));
     }
 };
 
 // -----------------------------------------------------------------------------
-// INICIALIZAÇÃO E ROTEAMENTO (CORREÇÃO DA TELA BRANCA E SINCRONIA)
+// INICIALIZAÇÃO E ROTEAMENTO (FINAL)
 // -----------------------------------------------------------------------------
 
 window.initSystemByRole = async function(user) {
     console.log(">>> INIT SYSTEM:", user.role);
     window.USUARIO_ATUAL = user;
 
-    // 1. ESCONDER TUDO (Evita flash de conteúdo errado)
+    // 1. Ocultar tudo inicialmente
     document.querySelectorAll('.page').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); });
     document.querySelectorAll('.sidebar ul').forEach(ul => ul.style.display = 'none');
 
-    // 2. ROTEAMENTO SUPER ADMIN (Imediato, sem sync de empresa)
+    // 2. Roteamento SUPER ADMIN
     if (EMAILS_MESTRES.includes(user.email) || user.role === 'admin_master') {
         document.getElementById('menu-super-admin').style.display = 'block';
         var p = document.getElementById('super-admin');
         p.style.display = 'block'; setTimeout(() => p.classList.add('active'), 50);
         carregarPainelSuperAdmin();
-        return; // PARE AQUI
+        return; // Encerra aqui para Super Admin
     }
 
-    // 3. SINCRONIA COM A NUVEM (Obrigatória para Admin e Func)
-    // Isso resolve o problema dos dados não aparecerem no celular
+    // 3. Sincronia de Dados (Para Admin e Func)
     await sincronizarDadosComFirebase(); 
+    preencherTodosSelects(); // Atualiza UI
 
-    // 4. PREENCHER CACHE VISUAL
-    preencherTodosSelects();
-
-    // 5. ROTEAMENTO FINAL
+    // 4. Roteamento ADMIN
     if (user.role === 'admin') {
-        // Validação de Pagamento
+        if (user.isBlocked) return document.body.innerHTML = "<div style='text-align:center;padding:50px;color:red'><h1>BLOQUEADO</h1></div>";
+        
+        // Verifica validade se não for vitalício
         if (!user.isVitalicio) {
             if (!user.systemValidity || new Date(user.systemValidity) < new Date()) {
                 document.body.innerHTML = "<div style='text-align:center; padding:50px; color:red'><h1>SISTEMA VENCIDO</h1><button onclick='logoutSystem()'>SAIR</button></div>";
@@ -1771,22 +1906,19 @@ window.initSystemByRole = async function(user) {
 
         document.getElementById('menu-admin').style.display = 'block';
         
-        // Exibir Dashboard Automaticamente (Correção Tela Branca)
         var home = document.getElementById('home');
         if(home) { 
             home.style.display = 'block'; 
             setTimeout(() => home.classList.add('active'), 50); 
             document.querySelector('[data-page="home"]')?.classList.add('active');
         }
-        
-        atualizarDashboard(); // Já tem dados da nuvem
+        atualizarDashboard();
 
     } else {
-        // FUNCIONÁRIO
+        // 5. Roteamento FUNCIONÁRIO
         document.getElementById('menu-employee').style.display = 'block';
         window.MODO_APENAS_LEITURA = true;
         
-        // Tela Inicial Func
         var empHome = document.getElementById('employee-home');
         if(empHome) { 
             empHome.style.display = 'block'; 
@@ -1794,14 +1926,13 @@ window.initSystemByRole = async function(user) {
             document.querySelector('[data-page="employee-home"]')?.classList.add('active');
         }
         
-        // Carrega Dados do Painel
         renderizarCheckinFuncionario();
         renderizarMeusDados();
     }
 };
 
 // -----------------------------------------------------------------------------
-// NAVEGAÇÃO
+// NAVEGAÇÃO E BACKUP
 // -----------------------------------------------------------------------------
 document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', function() {
@@ -1812,7 +1943,6 @@ document.querySelectorAll('.nav-item').forEach(item => {
         if (target) { target.style.display = 'block'; setTimeout(() => target.classList.add('active'), 10); }
         if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('active');
         
-        // Triggers
         if (this.getAttribute('data-page') === 'home') atualizarDashboard();
         if (this.getAttribute('data-page') === 'meus-dados') renderizarMeusDados();
         if (this.getAttribute('data-page') === 'employee-checkin') renderizarCheckinFuncionario();
@@ -1823,19 +1953,8 @@ document.getElementById('mobileMenuBtn')?.addEventListener('click', () => docume
 document.getElementById('sidebarOverlay')?.addEventListener('click', () => document.getElementById('sidebar').classList.remove('active'));
 
 window.exportDataBackup = function() {
-    var data = { 
-        meta: { date: new Date(), user: window.USUARIO_ATUAL.email }, 
-        data: { 
-            funcionarios: CACHE_FUNCIONARIOS, 
-            veiculos: CACHE_VEICULOS, 
-            operacoes: CACHE_OPERACOES, 
-            despesas: CACHE_DESPESAS 
-        } 
-    };
-    var a = document.createElement('a');
-    a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
-    a.download = "backup.json";
-    a.click();
+    var data = { meta: { date: new Date(), user: window.USUARIO_ATUAL.email }, data: { funcionarios: CACHE_FUNCIONARIOS, veiculos: CACHE_VEICULOS, operacoes: CACHE_OPERACOES, despesas: CACHE_DESPESAS } };
+    var a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data)); a.download = "backup.json"; a.click();
 };
 
 window.importDataBackup = function(event) {
@@ -1844,7 +1963,6 @@ window.importDataBackup = function(event) {
         if(confirm("Restaurar backup?")) {
             var json = JSON.parse(e.target.result);
             if(json.data) {
-                // Salva local e recarrega para disparar o sync
                 localStorage.setItem(CHAVE_DB_FUNCIONARIOS, JSON.stringify(json.data.funcionarios));
                 localStorage.setItem(CHAVE_DB_VEICULOS, JSON.stringify(json.data.veiculos));
                 localStorage.setItem(CHAVE_DB_OPERACOES, JSON.stringify(json.data.operacoes));
