@@ -2187,3 +2187,84 @@ document.querySelectorAll('.nav-item').forEach(item => {
 window.filtrarServicosFuncionario = window.filtrarServicosFuncionario || function(uid) {
     console.log("Buscando serviços para: " + uid);
 };
+// =============================================================================
+// PARTE 6: FUNÇÕES DE MANUTENÇÃO (CORREÇÃO DOS BOTÕES)
+// =============================================================================
+
+window.exportDataBackup = function() {
+    // 1. Reúne todos os dados atuais da memória
+    var backupData = {
+        meta: {
+            data: new Date().toISOString(),
+            usuario: window.USUARIO_ATUAL ? window.USUARIO_ATUAL.email : 'desconhecido',
+            versao: '22.0'
+        },
+        dados: {
+            funcionarios: CACHE_FUNCIONARIOS,
+            veiculos: CACHE_VEICULOS,
+            contratantes: CACHE_CONTRATANTES,
+            operacoes: CACHE_OPERACOES,
+            minhaEmpresa: CACHE_MINHA_EMPRESA,
+            despesas: CACHE_DESPESAS,
+            atividades: CACHE_ATIVIDADES,
+            recibos: CACHE_RECIBOS,
+            profileRequests: CACHE_PROFILE_REQUESTS
+        }
+    };
+
+    // 2. Cria o arquivo JSON para download
+    var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData));
+    var downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "backup_logimaster_" + new Date().toISOString().split('T')[0] + ".json");
+    document.body.appendChild(downloadAnchorNode); // Necessário para Firefox
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+};
+
+window.resetSystemData = function() {
+    var confirmacao = prompt("ATENÇÃO PERIGO!\n\nIsso apagará TODOS os dados salvos neste navegador (LocalStorage).\nSe você não tem backup, os dados serão perdidos.\n\nDigite 'ZERAR' para confirmar:");
+    
+    if (confirmacao === 'ZERAR') {
+        localStorage.clear();
+        alert("Sistema limpo com sucesso! A página será recarregada.");
+        window.location.reload();
+    } else {
+        alert("Ação cancelada.");
+    }
+};
+
+// Função Extra: Importar Backup (já que existe o input no HTML)
+window.importDataBackup = function(event) {
+    var file = event.target.files[0];
+    if (!file) return;
+
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            var json = JSON.parse(e.target.result);
+            if (json.dados) {
+                // Restaura os dados
+                if(confirm("Tem certeza que deseja substituir os dados atuais pelos do backup?")) {
+                    localStorage.setItem(CHAVE_DB_FUNCIONARIOS, JSON.stringify(json.dados.funcionarios || []));
+                    localStorage.setItem(CHAVE_DB_VEICULOS, JSON.stringify(json.dados.veiculos || []));
+                    localStorage.setItem(CHAVE_DB_CONTRATANTES, JSON.stringify(json.dados.contratantes || []));
+                    localStorage.setItem(CHAVE_DB_OPERACOES, JSON.stringify(json.dados.operacoes || []));
+                    localStorage.setItem(CHAVE_DB_MINHA_EMPRESA, JSON.stringify(json.dados.minhaEmpresa || {}));
+                    localStorage.setItem(CHAVE_DB_DESPESAS, JSON.stringify(json.dados.despesas || []));
+                    localStorage.setItem(CHAVE_DB_ATIVIDADES, JSON.stringify(json.dados.atividades || []));
+                    localStorage.setItem(CHAVE_DB_RECIBOS, JSON.stringify(json.dados.recibos || []));
+                    
+                    alert("Backup restaurado com sucesso!");
+                    window.location.reload();
+                }
+            } else {
+                alert("Arquivo de backup inválido.");
+            }
+        } catch (erro) {
+            console.error(erro);
+            alert("Erro ao ler arquivo: " + erro.message);
+        }
+    };
+    reader.readAsText(file);
+};

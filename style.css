@@ -219,3 +219,52 @@ button:hover { filter: brightness(0.9); }
     .config-group { flex-direction: column; }
     button { width: 100%; justify-content: center; }
 }
+/* =============================================================================
+   CORREÇÕES DE LAYOUT (ADICIONE AO FINAL DO ARQUIVO)
+   ============================================================================= */
+
+/* 1. CORREÇÃO DO CALENDÁRIO */
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr); /* 7 colunas fixas */
+    gap: 8px;
+    padding: 10px 0;
+}
+
+.day-cell {
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    min-height: 80px; /* Altura mínima para caber as bolinhas */
+    padding: 5px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    transition: 0.2s;
+}
+
+.day-cell:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.day-cell.empty {
+    background: transparent;
+    border: none;
+    cursor: default;
+}
+
+/* Bolinha de status da viagem no calendário */
+.event-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 5px;
+    display: inline-block;
+}
+
+/* 2. CORREÇÃO DO MENU MOBILE (Z-INDEX) */
+/* O sidebar precisa ser maior que o .mobile-nav (que é 1100) */
+.sidebar {
+    z-index: 2000 !important; 
+}
