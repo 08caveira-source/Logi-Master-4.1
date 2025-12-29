@@ -1840,152 +1840,148 @@ const EMAILS_MESTRES = ["admin@logimaster.com", "suporte@logimaster.com"];
 
 var _cacheGlobalUsers = [];
 
+// =============================================================================
+// ATUALIZAÇÃO: FUNÇÕES DO SUPER ADMIN (COM RESET DE SENHA)
+// =============================================================================
+
 window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
-    var container = document.getElementById('superAdminContainer');
-    if (!container) return;
-
-    if (forceRefresh) container.innerHTML = '<p style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Atualizando lista global...</p>';
-
-    if (!window.dbRef) return console.error("Firebase não inicializado.");
+    const container = document.getElementById('superAdminContainer');
+    if(!container) return;
+    
+    container.innerHTML = '<p style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Carregando ecossistema...</p>';
 
     try {
-        // CORREÇÃO: Removemos 'orderBy' que estava causando erro e ordenamos via JS
-        const { db, collection, getDocs, query } = window.dbRef;
+        const { db, collection, getDocs } = window.dbRef;
         
-        // Busca simples (sem ordenação no banco para evitar erro de índice/função)
-        const q = query(collection(db, "users"));
-        const snapshot = await getDocs(q);
-        
-        _cacheGlobalUsers = [];
-        snapshot.forEach(doc => {
-            _cacheGlobalUsers.push(doc.data());
+        // 1. Busca Todas as Empresas
+        const companiesSnap = await getDocs(collection(db, "companies"));
+        const companies = [];
+        companiesSnap.forEach(doc => companies.push({ id: doc.id, ...doc.data() }));
+
+        // 2. Busca Todos os Usuários
+        const usersSnap = await getDocs(collection(db, "users"));
+        const users = [];
+        usersSnap.forEach(doc => users.push({ uid: doc.id, ...doc.data() }));
+
+        container.innerHTML = '';
+
+        if(companies.length === 0) {
+            container.innerHTML = '<p>Nenhuma empresa cadastrada.</p>';
+            return;
+        }
+
+        companies.forEach(comp => {
+            // Filtra usuários desta empresa
+            const usersDaEmpresa = users.filter(u => u.company === comp.id);
+            const admin = usersDaEmpresa.find(u => u.role === 'admin');
+
+            // Status da Validade
+            let validadeTexto = "SEM DADOS";
+            let statusPill = "";
+
+            if (comp.isBlocked) {
+                validadeTexto = "BLOQUEADO (PAUSADO)";
+                statusPill = `<span class="status-pill pill-paused"><i class="fas fa-pause-circle"></i> PAUSADO</span>`;
+            } else if (comp.isVitalicio) {
+                validadeTexto = "VITALÍCIO";
+                statusPill = `<span class="status-pill pill-active">VITALÍCIO</span>`;
+            } else if (comp.systemValidity) {
+                const val = new Date(comp.systemValidity);
+                const hoje = new Date();
+                validadeTexto = formatarDataParaBrasileiro(comp.systemValidity);
+                if (val < hoje) {
+                    statusPill = `<span class="status-pill pill-blocked">VENCIDO</span>`;
+                } else {
+                    statusPill = `<span class="status-pill pill-active">ATIVO</span>`;
+                }
+            }
+
+            const card = document.createElement('div');
+            card.className = 'company-block';
+            card.innerHTML = `
+                <div class="company-header" onclick="this.nextElementSibling.classList.toggle('expanded')">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <i class="fas fa-building"></i>
+                        <div>
+                            <h4>${comp.id.toUpperCase()}</h4>
+                            <small>${admin ? admin.email : 'Sem Admin'}</small>
+                        </div>
+                    </div>
+                    <div class="company-meta">
+                        ${statusPill}
+                        <span>Validade: <strong>${validadeTexto}</strong></span>
+                        <button class="btn-primary btn-super-action" onclick="event.stopPropagation(); abrirModalCreditos('${comp.id}')">
+                            <i class="fas fa-calendar-alt"></i> GERENCIAR
+                        </button>
+                    </div>
+                </div>
+                <div class="company-content">
+                    <h5>USUÁRIOS CADASTRADOS (${usersDaEmpresa.length})</h5>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>NOME</th>
+                                <th>EMAIL</th>
+                                <th>FUNÇÃO</th>
+                                <th>SENHA (REF)</th>
+                                <th>AÇÃO</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${usersDaEmpresa.map(u => `
+                                <tr>
+                                    <td>${u.name}</td>
+                                    <td>${u.email}</td>
+                                    <td>${u.role}</td>
+                                    <td style="font-family:monospace; color:#555;">${u.senhaVisual || '***'}</td>
+                                    <td>
+                                        <button class="btn-mini btn-warning" onclick="resetarSenhaAdminEmpresa('${u.uid}', '${u.name}')" title="Resetar Senha Manualmente">
+                                            <i class="fas fa-key"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            container.appendChild(card);
         });
 
-        // Ordenação via JavaScript (Agrupa por empresa)
-        _cacheGlobalUsers.sort((a, b) => {
-            var empA = a.company ? a.company.toLowerCase() : 'zzz';
-            var empB = b.company ? b.company.toLowerCase() : 'zzz';
-            return empA.localeCompare(empB);
-        });
-
-        renderizarListaGlobal(_cacheGlobalUsers);
-
-    } catch (erro) {
-        console.error("Erro Super Admin:", erro);
-        container.innerHTML = '<p style="color:red; text-align:center;">Erro ao carregar lista global: ' + erro.message + '</p>';
+    } catch (e) {
+        console.error(e);
+        container.innerHTML = '<p style="color:red">Erro ao carregar dados.</p>';
     }
 };
 
-function renderizarListaGlobal(listaUsuarios) {
-    var container = document.getElementById('superAdminContainer');
-    if (!container) return;
+// --- NOVA FUNÇÃO: RESET DE SENHA PELO SUPER ADMIN ---
+window.resetarSenhaAdminEmpresa = async function(uid, nomeUser) {
+    // 1. Solicita a nova senha
+    var novaSenha = prompt("RESET DE SENHA (SUPER ADMIN)\n\nDefina a nova senha para o usuário " + nomeUser + ":\n(A senha antiga será substituída no registro)");
     
-    container.innerHTML = '';
-
-    // Agrupar por Empresa (Domínio)
-    var empresas = {};
-    
-    listaUsuarios.forEach(u => {
-        var emp = u.company || 'SEM_EMPRESA';
-        if (!empresas[emp]) {
-            empresas[emp] = {
-                id: emp,
-                usuarios: [],
-                admin: null,
-                validade: null,
-                isVitalicio: false
-            };
-        }
-        empresas[emp].usuarios.push(u);
-        if (u.role === 'admin') {
-            empresas[emp].admin = u;
-            empresas[emp].validade = u.systemValidity || null; // Data ISO
-            empresas[emp].isVitalicio = u.isVitalicio || false;
-        }
-    });
-
-    if (Object.keys(empresas).length === 0) {
-        container.innerHTML = '<p style="text-align:center;">Nenhuma empresa encontrada no banco de dados.</p>';
+    if (novaSenha === null) return; // Cancelou
+    if (novaSenha.trim().length < 6) {
+        alert("A nova senha deve ter no mínimo 6 caracteres.");
         return;
     }
 
-    // Renderizar Blocos de Empresa
-    Object.values(empresas).forEach(emp => {
-        var qtdUsers = emp.usuarios.length;
-        var nomeAdmin = emp.admin ? emp.admin.name : '(Sem Admin)';
+    try {
+        const { db, doc, updateDoc } = window.dbRef;
         
-        // Status da Validade (Visualização para o Super Admin)
-        var statusValidade = '<span class="status-pill pill-blocked">SEM DADOS</span>';
-        if (emp.isVitalicio) {
-            statusValidade = '<span class="status-pill pill-active" style="background:gold; color:#333;"><i class="fas fa-infinity"></i> VITALÍCIO</span>';
-        } else if (emp.validade) {
-            var diasRestantes = Math.ceil((new Date(emp.validade) - new Date()) / (1000 * 60 * 60 * 24));
-            if (diasRestantes > 0) {
-                statusValidade = `<span class="status-pill pill-active">${diasRestantes} DIAS RESTANTES</span>`;
-            } else {
-                statusValidade = `<span class="status-pill pill-blocked">VENCIDO HÁ ${Math.abs(diasRestantes)} DIAS</span>`;
-            }
-        }
+        // 2. Atualiza no Firestore (Banco de Dados)
+        await updateDoc(doc(db, "users", uid), {
+            senhaVisual: novaSenha
+        });
 
-        var bloco = document.createElement('div');
-        bloco.className = 'company-block';
+        alert("SUCESSO!\n\nA senha de cadastro foi atualizada para: " + novaSenha + "\n\nIMPORTANTE: Informe esta senha ao usuário. Caso ele não consiga logar, peça para usar a função 'Esqueci minha senha' com o e-mail cadastrado.");
         
-        var htmlUsuarios = emp.usuarios.map(u => `
-            <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; font-size:0.85rem;">
-                <div>
-                    <strong>${u.name}</strong> (${u.role})<br>
-                    <span style="color:#666;">${u.email}</span>
-                </div>
-                <div>
-                    ${u.role !== 'admin_master' ? 
-                      `<button class="btn-mini delete-btn" onclick="excluirUsuarioGlobal('${u.uid}')" title="Excluir Usuário"><i class="fas fa-trash"></i></button>` 
-                      : ''}
-                    ${(u.role === 'admin' && !u.approved) ? 
-                      `<button class="btn-mini btn-success" onclick="aprovarUsuario('${u.uid}')">APROVAR</button>` 
-                      : ''}
-                </div>
-            </div>
-        `).join('');
+        // 3. Recarrega o painel para mostrar a nova senha na tabela
+        carregarPainelSuperAdmin(true);
 
-        bloco.innerHTML = `
-            <div class="company-header" onclick="this.nextElementSibling.classList.toggle('expanded')">
-                <div style="flex:1;">
-                    <h4 style="display:flex; align-items:center; gap:10px;">
-                        <i class="fas fa-building"></i> ${emp.id.toUpperCase()}
-                        ${!emp.admin ? '<small style="color:red;">(Sem Admin)</small>' : ''}
-                    </h4>
-                    <div style="font-size:0.75rem; color:#555; margin-top:4px;">Admin: ${nomeAdmin}</div>
-                </div>
-                <div class="company-meta">
-                    ${statusValidade}
-                    <span style="background:#ddd; padding:2px 6px; border-radius:4px;">${qtdUsers} Usuários</span>
-                    <i class="fas fa-chevron-down"></i>
-                </div>
-            </div>
-            <div class="company-content">
-                <div style="display:flex; justify-content:flex-end; margin-bottom:10px; border-bottom:1px solid #ddd; padding-bottom:10px;">
-                     <button class="btn-mini btn-warning" onclick="abrirModalCreditos('${emp.id}', '${emp.validade || ''}', ${emp.isVitalicio})">
-                        <i class="fas fa-coins"></i> GERENCIAR CRÉDITOS / ACESSO
-                     </button>
-                </div>
-                ${htmlUsuarios}
-            </div>
-        `;
-        
-        container.appendChild(bloco);
-    });
-}
-
-window.filterGlobalUsers = function() {
-    var termo = document.getElementById('superAdminSearch').value.toLowerCase();
-    if (!termo) return renderizarListaGlobal(_cacheGlobalUsers);
-
-    var filtrados = _cacheGlobalUsers.filter(u => 
-        u.name.toLowerCase().includes(termo) || 
-        u.email.toLowerCase().includes(termo) || 
-        (u.company && u.company.toLowerCase().includes(termo))
-    );
-    renderizarListaGlobal(filtrados);
+    } catch (e) {
+        console.error(e);
+        alert("Erro ao atualizar senha no banco de dados: " + e.message);
+    }
 };
 
 // -----------------------------------------------------------------------------
