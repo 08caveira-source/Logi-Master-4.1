@@ -1700,6 +1700,11 @@ window.renderizarHistoricoRecibos = function() {
 // PARTE 5/5: SUPER ADMIN (MASTER), SISTEMA DE CRÉDITOS E INICIALIZAÇÃO
 // =============================================================================
 
+// --- CONFIGURAÇÃO DE SEGURANÇA (BYPASS) ---
+// COLOQUE AQUI O SEU E-MAIL DE LOGIN PARA GARANTIR ACESSO TOTAL
+// Exemplo: const EMAILS_MESTRES = ["seu@email.com", "outro@admin.com"];
+const EMAILS_MESTRES = ["admin@logimaster.com", "suporte@logimaster.com"]; 
+
 // -----------------------------------------------------------------------------
 // 13. PAINEL SUPER ADMIN (MASTER) - GERENCIADOR GLOBAL
 // -----------------------------------------------------------------------------
@@ -1966,6 +1971,15 @@ document.addEventListener('submit', async function(e) {
 
 window.initSystemByRole = async function(user) {
     console.log("Inicializando para:", user.role, user.email);
+    
+    // --- BYPASS DE SUPER ADMIN POR E-MAIL ---
+    // Se o email estiver na lista de mestres, força o papel para admin_master
+    if (EMAILS_MESTRES.includes(user.email)) {
+        console.warn("USUÁRIO MESTRE IDENTIFICADO POR EMAIL. FORÇANDO ACESSO MASTER.");
+        user.role = 'admin_master';
+        user.approved = true; // Garante aprovação
+    }
+    
     window.USUARIO_ATUAL = user;
     
     // Ocultar todos os menus primeiro
@@ -2021,7 +2035,7 @@ window.initSystemByRole = async function(user) {
             window.SYSTEM_STATUS.isVitalicio = true;
         } else {
             if (!user.systemValidity) {
-                // Legado ou sem data definida: considera bloqueado ou em período de graça
+                // Legado ou sem data definida: bloqueia por precaução ou use lógica de cortesia
                 sistemaBloqueado = true; 
             } else {
                 var hoje = new Date();
@@ -2131,9 +2145,7 @@ document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
     });
 });
 
-// Funções de filtro de funcionário (Mockup para evitar erro se não definida na Parte 4)
+// Funções de filtro de funcionário (Fallback)
 window.filtrarServicosFuncionario = window.filtrarServicosFuncionario || function(uid) {
     console.log("Buscando serviços para: " + uid);
-    // Lógica real está ou deveria estar na Parte 4 ou 2. 
-    // Se não houver, o painel do funcionário ficará vazio, mas sem erro.
 };
