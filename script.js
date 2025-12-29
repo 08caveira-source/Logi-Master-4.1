@@ -1,7 +1,6 @@
 // =============================================================================
 // ARQUIVO: script.js
-// SISTEMA LOGIMASTER - VERSÃO 22.0 (CRÉDITOS, SUPER ADMIN E SEGURANÇA)
-// PARTE 1/5: CONFIGURAÇÕES, VARIÁVEIS GLOBAIS E CAMADA DE DADOS
+// SISTEMA LOGIMASTER - VERSÃO 22.1 (CORRIGIDO E ATUALIZADO)
 // =============================================================================
 
 // 1. CONSTANTES DE ARMAZENAMENTO (LOCALSTORAGE / FIREBASE)
@@ -155,12 +154,12 @@ function buscarReciboPorId(id) { return CACHE_RECIBOS.find(r => String(r.id) ===
 
 // Inicialização Inicial de Dados (Local)
 carregarTodosDadosLocais();
+
 // =============================================================================
-// =============================================================================
-// PARTE 2/5 (ATUALIZADA): DASHBOARD, PRIVACIDADE E GRÁFICOS
+// PARTE 2: DASHBOARD, PRIVACIDADE E GRÁFICOS
 // =============================================================================
 
-// --- NOVA FUNÇÃO: TOGGLE PRIVACIDADE DASHBOARD ---
+// --- FUNÇÃO: TOGGLE PRIVACIDADE DASHBOARD ---
 window.toggleDashboardPrivacy = function() {
     const targets = document.querySelectorAll('.privacy-target');
     const icon = document.getElementById('btnPrivacyIcon');
@@ -245,106 +244,147 @@ window.atualizarDashboard = function() {
     atualizarGraficoPrincipal(mesAtual, anoAtual);
 };
 
-// --- ATUALIZADA: GRÁFICO COM RESUMO DETALHADO DO VEÍCULO ---
+// --- NOVA FUNÇÃO DE GRÁFICO: SUPORTA FILTRO DE VEÍCULO E MOTORISTA ---
 function atualizarGraficoPrincipal(mes, ano) {
     var ctx = document.getElementById('mainChart');
     if (!ctx) return; 
 
-    var elSelect = document.getElementById('filtroVeiculoGrafico');
-    var filtroVeiculo = elSelect ? elSelect.value : "";
+    var filtroVeiculo = document.getElementById('filtroVeiculoGrafico') ? document.getElementById('filtroVeiculoGrafico').value : "";
+    var filtroMotorista = document.getElementById('filtroMotoristaGrafico') ? document.getElementById('filtroMotoristaGrafico').value : "";
+    
     var summaryContainer = document.getElementById('chartVehicleSummaryContainer');
 
-    // 1. GERAÇÃO DO CARD DE RESUMO (Se veículo selecionado)
-    if (summaryContainer) {
-        summaryContainer.innerHTML = ''; // Limpa anterior
+    // 1. CÁLCULO DAS ESTATÍSTICAS
+    var stats = {
+        faturamento: 0,
+        custos: 0, // Combustivel + Despesas + Comissão
+        lucro: 0,
+        viagens: 0,
+        faltas: 0,
+        kmTotal: 0,
+        litrosTotal: 0
+    };
+
+    // Variáveis para o gráfico de barras
+    var gReceita = 0;
+    var gCombustivel = 0;
+    var gPessoal = 0;
+    var gManutencao = 0;
+
+    CACHE_OPERACOES.forEach(op => {
+        if (op.status === 'CANCELADA') return;
         
-        if (filtroVeiculo) {
-            var kmMes = 0;
-            var faturamentoVeiculo = 0;
-            var custoTotalVeiculo = 0;
-            var litrosTotal = 0;
+        // Filtros (Se um estiver ativo, o outro deve ser ignorado ou ambos aplicados)
+        if (filtroVeiculo && op.veiculoPlaca !== filtroVeiculo) return;
+        if (filtroMotorista && op.motoristaId !== filtroMotorista) return;
 
-            CACHE_OPERACOES.forEach(op => {
-                if (op.veiculoPlaca !== filtroVeiculo || op.status === 'CANCELADA') return;
-                var d = new Date(op.data + 'T12:00:00');
-                if (d.getMonth() === mes && d.getFullYear() === ano) {
-                    kmMes += (Number(op.kmRodado) || 0);
-                    faturamentoVeiculo += (Number(op.faturamento) || 0);
-                    custoTotalVeiculo += (Number(op.combustivel) || 0) + (Number(op.despesas) || 0); // + Comissao se quiser refinar
-                    
-                    var preco = Number(op.precoLitro) || 0;
-                    var valorAbast = Number(op.combustivel) || 0;
-                    if (preco > 0 && valorAbast > 0) litrosTotal += (valorAbast / preco);
-                }
-            });
+        var d = new Date(op.data + 'T12:00:00');
+        if (d.getMonth() === mes && d.getFullYear() === ano) {
+            
+            // Verifica Faltas (Se filtrou motorista, conta faltas dele)
+            if (filtroMotorista && op.checkins && op.checkins.faltaMotorista) {
+                stats.faltas++;
+            }
 
-            var media = (litrosTotal > 0) ? (kmMes / litrosTotal) : 0;
-            var lucroLiquidoVeiculo = faturamentoVeiculo - custoTotalVeiculo;
+            var receitaOp = Number(op.faturamento) || 0;
+            var combustivelOp = Number(op.combustivel) || 0;
+            var despesasOp = Number(op.despesas) || 0;
+            var comissaoOp = 0;
 
-            // HTML do Resumo Detalhado
+            // Comissão só conta se não faltou
+            if (!op.checkins || !op.checkins.faltaMotorista) {
+                comissaoOp = Number(op.comissao) || 0;
+            }
+            
+            // Ajudantes
+            if (op.ajudantes) {
+                op.ajudantes.forEach(aj => {
+                     var faltou = (op.checkins && op.checkins.faltas && op.checkins.faltas[aj.id]);
+                     if (!faltou) comissaoOp += (Number(aj.diaria)||0);
+                });
+            }
+
+            stats.viagens++;
+            stats.faturamento += receitaOp;
+            stats.custos += (combustivelOp + despesasOp + comissaoOp);
+            stats.kmTotal += (Number(op.kmRodado) || 0);
+
+            // Dados para o Gráfico
+            gReceita += receitaOp;
+            gCombustivel += combustivelOp;
+            gPessoal += comissaoOp;
+            gManutencao += despesasOp;
+
+            // Cálculo Média Km/L (Apenas se tiver dados validos)
+            var preco = Number(op.precoLitro) || 0;
+            if (preco > 0 && combustivelOp > 0) stats.litrosTotal += (combustivelOp / preco);
+        }
+    });
+
+    stats.lucro = stats.faturamento - stats.custos;
+
+    // 2. GERAÇÃO DO CARD DE RESUMO
+    if (summaryContainer) {
+        summaryContainer.innerHTML = ''; 
+        
+        if (filtroVeiculo || filtroMotorista) {
+            var tituloBox = filtroVeiculo ? "VEÍCULO" : "MOTORISTA";
+            var valorTitulo = filtroVeiculo || (CACHE_FUNCIONARIOS.find(f => f.id == filtroMotorista)?.nome || "Desconhecido");
+            
+            // Se for motorista, mostra faltas. Se for veículo, mostra média km/l
+            var boxExtraLabel = filtroMotorista ? "FALTAS / OCORRÊNCIAS" : "MÉDIA DE CONSUMO";
+            var boxExtraValue = "";
+            var boxExtraColor = "#333";
+
+            if (filtroMotorista) {
+                boxExtraValue = stats.faltas + " Faltas";
+                boxExtraColor = stats.faltas > 0 ? "var(--danger-color)" : "var(--success-color)";
+            } else {
+                var media = (stats.litrosTotal > 0) ? (stats.kmTotal / stats.litrosTotal) : 0;
+                boxExtraValue = media.toFixed(2) + " Km/L";
+                boxExtraColor = "var(--primary-color)";
+            }
+
             summaryContainer.innerHTML = `
                 <div id="chartVehicleSummary">
-                    <div class="veh-stat-box"><small>VEÍCULO</small><span>${filtroVeiculo}</span></div>
-                    <div class="veh-stat-box"><small>FATURAMENTO</small><span style="color:var(--success-color)">${formatarValorMoeda(faturamentoVeiculo)}</span></div>
-                    <div class="veh-stat-box"><small>KM RODADO</small><span>${kmMes.toFixed(1)} km</span></div>
-                    <div class="veh-stat-box"><small>MÉDIA GLOBAL</small><span style="color:var(--primary-color)">${media.toFixed(2)} Km/L</span></div>
-                    <div class="veh-stat-box"><small>LUCRO LÍQUIDO</small><span style="color:${lucroLiquidoVeiculo >= 0 ? 'var(--success-color)' : 'var(--danger-color)'}">${formatarValorMoeda(lucroLiquidoVeiculo)}</span></div>
+                    <div class="veh-stat-box"><small>${tituloBox}</small><span>${valorTitulo}</span></div>
+                    <div class="veh-stat-box"><small>VIAGENS (MÊS)</small><span>${stats.viagens}</span></div>
+                    <div class="veh-stat-box"><small>FATURAMENTO</small><span style="color:var(--success-color)">${formatarValorMoeda(stats.faturamento)}</span></div>
+                    <div class="veh-stat-box"><small>${boxExtraLabel}</small><span style="color:${boxExtraColor}">${boxExtraValue}</span></div>
+                    <div class="veh-stat-box"><small>LUCRO GERADO</small><span style="color:${stats.lucro >= 0 ? 'var(--success-color)' : 'var(--danger-color)'}">${formatarValorMoeda(stats.lucro)}</span></div>
                 </div>
             `;
         }
     }
 
-    // 2. RENDERIZAÇÃO DO GRÁFICO (Chart.js)
+    // 3. RENDERIZAÇÃO DO GRÁFICO (Chart.js)
     if (window.chartInstance) window.chartInstance.destroy();
 
-    var receita = 0;
-    var combustivel = 0;
-    var pessoal = 0; 
-    var manutencaoGeral = 0; 
-    
-    CACHE_OPERACOES.forEach(op => {
-        if (filtroVeiculo && op.veiculoPlaca !== filtroVeiculo) return;
-        var d = new Date(op.data + 'T12:00:00');
-        if ((op.status === 'CONFIRMADA' || op.status === 'FINALIZADA') && d.getMonth() === mes && d.getFullYear() === ano) {
-            receita += Number(op.faturamento || 0);
-            combustivel += Number(op.combustivel || 0);
-            if (!op.checkins || !op.checkins.faltaMotorista) pessoal += Number(op.comissao || 0);
-            if (op.ajudantes) {
-                op.ajudantes.forEach(aj => {
-                    var faltou = (op.checkins && op.checkins.faltas && op.checkins.faltas[aj.id]);
-                    if (!faltou) pessoal += (Number(aj.diaria)||0);
-                });
-            }
-            manutencaoGeral += Number(op.despesas || 0);
-        }
-    });
-
-    CACHE_DESPESAS.forEach(d => {
-        if (filtroVeiculo && d.veiculoPlaca !== filtroVeiculo) return;
-        var dt = new Date(d.data + 'T12:00:00');
-        if (dt.getMonth() === mes && dt.getFullYear() === ano) {
-            manutencaoGeral += Number(d.valor || 0);
-        }
-    });
-
-    var lucro = receita - (combustivel + pessoal + manutencaoGeral);
+    var lucroFinal = gReceita - (gCombustivel + gPessoal + gManutencao);
 
     window.chartInstance = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ['FATURAMENTO', 'COMBUSTÍVEL', 'PESSOAL', 'MANUTENÇÃO', 'LUCRO'],
+            labels: ['FATURAMENTO', 'COMBUSTÍVEL', 'PESSOAL/COMISSÃO', 'MANUTENÇÃO', 'LUCRO LÍQUIDO'],
             datasets: [{
-                label: filtroVeiculo ? 'Dados: ' + filtroVeiculo : 'Geral',
-                data: [receita, combustivel, pessoal, manutencaoGeral, lucro],
-                backgroundColor: ['#28a745', '#dc3545', '#ffc107', '#17a2b8', (lucro >= 0 ? '#20c997' : '#e83e8c')]
+                label: 'Valores do Mês',
+                data: [gReceita, gCombustivel, gPessoal, gManutencao, lucroFinal],
+                backgroundColor: ['#28a745', '#dc3545', '#ffc107', '#17a2b8', (lucroFinal >= 0 ? '#20c997' : '#e83e8c')]
             }]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { callback: function(value) { return 'R$ ' + value; } } }
+            }
+        }
     });
 }
 
 // -----------------------------------------------------------------------------
-// 8. LÓGICA DO CALENDÁRIO
+// LÓGICA DO CALENDÁRIO
 // -----------------------------------------------------------------------------
 
 window.renderizarCalendario = function() {
@@ -605,9 +645,9 @@ window.abrirModalDetalhesDia = function(dataString) {
     modalBody.innerHTML = htmlLista || '<p style="text-align:center; padding:20px;">Nenhuma operação registrada neste dia.</p>';
     document.getElementById('modalDayOperations').style.display = 'block';
 };
+
 // =============================================================================
-// ARQUIVO: script.js
-// PARTE 3/5: GESTÃO DE CADASTROS, INTERFACE DE FORMULÁRIOS E FUNÇÕES DE UI
+// PARTE 3: GESTÃO DE CADASTROS, INTERFACE DE FORMULÁRIOS E FUNÇÕES DE UI
 // =============================================================================
 
 // -----------------------------------------------------------------------------
@@ -832,6 +872,14 @@ window.renderizarListaAjudantesAdicionados = function() { var ul = document.getE
 window.removerAjudanteTemp = function(id) { window._operacaoAjudantesTempList = window._operacaoAjudantesTempList.filter(x => String(x.id) !== String(id)); renderizarListaAjudantesAdicionados(); };
 document.getElementById('btnManualAddAjudante')?.addEventListener('click', function() { var sel = document.getElementById('selectAjudantesOperacao'); var idAj = sel.value; if (!idAj) return alert("Selecione um ajudante."); if (window._operacaoAjudantesTempList.find(x => x.id === idAj)) return alert("Já está na lista."); var valor = prompt("Valor da Diária:"); if (valor) { window._operacaoAjudantesTempList.push({ id: idAj, diaria: Number(valor.replace(',', '.')) }); renderizarListaAjudantesAdicionados(); sel.value = ""; } });
 
+window.limparOutroFiltro = function(tipo) {
+    if (tipo === 'motorista') {
+        document.getElementById('filtroMotoristaGrafico').value = "";
+    } else {
+        document.getElementById('filtroVeiculoGrafico').value = "";
+    }
+};
+
 function preencherTodosSelects() {
     const fill = (id, dados, valKey, textKey, defText) => { var el = document.getElementById(id); if (!el) return; var atual = el.value; el.innerHTML = `<option value="">${defText}</option>` + dados.map(d => `<option value="${d[valKey]}">${d[textKey]}</option>`).join(''); if(atual) el.value = atual; };
     fill('selectMotoristaOperacao', CACHE_FUNCIONARIOS.filter(f => f.funcao === 'motorista'), 'id', 'nome', 'SELECIONE MOTORISTA...');
@@ -848,6 +896,7 @@ function preencherTodosSelects() {
     
     // NOVO: Filtro de Gráfico (Análise Financeira)
     fill('filtroVeiculoGrafico', CACHE_VEICULOS, 'placa', 'placa', 'TODOS OS VEÍCULOS');
+    fill('filtroMotoristaGrafico', CACHE_FUNCIONARIOS, 'id', 'nome', 'TODOS OS MOTORISTAS');
     
     // Recibos e Despesas
     fill('selectMotoristaRecibo', CACHE_FUNCIONARIOS, 'id', 'nome', 'SELECIONE O FUNCIONÁRIO...');
@@ -1058,13 +1107,13 @@ window.closeModal = function() { document.getElementById('operationDetailsModal'
 window.closeCheckinConfirmModal = function() { document.getElementById('modalCheckinConfirm').style.display = 'none'; };
 window.closeAdicionarAjudanteModal = function() { document.getElementById('modalAdicionarAjudante').style.display = 'none'; };
 function renderizarInformacoesEmpresa() { var div = document.getElementById('viewMinhaEmpresaContent'); if (CACHE_MINHA_EMPRESA.razaoSocial) { div.innerHTML = `<strong>${CACHE_MINHA_EMPRESA.razaoSocial}</strong><br>CNPJ: ${CACHE_MINHA_EMPRESA.cnpj}<br>Tel: ${formatarTelefoneBrasil(CACHE_MINHA_EMPRESA.telefone)}`; } else { div.innerHTML = "Nenhum dado cadastrado."; } }
+
 // =============================================================================
-// ARQUIVO: script.js
-// PARTE 4/5: MONITORAMENTO, GESTÃO DE EQUIPE, RELATÓRIOS E RECIBOS
+// PARTE 4: MONITORAMENTO, GESTÃO DE EQUIPE, RELATÓRIOS E RECIBOS
 // =============================================================================
 
 // -----------------------------------------------------------------------------
-// 9. MONITORAMENTO DE ROTAS E CHECK-INS
+// MONITORAMENTO DE ROTAS E CHECK-INS
 // -----------------------------------------------------------------------------
 
 window.renderizarTabelaMonitoramento = function() {
@@ -1169,7 +1218,7 @@ function adicionarLinhaFalta(tbody, data, nome, funcao, status, opId) {
 }
 
 // -----------------------------------------------------------------------------
-// 10. GESTÃO DE EQUIPE (ADMINISTRATIVO)
+// GESTÃO DE EQUIPE (ADMINISTRATIVO)
 // -----------------------------------------------------------------------------
 
 window.renderizarPainelEquipe = async function() {
@@ -1319,7 +1368,7 @@ window.rejeitarProfileRequest = async function(reqId) {
 };
 
 // -----------------------------------------------------------------------------
-// 11. GERAÇÃO DE RELATÓRIOS
+// GERAÇÃO DE RELATÓRIOS
 // -----------------------------------------------------------------------------
 
 function filtrarOperacoesParaRelatorio() {
@@ -1484,7 +1533,7 @@ window.exportarRelatorioPDF = function() {
 };
 
 // -----------------------------------------------------------------------------
-// 12. EMISSÃO DE RECIBOS DE PAGAMENTO
+// EMISSÃO DE RECIBOS DE PAGAMENTO
 // -----------------------------------------------------------------------------
 
 window.gerarReciboPagamento = function() {
@@ -1648,25 +1697,21 @@ window.renderizarHistoricoRecibos = function() {
         tbody.appendChild(tr);
     });
 };
+
 // =============================================================================
-// ARQUIVO: script.js
-// PARTE 5/5: SUPER ADMIN (CORREÇÃO ORDERBY), CRÉDITOS E INICIALIZAÇÃO
+// PARTE 5: SUPER ADMIN (MASTER), CRÉDITOS E INICIALIZAÇÃO
 // =============================================================================
 
 // --- CONFIGURAÇÃO DE SEGURANÇA (BYPASS) ---
-// COLOQUE AQUI O SEU E-MAIL DE LOGIN PARA GARANTIR ACESSO TOTAL
 const EMAILS_MESTRES = ["admin@logimaster.com", "suporte@logimaster.com"]; 
 
 // -----------------------------------------------------------------------------
-// 13. PAINEL SUPER ADMIN (MASTER) - GERENCIADOR GLOBAL
+// PAINEL SUPER ADMIN (MASTER) - GERENCIADOR GLOBAL
 // -----------------------------------------------------------------------------
 
 var _cacheGlobalUsers = [];
 
-// =============================================================================
-// ATUALIZAÇÃO: SUPER ADMIN - RESET DE SENHA (RECRIAÇÃO INTELIGENTE)
-// =============================================================================
-
+// RESET DE SENHA (RECRIAÇÃO INTELIGENTE)
 window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
     const container = document.getElementById('superAdminContainer');
     if(!container) return;
@@ -1773,7 +1818,6 @@ window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
     }
 };
 
-// --- LÓGICA DE RESET FORÇADO (MIGRAÇÃO DE DADOS) ---
 window.resetarSenhaComMigracao = async function(oldUid, email, nome) {
     // 1. Pedir a nova senha
     var novaSenha = prompt(`RESETAR SENHA DE: ${nome}\n(${email})\n\nComo o e-mail é fictício, vamos recriar o acesso mantendo os dados.\n\nDIGITE A NOVA SENHA (Mín 6 dígitos):`);
@@ -1789,16 +1833,12 @@ window.resetarSenhaComMigracao = async function(oldUid, email, nome) {
 
     try {
         // 2. Tentar Criar Novo Usuário (Secondary App)
-        // Isso vai falhar se o email já existir no Authentication
         let newUid = null;
         try {
             newUid = await window.dbRef.criarAuthUsuario(email, novaSenha);
         } catch (authError) {
             if (authError.code === 'auth/email-already-in-use') {
-                // 3. FALHA ESPERADA: O e-mail está preso no Auth.
                 alert(`IMPORTANTE: O e-mail "${email}" já está travado no sistema de Autenticação.\n\nPARA CONTINUAR:\n1. Abra uma nova aba no FIREBASE CONSOLE.\n2. Vá em 'Authentication' e EXCLUA a linha do e-mail: ${email}.\n3. Volte aqui e clique em OK nesta mensagem.`);
-                
-                // Tenta de novo após o admin excluir manualmente
                 try {
                     newUid = await window.dbRef.criarAuthUsuario(email, novaSenha);
                 } catch (retryError) {
@@ -1812,8 +1852,6 @@ window.resetarSenhaComMigracao = async function(oldUid, email, nome) {
         }
 
         // 4. Se chegou aqui, temos o newUid e o usuário foi recriado com a nova senha.
-        // Agora precisamos mover os DADOS do oldUid para o newUid.
-        
         console.log(`Migrando dados de ${oldUid} para ${newUid}...`);
         
         const { db, doc, getDoc, setDoc, deleteDoc } = window.dbRef;
@@ -1824,25 +1862,18 @@ window.resetarSenhaComMigracao = async function(oldUid, email, nome) {
         
         if (oldUserSnap.exists()) {
             const userData = oldUserSnap.data();
-            // Atualiza com os novos dados de acesso
             userData.uid = newUid;
             userData.senhaVisual = novaSenha;
             userData.migratedAt = new Date().toISOString();
             
-            // Salva no novo ID
             await setDoc(doc(db, "users", newUid), userData);
-            // Deleta o perfil antigo
             await deleteDoc(oldUserRef);
         }
 
         // B. Atualizar Referências nas Operações e Recibos (Localmente + Cloud)
-        // Como o sistema é híbrido, atualizamos as listas locais e salvamos tudo.
-        // Isso é mais eficiente que buscar documento por documento no Firestore.
-        
         let migrouOps = 0;
         let migrouRecibos = 0;
 
-        // Atualiza Operações (Motorista ID e Ajudantes)
         CACHE_OPERACOES.forEach(op => {
             let mudou = false;
             if (op.motoristaId === oldUid) {
@@ -1860,7 +1891,6 @@ window.resetarSenhaComMigracao = async function(oldUid, email, nome) {
             }
         });
 
-        // Atualiza Recibos
         CACHE_RECIBOS.forEach(rec => {
             if (rec.funcionarioId === oldUid) {
                 rec.funcionarioId = newUid;
@@ -1868,20 +1898,17 @@ window.resetarSenhaComMigracao = async function(oldUid, email, nome) {
             }
         });
 
-        // Atualiza Lista de Funcionários
         const idx = CACHE_FUNCIONARIOS.findIndex(f => f.id === oldUid);
         if (idx !== -1) {
             CACHE_FUNCIONARIOS[idx].id = newUid;
-            CACHE_FUNCIONARIOS[idx].senhaVisual = novaSenha; // Atualiza visualmente também
+            CACHE_FUNCIONARIOS[idx].senhaVisual = novaSenha; 
         }
 
-        // Salva tudo na nuvem
         await salvarListaOperacoes(CACHE_OPERACOES);
         await salvarListaRecibos(CACHE_RECIBOS);
         await salvarListaFuncionarios(CACHE_FUNCIONARIOS);
 
         alert(`SUCESSO!\n\nSenha alterada para: ${novaSenha}\n\nO usuário foi recriado e ${migrouOps} operações + ${migrouRecibos} recibos foram migrados para o novo acesso.`);
-        
         carregarPainelSuperAdmin(true);
 
     } catch (erro) {
@@ -1892,7 +1919,7 @@ window.resetarSenhaComMigracao = async function(oldUid, email, nome) {
 };
 
 // -----------------------------------------------------------------------------
-// 14. SISTEMA DE CRÉDITOS E VALIDADE (GERENCIAMENTO)
+// SISTEMA DE CRÉDITOS E VALIDADE
 // -----------------------------------------------------------------------------
 
 window.abrirModalCreditos = function(companyId, validadeAtual, isVitalicio) {
@@ -2006,96 +2033,58 @@ document.addEventListener('submit', async function(e) {
 });
 
 // -----------------------------------------------------------------------------
-// 15. INICIALIZAÇÃO DO SISTEMA (ROTEAMENTO E VERIFICAÇÕES)
+// INICIALIZAÇÃO DO SISTEMA (ROTEAMENTO E VERIFICAÇÕES)
 // -----------------------------------------------------------------------------
 
 window.initSystemByRole = async function(user) {
     console.log("Inicializando para:", user.role, user.email);
     
-    // --- BYPASS DE SUPER ADMIN POR E-MAIL ---
-    if (EMAILS_MESTRES.includes(user.email)) {
-        console.warn("USUÁRIO MESTRE IDENTIFICADO. ACESSO LIBERADO.");
-        user.role = 'admin_master';
-        user.approved = true; 
-    }
+    // Ocultar TUDO imediatamente para evitar o "flash"
+    document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+    document.querySelectorAll('.sidebar ul').forEach(ul => ul.style.display = 'none');
     
     window.USUARIO_ATUAL = user;
-    
-    // Ocultar menus
-    document.querySelectorAll('.sidebar ul').forEach(ul => ul.style.display = 'none');
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
 
-    // -----------------------------------------------------------
-    // 1. SUPER ADMIN (MASTER) - SEM RESTRIÇÕES
-    // -----------------------------------------------------------
-    if (user.role === 'admin_master') {
+    // --- 1. SUPER ADMIN (MASTER) ---
+    if (EMAILS_MESTRES.includes(user.email) || user.role === 'admin_master') {
         window.SYSTEM_STATUS = { validade: 'VITALICIO', isVitalicio: true, bloqueado: false };
-
-        document.getElementById('menu-super-admin').style.display = 'block';
-        document.getElementById('userRoleDisplay').textContent = "SUPER ADMIN";
         
-        document.querySelector('[data-page="super-admin"]').click();
+        document.getElementById('userRoleDisplay').textContent = "SUPER ADMIN";
+        document.getElementById('menu-super-admin').style.display = 'block';
+        
+        document.getElementById('super-admin').style.display = 'block';
+        document.getElementById('super-admin').classList.add('active');
+        
         carregarPainelSuperAdmin(true);
-        return; 
+        return; // BLOQUEIA A EXECUÇÃO DO RESTO (CORREÇÃO DO FLASH)
     }
 
-    // -----------------------------------------------------------
-    // 2. VERIFICAÇÃO DE APROVAÇÃO
-    // -----------------------------------------------------------
+    // --- 2. VERIFICAÇÕES DE USUÁRIO COMUM ---
     if (!user.approved) {
-        document.body.innerHTML = `
-            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#eceff1; color:#37474f; text-align:center;">
-                <i class="fas fa-lock" style="font-size:4rem; margin-bottom:20px; color:#cfd8dc;"></i>
-                <h1>ACESSO EM ANÁLISE</h1>
-                <p>Sua conta aguarda aprovação do administrador da empresa <strong>${user.company}</strong>.</p>
-                <button onclick="logoutSystem()" class="btn-primary" style="margin-top:20px;">VOLTAR AO LOGIN</button>
-            </div>
-        `;
+        document.body.innerHTML = `<div style="text-align:center; padding:50px;"><h1>AGUARDANDO APROVAÇÃO</h1><button onclick="logoutSystem()">SAIR</button></div>`;
         return;
     }
 
-    // -----------------------------------------------------------
-    // 3. VERIFICAÇÃO DE VALIDADE/CRÉDITOS
-    // -----------------------------------------------------------
+    // Validação de Créditos
     var diasRestantes = 0;
     var sistemaBloqueado = false;
-    
     if (user.role === 'admin') {
-        if (user.isVitalicio) {
-            window.SYSTEM_STATUS.isVitalicio = true;
-        } else {
-            if (!user.systemValidity) {
-                sistemaBloqueado = true; 
-            } else {
+        if (!user.isVitalicio) {
+            if (!user.systemValidity) sistemaBloqueado = true;
+            else {
                 var hoje = new Date();
                 var vencimento = new Date(user.systemValidity);
-                diasRestantes = Math.ceil((vencimento - hoje) / (1000 * 60 * 60 * 24));
-                
-                if (vencimento < hoje) {
-                    sistemaBloqueado = true;
-                    window.SYSTEM_STATUS.bloqueado = true;
-                }
+                if (vencimento < hoje) { sistemaBloqueado = true; window.SYSTEM_STATUS.bloqueado = true; }
             }
         }
     }
 
-    // TELA DE BLOQUEIO (ADMIN LOCAL)
     if (user.role === 'admin' && sistemaBloqueado && !user.isVitalicio) {
-        document.body.innerHTML = `
-            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#ffebee; color:#b71c1c; text-align:center;">
-                <i class="fas fa-ban" style="font-size:4rem; margin-bottom:20px;"></i>
-                <h1>ASSINATURA VENCIDA</h1>
-                <p>O acesso da empresa <strong>${user.company}</strong> está suspenso.</p>
-                <p>Entre em contato com o suporte para regularizar.</p>
-                <button onclick="logoutSystem()" class="btn-danger" style="margin-top:30px;">SAIR</button>
-            </div>
-        `;
+        document.body.innerHTML = `<div style="text-align:center; padding:50px; color:red;"><h1>ASSINATURA VENCIDA</h1><button onclick="logoutSystem()">SAIR</button></div>`;
         return;
     }
 
-    // -----------------------------------------------------------
-    // 4. ROTEAMENTO
-    // -----------------------------------------------------------
+    // --- 3. ROTEAMENTO ADMIN COMUM ---
     if (user.role === 'admin') {
         document.getElementById('menu-admin').style.display = 'block';
         
@@ -2115,18 +2104,25 @@ window.initSystemByRole = async function(user) {
         renderizarPainelEquipe();
         renderizarCalendario();
         atualizarDashboard();
-        document.querySelector('[data-page="home"]').click();
+        
+        var homePage = document.getElementById('home');
+        if(homePage) {
+            homePage.style.display = 'block';
+            homePage.classList.add('active');
+        }
 
     } else if (user.role === 'motorista' || user.role === 'ajudante') {
         document.getElementById('menu-employee').style.display = 'block';
         window.MODO_APENAS_LEITURA = true;
-        filtrarServicosFuncionario(user.uid); 
+        if(typeof window.filtrarServicosFuncionario === 'function') {
+             window.filtrarServicosFuncionario(user.uid); 
+        }
         document.querySelector('[data-page="employee-home"]').click();
     }
 };
 
 // -----------------------------------------------------------------------------
-// 16. EVENTOS DE NAVEGAÇÃO E UI
+// EVENTOS DE NAVEGAÇÃO E UI
 // -----------------------------------------------------------------------------
 
 document.querySelectorAll('.nav-item').forEach(item => {
@@ -2172,21 +2168,6 @@ document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
     });
 });
 
-document.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', function() {
-        // ... (código existente de navegação) ...
-        
-        // NOVO: Fecha menu no mobile ao clicar
-        if (window.innerWidth <= 768) {
-            document.getElementById('sidebar').classList.remove('active');
-        }
-    });
-});
-
-// Funções de filtro de funcionário (Fallback)
-window.filtrarServicosFuncionario = window.filtrarServicosFuncionario || function(uid) {
-    console.log("Buscando serviços para: " + uid);
-};
 // =============================================================================
 // PARTE 6: FUNÇÕES DE MANUTENÇÃO (CORREÇÃO DOS BOTÕES)
 // =============================================================================

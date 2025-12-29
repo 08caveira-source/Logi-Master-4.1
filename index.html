@@ -153,22 +153,27 @@
             </div>
         </section>
 
-        <section id="graficos" class="page">
-            <div class="section-header"><h2>ANÁLISE GRÁFICA FINANCEIRA</h2></div>
-            
-            <div class="card">
-                <div style="display:flex; justify-content:space-between; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
-                    <h3>PERFORMANCE POR VEÍCULO</h3>
-                    
-                    <div style="display:flex; gap:10px; align-items:center;">
-                        <label for="filtroVeiculoGrafico" style="margin:0; white-space:nowrap;">Filtrar Veículo:</label>
-                        <select id="filtroVeiculoGrafico" onchange="atualizarDashboard()" style="min-width:200px;">
-                            <option value="">TODOS OS VEÍCULOS</option>
-                        </select>
-                    </div>
-                </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+    <h3>PERFORMANCE OPERACIONAL (VEÍCULO OU MOTORISTA)</h3>
+    
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap: wrap;">
+        <div style="display:flex; flex-direction:column;">
+            <label for="filtroVeiculoGrafico" style="margin:0; font-size:0.7rem;">FILTRAR VEÍCULO:</label>
+            <select id="filtroVeiculoGrafico" onchange="limparOutroFiltro('motorista'); atualizarDashboard()" style="min-width:180px;">
+                <option value="">TODOS OS VEÍCULOS</option>
+            </select>
+        </div>
 
-                <div id="chartVehicleSummaryContainer"></div>
+        <div style="display:flex; flex-direction:column;">
+            <label for="filtroMotoristaGrafico" style="margin:0; font-size:0.7rem;">FILTRAR MOTORISTA:</label>
+            <select id="filtroMotoristaGrafico" onchange="limparOutroFiltro('veiculo'); atualizarDashboard()" style="min-width:180px;">
+                <option value="">TODOS OS MOTORISTAS</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<div id="chartVehicleSummaryContainer"></div>
 
                 <div class="chart-container" style="position: relative; height:450px; width:100%;">
                     <canvas id="mainChart"></canvas>
