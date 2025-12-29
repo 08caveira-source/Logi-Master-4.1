@@ -1697,12 +1697,11 @@ window.renderizarHistoricoRecibos = function() {
 };
 // =============================================================================
 // ARQUIVO: script.js
-// PARTE 5/5: SUPER ADMIN (MASTER), SISTEMA DE CRÉDITOS E INICIALIZAÇÃO
+// PARTE 5/5: SUPER ADMIN (CORREÇÃO ORDERBY), CRÉDITOS E INICIALIZAÇÃO
 // =============================================================================
 
 // --- CONFIGURAÇÃO DE SEGURANÇA (BYPASS) ---
 // COLOQUE AQUI O SEU E-MAIL DE LOGIN PARA GARANTIR ACESSO TOTAL
-// Exemplo: const EMAILS_MESTRES = ["seu@email.com", "outro@admin.com"];
 const EMAILS_MESTRES = ["admin@logimaster.com", "suporte@logimaster.com"]; 
 
 // -----------------------------------------------------------------------------
@@ -1720,14 +1719,23 @@ window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
     if (!window.dbRef) return console.error("Firebase não inicializado.");
 
     try {
-        // Busca todos os usuários do sistema (Global) sem restrições
-        const { db, collection, getDocs, query, orderBy } = window.dbRef;
-        const q = query(collection(db, "users"), orderBy("company"));
+        // CORREÇÃO: Removemos 'orderBy' que estava causando erro e ordenamos via JS
+        const { db, collection, getDocs, query } = window.dbRef;
+        
+        // Busca simples (sem ordenação no banco para evitar erro de índice/função)
+        const q = query(collection(db, "users"));
         const snapshot = await getDocs(q);
         
         _cacheGlobalUsers = [];
         snapshot.forEach(doc => {
             _cacheGlobalUsers.push(doc.data());
+        });
+
+        // Ordenação via JavaScript (Agrupa por empresa)
+        _cacheGlobalUsers.sort((a, b) => {
+            var empA = a.company ? a.company.toLowerCase() : 'zzz';
+            var empB = b.company ? b.company.toLowerCase() : 'zzz';
+            return empA.localeCompare(empB);
         });
 
         renderizarListaGlobal(_cacheGlobalUsers);
@@ -1767,7 +1775,7 @@ function renderizarListaGlobal(listaUsuarios) {
     });
 
     if (Object.keys(empresas).length === 0) {
-        container.innerHTML = '<p style="text-align:center;">Nenhuma empresa encontrada.</p>';
+        container.innerHTML = '<p style="text-align:center;">Nenhuma empresa encontrada no banco de dados.</p>';
         return;
     }
 
@@ -1942,7 +1950,6 @@ document.addEventListener('submit', async function(e) {
             var uid = await window.dbRef.criarAuthUsuario(email, senha);
             const { db, doc, setDoc } = window.dbRef;
             
-            // Cria o Admin da nova empresa com 30 dias grátis
             await setDoc(doc(db, "users", uid), {
                 uid: uid,
                 name: "ADMIN " + dominio.toUpperCase(),
@@ -1973,43 +1980,34 @@ window.initSystemByRole = async function(user) {
     console.log("Inicializando para:", user.role, user.email);
     
     // --- BYPASS DE SUPER ADMIN POR E-MAIL ---
-    // Se o email estiver na lista de mestres, força o papel para admin_master
     if (EMAILS_MESTRES.includes(user.email)) {
-        console.warn("USUÁRIO MESTRE IDENTIFICADO POR EMAIL. FORÇANDO ACESSO MASTER.");
+        console.warn("USUÁRIO MESTRE IDENTIFICADO. ACESSO LIBERADO.");
         user.role = 'admin_master';
-        user.approved = true; // Garante aprovação
+        user.approved = true; 
     }
     
     window.USUARIO_ATUAL = user;
     
-    // Ocultar todos os menus primeiro
+    // Ocultar menus
     document.querySelectorAll('.sidebar ul').forEach(ul => ul.style.display = 'none');
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
 
     // -----------------------------------------------------------
-    // 1. SUPER ADMIN (MASTER) - IMUNIDADE TOTAL DE CRÉDITOS
+    // 1. SUPER ADMIN (MASTER) - SEM RESTRIÇÕES
     // -----------------------------------------------------------
     if (user.role === 'admin_master') {
-        console.log("Acesso Master concedido: Sistema de créditos desativado para este usuário.");
-        
-        // Garante que o estado global reflita acesso ilimitado para evitar bloqueios de escrita
-        window.SYSTEM_STATUS = {
-            validade: 'VITALICIO',
-            isVitalicio: true,
-            bloqueado: false
-        };
+        window.SYSTEM_STATUS = { validade: 'VITALICIO', isVitalicio: true, bloqueado: false };
 
         document.getElementById('menu-super-admin').style.display = 'block';
         document.getElementById('userRoleDisplay').textContent = "SUPER ADMIN";
         
-        // Força a entrada no painel master
         document.querySelector('[data-page="super-admin"]').click();
         carregarPainelSuperAdmin(true);
-        return; // ENCERRA AQUI - Não executa verificações de bloqueio abaixo
+        return; 
     }
 
     // -----------------------------------------------------------
-    // 2. VERIFICAÇÃO DE APROVAÇÃO (ADMIN LOCAL E FUNCIONÁRIOS)
+    // 2. VERIFICAÇÃO DE APROVAÇÃO
     // -----------------------------------------------------------
     if (!user.approved) {
         document.body.innerHTML = `
@@ -2024,18 +2022,16 @@ window.initSystemByRole = async function(user) {
     }
 
     // -----------------------------------------------------------
-    // 3. VERIFICAÇÃO DE VALIDADE/CRÉDITOS (APENAS EMPRESAS)
+    // 3. VERIFICAÇÃO DE VALIDADE/CRÉDITOS
     // -----------------------------------------------------------
     var diasRestantes = 0;
     var sistemaBloqueado = false;
     
-    // Se for Admin Local, verifica sua própria validade
     if (user.role === 'admin') {
         if (user.isVitalicio) {
             window.SYSTEM_STATUS.isVitalicio = true;
         } else {
             if (!user.systemValidity) {
-                // Legado ou sem data definida: bloqueia por precaução ou use lógica de cortesia
                 sistemaBloqueado = true; 
             } else {
                 var hoje = new Date();
@@ -2050,7 +2046,7 @@ window.initSystemByRole = async function(user) {
         }
     }
 
-    // TELA DE BLOQUEIO POR FALTA DE PAGAMENTO (APENAS ADMIN LOCAL)
+    // TELA DE BLOQUEIO (ADMIN LOCAL)
     if (user.role === 'admin' && sistemaBloqueado && !user.isVitalicio) {
         document.body.innerHTML = `
             <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#ffebee; color:#b71c1c; text-align:center;">
@@ -2065,12 +2061,11 @@ window.initSystemByRole = async function(user) {
     }
 
     // -----------------------------------------------------------
-    // 4. ROTEAMENTO DE MENUS (USUÁRIOS COM ACESSO LIBERADO)
+    // 4. ROTEAMENTO
     // -----------------------------------------------------------
     if (user.role === 'admin') {
         document.getElementById('menu-admin').style.display = 'block';
         
-        // Exibir Mostrador de Validade na Sidebar
         var displayVal = document.getElementById('systemValidityDisplay');
         var spanData = document.getElementById('valDataVencimento');
         if (displayVal && spanData) {
@@ -2092,7 +2087,6 @@ window.initSystemByRole = async function(user) {
     } else if (user.role === 'motorista' || user.role === 'ajudante') {
         document.getElementById('menu-employee').style.display = 'block';
         window.MODO_APENAS_LEITURA = true;
-        // Funcionários não veem dados financeiros globais, apenas seus serviços
         filtrarServicosFuncionario(user.uid); 
         document.querySelector('[data-page="employee-home"]').click();
     }
