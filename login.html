@@ -132,6 +132,15 @@
                 try {
                     const snap = await getDoc(docRef);
                     if (snap.exists()) {
+                        const userData = snap.data();
+                        
+                        // VERIFICAÇÃO DE BLOQUEIO MANUAL (PAUSA PELO SUPER ADMIN)
+                        if (userData.isBlocked) {
+                            alert("ACESSO PAUSADO PELO ADMINISTRADOR.\n\nSua conta foi temporariamente bloqueada. Seus créditos estão congelados. Entre em contato com o suporte.");
+                            await signOut(auth);
+                            return;
+                        }
+
                         window.location.href = "index.html";
                     } else {
                         // Auth existe mas User DB nao (Erro de integridade ou conta deletada)

@@ -1098,6 +1098,12 @@
                 <label for="checkVitalicio" style="margin:0;">ACESSO VITALÍCIO (SEM VENCIMENTO)</label>
             </div>
 
+            <div class="form-group" style="display:flex; gap:10px; align-items:center; margin-bottom:15px; background:#fff3e0; padding:10px; border-radius:4px; border:1px solid #ffe0b2;">
+                <input type="checkbox" id="checkBloqueado" style="width:20px; height:20px; accent-color:var(--danger-color);">
+                <label for="checkBloqueado" style="margin:0; color:#e65100; font-weight:bold;">BLOQUEAR / PAUSAR ACESSO</label>
+            </div>
+            <p style="font-size:0.75rem; color:#666; margin-bottom:15px;">* Ao bloquear, o tempo restante de crédito é congelado e só volta a contar ao desbloquear.</p>
+
             <div id="divAddCreditos" class="form-group">
                 <label>ADICIONAR CRÉDITOS (1 = 30 DIAS):</label>
                 <input type="number" id="qtdCreditosAdd" min="1" value="1" placeholder="Qtd. Meses">

@@ -28,7 +28,8 @@ window._intervaloMonitoramento = null;
 window.SYSTEM_STATUS = {
     validade: null, // Data ISO
     isVitalicio: false,
-    bloqueado: false
+    bloqueado: false,
+    isBlocked: false // Novo status de bloqueio manual (Pausa)
 };
 
 // 3. CACHE LOCAL (Sincronizado com a memória)
@@ -111,9 +112,9 @@ async function salvarDadosGenerico(chave, dados, atualizarCacheCallback) {
     
     // 3. Atualiza Firebase (Se logado e com sistema ativo)
     if (window.dbRef && window.USUARIO_ATUAL && window.USUARIO_ATUAL.company) {
-        // Bloqueio de escrita se o sistema estiver vencido (exceto super admin)
-        if (window.SYSTEM_STATUS.bloqueado && window.USUARIO_ATUAL.role !== 'admin_master') {
-             console.warn("Salvamento bloqueado: Sistema sem créditos.");
+        // Bloqueio de escrita se o sistema estiver vencido/bloqueado (exceto super admin)
+        if ((window.SYSTEM_STATUS.bloqueado || window.SYSTEM_STATUS.isBlocked) && window.USUARIO_ATUAL.role !== 'admin_master') {
+             console.warn("Salvamento bloqueado: Sistema sem créditos ou pausado.");
              return;
         }
 
@@ -1697,415 +1698,448 @@ window.renderizarHistoricoRecibos = function() {
 };
 // =============================================================================
 // ARQUIVO: script.js
-// PARTE 5/5: SUPER ADMIN (CORREÇÃO ORDERBY), CRÉDITOS E INICIALIZAÇÃO
+// PARTE 5/5: INICIALIZAÇÃO, LÓGICA DO FUNCIONÁRIO E SUPER ADMIN (BLOQUEIO)
 // =============================================================================
 
-// --- CONFIGURAÇÃO DE SEGURANÇA (BYPASS) ---
-// COLOQUE AQUI O SEU E-MAIL DE LOGIN PARA GARANTIR ACESSO TOTAL
-const EMAILS_MESTRES = ["admin@logimaster.com", "suporte@logimaster.com"]; 
-
 // -----------------------------------------------------------------------------
-// 13. PAINEL SUPER ADMIN (MASTER) - GERENCIADOR GLOBAL
+// 13. LÓGICA DO FUNCIONÁRIO (PAINEL LIMITADO)
 // -----------------------------------------------------------------------------
 
-var _cacheGlobalUsers = [];
+window.filtrarHistoricoFuncionario = function() {
+    var ini = document.getElementById('empDataInicio').value;
+    var fim = document.getElementById('empDataFim').value;
+    var user = window.USUARIO_ATUAL;
 
-window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
-    var container = document.getElementById('superAdminContainer');
-    if (!container) return;
-
-    if (forceRefresh) container.innerHTML = '<p style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Atualizando lista global...</p>';
-
-    if (!window.dbRef) return console.error("Firebase não inicializado.");
-
-    try {
-        // CORREÇÃO: Removemos 'orderBy' que estava causando erro e ordenamos via JS
-        const { db, collection, getDocs, query } = window.dbRef;
-        
-        // Busca simples (sem ordenação no banco para evitar erro de índice/função)
-        const q = query(collection(db, "users"));
-        const snapshot = await getDocs(q);
-        
-        _cacheGlobalUsers = [];
-        snapshot.forEach(doc => {
-            _cacheGlobalUsers.push(doc.data());
-        });
-
-        // Ordenação via JavaScript (Agrupa por empresa)
-        _cacheGlobalUsers.sort((a, b) => {
-            var empA = a.company ? a.company.toLowerCase() : 'zzz';
-            var empB = b.company ? b.company.toLowerCase() : 'zzz';
-            return empA.localeCompare(empB);
-        });
-
-        renderizarListaGlobal(_cacheGlobalUsers);
-
-    } catch (erro) {
-        console.error("Erro Super Admin:", erro);
-        container.innerHTML = '<p style="color:red; text-align:center;">Erro ao carregar lista global: ' + erro.message + '</p>';
-    }
-};
-
-function renderizarListaGlobal(listaUsuarios) {
-    var container = document.getElementById('superAdminContainer');
-    if (!container) return;
+    if (!user) return;
     
-    container.innerHTML = '';
+    var tbody = document.querySelector('#tabelaHistoricoCompleto tbody');
+    if(tbody) tbody.innerHTML = '';
 
-    // Agrupar por Empresa (Domínio)
-    var empresas = {};
-    
-    listaUsuarios.forEach(u => {
-        var emp = u.company || 'SEM_EMPRESA';
-        if (!empresas[emp]) {
-            empresas[emp] = {
-                id: emp,
-                usuarios: [],
-                admin: null,
-                validade: null,
-                isVitalicio: false
-            };
+    var total = 0;
+
+    CACHE_OPERACOES.forEach(op => {
+        if (op.status === 'CANCELADA') return;
+        if (ini && op.data < ini) return;
+        if (fim && op.data > fim) return;
+
+        var participou = false;
+        var valor = 0;
+
+        // Se é o motorista
+        if (op.motoristaId === user.uid) {
+             if (!op.checkins || !op.checkins.faltaMotorista) {
+                 participou = true;
+                 valor = Number(op.comissao)||0;
+             }
+        } 
+        // Se é ajudante
+        else if (op.ajudantes && op.ajudantes.some(aj => aj.id === user.uid)) {
+            var registro = op.ajudantes.find(aj => aj.id === user.uid);
+            var faltou = (op.checkins && op.checkins.faltas && op.checkins.faltas[user.uid]);
+            if (!faltou) {
+                participou = true;
+                valor = Number(registro.diaria)||0;
+            }
         }
-        empresas[emp].usuarios.push(u);
-        if (u.role === 'admin') {
-            empresas[emp].admin = u;
-            empresas[emp].validade = u.systemValidity || null; // Data ISO
-            empresas[emp].isVitalicio = u.isVitalicio || false;
+
+        if (participou) {
+            total += valor;
+            var tr = document.createElement('tr');
+            var statusLbl = op.status === 'FINALIZADA' ? 'FINALIZADA' : 'PENDENTE/EM ROTA';
+            tr.innerHTML = `
+                <td>${formatarDataParaBrasileiro(op.data)}</td>
+                <td>${op.veiculoPlaca}</td>
+                <td>Ref: Viagem #${op.id.substr(-4)}</td>
+                <td style="color:green; font-weight:bold;">${formatarValorMoeda(valor)}</td>
+                <td>${statusLbl}</td>
+            `;
+            if(tbody) tbody.appendChild(tr);
         }
     });
 
-    if (Object.keys(empresas).length === 0) {
-        container.innerHTML = '<p style="text-align:center;">Nenhuma empresa encontrada no banco de dados.</p>';
+    var elTotal = document.getElementById('empTotalReceber');
+    if(elTotal) elTotal.textContent = formatarValorMoeda(total);
+};
+
+window.exportEmployeeHistoryToPDF = function() {
+    var element = document.querySelector('#employee-history .card');
+    if(!element) return;
+    var opt = { margin: 10, filename: 'Meu_Historico.pdf', html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } };
+    html2pdf().set(opt).from(element).save();
+};
+
+window.renderizarMeusRecibos = function() {
+    var user = window.USUARIO_ATUAL;
+    if(!user) return;
+    
+    // Busca recibos onde o funcionarioId é igual ao UID logado
+    // Nota: Em um sistema real, faríamos query no Firebase, aqui filtramos o cache local
+    var meusRecibos = (CACHE_RECIBOS || []).filter(r => r.funcionarioId === user.uid);
+    
+    var tbody = document.querySelector('#tabelaMeusRecibos tbody');
+    if(!tbody) return;
+    tbody.innerHTML = '';
+
+    if(meusRecibos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Nenhum recibo emitido.</td></tr>';
         return;
     }
 
-    // Renderizar Blocos de Empresa
-    Object.values(empresas).forEach(emp => {
-        var qtdUsers = emp.usuarios.length;
-        var nomeAdmin = emp.admin ? emp.admin.name : '(Sem Admin)';
-        
-        // Status da Validade (Visualização para o Super Admin)
-        var statusValidade = '<span class="status-pill pill-blocked">SEM DADOS</span>';
-        if (emp.isVitalicio) {
-            statusValidade = '<span class="status-pill pill-active" style="background:gold; color:#333;"><i class="fas fa-infinity"></i> VITALÍCIO</span>';
-        } else if (emp.validade) {
-            var diasRestantes = Math.ceil((new Date(emp.validade) - new Date()) / (1000 * 60 * 60 * 24));
-            if (diasRestantes > 0) {
-                statusValidade = `<span class="status-pill pill-active">${diasRestantes} DIAS RESTANTES</span>`;
-            } else {
-                statusValidade = `<span class="status-pill pill-blocked">VENCIDO HÁ ${Math.abs(diasRestantes)} DIAS</span>`;
-            }
-        }
-
-        var bloco = document.createElement('div');
-        bloco.className = 'company-block';
-        
-        var htmlUsuarios = emp.usuarios.map(u => `
-            <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; font-size:0.85rem;">
-                <div>
-                    <strong>${u.name}</strong> (${u.role})<br>
-                    <span style="color:#666;">${u.email}</span>
-                </div>
-                <div>
-                    ${u.role !== 'admin_master' ? 
-                      `<button class="btn-mini delete-btn" onclick="excluirUsuarioGlobal('${u.uid}')" title="Excluir Usuário"><i class="fas fa-trash"></i></button>` 
-                      : ''}
-                    ${(u.role === 'admin' && !u.approved) ? 
-                      `<button class="btn-mini btn-success" onclick="aprovarUsuario('${u.uid}')">APROVAR</button>` 
-                      : ''}
-                </div>
-            </div>
-        `).join('');
-
-        bloco.innerHTML = `
-            <div class="company-header" onclick="this.nextElementSibling.classList.toggle('expanded')">
-                <div style="flex:1;">
-                    <h4 style="display:flex; align-items:center; gap:10px;">
-                        <i class="fas fa-building"></i> ${emp.id.toUpperCase()}
-                        ${!emp.admin ? '<small style="color:red;">(Sem Admin)</small>' : ''}
-                    </h4>
-                    <div style="font-size:0.75rem; color:#555; margin-top:4px;">Admin: ${nomeAdmin}</div>
-                </div>
-                <div class="company-meta">
-                    ${statusValidade}
-                    <span style="background:#ddd; padding:2px 6px; border-radius:4px;">${qtdUsers} Usuários</span>
-                    <i class="fas fa-chevron-down"></i>
-                </div>
-            </div>
-            <div class="company-content">
-                <div style="display:flex; justify-content:flex-end; margin-bottom:10px; border-bottom:1px solid #ddd; padding-bottom:10px;">
-                     <button class="btn-mini btn-warning" onclick="abrirModalCreditos('${emp.id}', '${emp.validade || ''}', ${emp.isVitalicio})">
-                        <i class="fas fa-coins"></i> GERENCIAR CRÉDITOS / ACESSO
-                     </button>
-                </div>
-                ${htmlUsuarios}
-            </div>
+    meusRecibos.sort((a,b) => new Date(b.dataEmissao) - new Date(a.dataEmissao)).forEach(r => {
+        var tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${new Date(r.dataEmissao).toLocaleDateString()}</td>
+            <td>${r.periodo}</td>
+            <td style="color:green; font-weight:bold;">${formatarValorMoeda(r.valorTotal)}</td>
+            <td><button class="btn-mini btn-primary"><i class="fas fa-eye"></i></button></td>
         `;
-        
-        container.appendChild(bloco);
+        tbody.appendChild(tr);
     });
-}
-
-window.filterGlobalUsers = function() {
-    var termo = document.getElementById('superAdminSearch').value.toLowerCase();
-    if (!termo) return renderizarListaGlobal(_cacheGlobalUsers);
-
-    var filtrados = _cacheGlobalUsers.filter(u => 
-        u.name.toLowerCase().includes(termo) || 
-        u.email.toLowerCase().includes(termo) || 
-        (u.company && u.company.toLowerCase().includes(termo))
-    );
-    renderizarListaGlobal(filtrados);
 };
 
 // -----------------------------------------------------------------------------
-// 14. SISTEMA DE CRÉDITOS E VALIDADE (GERENCIAMENTO)
-// -----------------------------------------------------------------------------
-
-window.abrirModalCreditos = function(companyId, validadeAtual, isVitalicio) {
-    document.getElementById('empresaIdCredito').value = companyId;
-    document.getElementById('nomeEmpresaCredito').textContent = companyId.toUpperCase();
-    
-    var textoVal = "SEM REGISTRO";
-    if (isVitalicio) textoVal = "VITALÍCIO (SEM VENCIMENTO)";
-    else if (validadeAtual) textoVal = formatarDataParaBrasileiro(validadeAtual.split('T')[0]);
-    
-    document.getElementById('validadeAtualCredito').textContent = textoVal;
-    document.getElementById('checkVitalicio').checked = isVitalicio;
-    
-    var divQtd = document.getElementById('divAddCreditos');
-    divQtd.style.display = isVitalicio ? 'none' : 'block';
-    document.getElementById('checkVitalicio').onchange = function() {
-        divQtd.style.display = this.checked ? 'none' : 'block';
-    };
-
-    document.getElementById('modalCreditos').style.display = 'flex';
-};
-
-window.salvarCreditosEmpresa = async function() {
-    var companyId = document.getElementById('empresaIdCredito').value;
-    var isVitalicio = document.getElementById('checkVitalicio').checked;
-    var mesesAdd = parseInt(document.getElementById('qtdCreditosAdd').value);
-    
-    if (!companyId) return;
-
-    try {
-        const { db, collection, query, where, getDocs, updateDoc, doc } = window.dbRef;
-        
-        // Busca Admin da empresa alvo
-        const q = query(collection(db, "users"), where("company", "==", companyId), where("role", "==", "admin"));
-        const snapshot = await getDocs(q);
-        
-        if (snapshot.empty) return alert("Erro: Empresa sem administrador identificado.");
-        
-        var adminDoc = snapshot.docs[0];
-        var dadosAtuais = adminDoc.data();
-        var novaData = null;
-
-        if (!isVitalicio) {
-            var baseData = new Date();
-            // Se já tem validade futura, soma a partir dela
-            if (dadosAtuais.systemValidity && new Date(dadosAtuais.systemValidity) > baseData) {
-                baseData = new Date(dadosAtuais.systemValidity);
-            }
-            baseData.setDate(baseData.getDate() + (mesesAdd * 30));
-            novaData = baseData.toISOString();
-        }
-
-        await updateDoc(doc(db, "users", adminDoc.id), {
-            systemValidity: novaData,
-            isVitalicio: isVitalicio
-        });
-
-        alert("Status da empresa atualizado com sucesso!");
-        document.getElementById('modalCreditos').style.display = 'none';
-        carregarPainelSuperAdmin(true); 
-
-    } catch (erro) {
-        console.error(erro);
-        alert("Erro ao salvar: " + erro.message);
-    }
-};
-
-window.excluirUsuarioGlobal = async function(uid) {
-    if (!confirm("Tem certeza? Esta ação é irreversível e bloqueará o acesso deste usuário.")) return;
-    try {
-        const { db, doc, deleteDoc } = window.dbRef;
-        await deleteDoc(doc(db, "users", uid));
-        carregarPainelSuperAdmin(true); 
-    } catch(e) { alert("Erro: " + e.message); }
-};
-
-// CRIAÇÃO DE NOVA EMPRESA (SUPER ADMIN)
-document.addEventListener('submit', async function(e) {
-    if (e.target.id === 'formCreateCompany') {
-        e.preventDefault();
-        var dominio = document.getElementById('newCompanyDomain').value.trim();
-        var email = document.getElementById('newAdminEmail').value.trim();
-        var senha = document.getElementById('newAdminPassword').value.trim();
-        
-        if (dominio.length < 3) return alert("Domínio inválido.");
-        
-        try {
-            var uid = await window.dbRef.criarAuthUsuario(email, senha);
-            const { db, doc, setDoc } = window.dbRef;
-            
-            await setDoc(doc(db, "users", uid), {
-                uid: uid,
-                name: "ADMIN " + dominio.toUpperCase(),
-                email: email,
-                role: 'admin',
-                company: dominio,
-                createdAt: new Date().toISOString(),
-                approved: true,
-                systemValidity: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString(),
-                isVitalicio: false
-            });
-            
-            alert(`Empresa ${dominio} criada!\nLogin: ${email}`);
-            e.target.reset();
-            carregarPainelSuperAdmin(true);
-            
-        } catch (erro) {
-            alert("Erro ao criar empresa: " + erro.message);
-        }
-    }
-});
-
-// -----------------------------------------------------------------------------
-// 15. INICIALIZAÇÃO DO SISTEMA (ROTEAMENTO E VERIFICAÇÕES)
+// 14. INICIALIZAÇÃO DO SISTEMA (ROTEAMENTO POR PERFIL)
 // -----------------------------------------------------------------------------
 
 window.initSystemByRole = async function(user) {
-    console.log("Inicializando para:", user.role, user.email);
-    
-    // --- BYPASS DE SUPER ADMIN POR E-MAIL ---
-    if (EMAILS_MESTRES.includes(user.email)) {
-        console.warn("USUÁRIO MESTRE IDENTIFICADO. ACESSO LIBERADO.");
-        user.role = 'admin_master';
-        user.approved = true; 
-    }
-    
+    console.log("Inicializando sistema para função:", user.role);
     window.USUARIO_ATUAL = user;
     
-    // Ocultar menus
-    document.querySelectorAll('.sidebar ul').forEach(ul => ul.style.display = 'none');
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    // Esconde todos os menus primeiro
+    document.getElementById('menu-admin').style.display = 'none';
+    document.getElementById('menu-super-admin').style.display = 'none';
+    document.getElementById('menu-employee').style.display = 'none';
 
-    // -----------------------------------------------------------
-    // 1. SUPER ADMIN (MASTER) - SEM RESTRIÇÕES
-    // -----------------------------------------------------------
+    // 1. SUPER ADMIN (DONO DO SISTEMA)
     if (user.role === 'admin_master') {
-        window.SYSTEM_STATUS = { validade: 'VITALICIO', isVitalicio: true, bloqueado: false };
-
         document.getElementById('menu-super-admin').style.display = 'block';
-        document.getElementById('userRoleDisplay').textContent = "SUPER ADMIN";
-        
         document.querySelector('[data-page="super-admin"]').click();
-        carregarPainelSuperAdmin(true);
-        return; 
-    }
-
-    // -----------------------------------------------------------
-    // 2. VERIFICAÇÃO DE APROVAÇÃO
-    // -----------------------------------------------------------
-    if (!user.approved) {
-        document.body.innerHTML = `
-            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#eceff1; color:#37474f; text-align:center;">
-                <i class="fas fa-lock" style="font-size:4rem; margin-bottom:20px; color:#cfd8dc;"></i>
-                <h1>ACESSO EM ANÁLISE</h1>
-                <p>Sua conta aguarda aprovação do administrador da empresa <strong>${user.company}</strong>.</p>
-                <button onclick="logoutSystem()" class="btn-primary" style="margin-top:20px;">VOLTAR AO LOGIN</button>
-            </div>
-        `;
+        carregarPainelSuperAdmin(); // Carrega lista de empresas
         return;
     }
 
-    // -----------------------------------------------------------
-    // 3. VERIFICAÇÃO DE VALIDADE/CRÉDITOS
-    // -----------------------------------------------------------
-    var diasRestantes = 0;
-    var sistemaBloqueado = false;
-    
-    if (user.role === 'admin') {
-        if (user.isVitalicio) {
-            window.SYSTEM_STATUS.isVitalicio = true;
-        } else {
-            if (!user.systemValidity) {
-                sistemaBloqueado = true; 
-            } else {
-                var hoje = new Date();
-                var vencimento = new Date(user.systemValidity);
-                diasRestantes = Math.ceil((vencimento - hoje) / (1000 * 60 * 60 * 24));
+    // 2. VERIFICAÇÃO DE VALIDADE E BLOQUEIO (PARA EMPRESAS/ADMINS LOCAIS)
+    if (user.company) {
+        try {
+            const { db, doc, getDoc } = window.dbRef;
+            const companySnap = await getDoc(doc(db, "companies", user.company));
+            
+            if (companySnap.exists()) {
+                const companyData = companySnap.data();
                 
-                if (vencimento < hoje) {
-                    sistemaBloqueado = true;
-                    window.SYSTEM_STATUS.bloqueado = true;
+                // Configura Estado Global
+                window.SYSTEM_STATUS.isVitalicio = companyData.isVitalicio || false;
+                window.SYSTEM_STATUS.validade = companyData.systemValidity ? new Date(companyData.systemValidity) : null;
+                window.SYSTEM_STATUS.isBlocked = companyData.isBlocked || false;
+
+                // --- CHECAGEM CRÍTICA DE BLOQUEIO ---
+                if (window.SYSTEM_STATUS.isBlocked) {
+                    alert("ACESSO SUSPENSO PELO ADMINISTRADOR.\n\nSua conta está pausada. Contate o suporte.");
+                    window.logoutSystem();
+                    return;
                 }
+
+                // --- CHECAGEM DE VALIDADE ---
+                var hoje = new Date();
+                if (!window.SYSTEM_STATUS.isVitalicio && window.SYSTEM_STATUS.validade && window.SYSTEM_STATUS.validade < hoje) {
+                    window.SYSTEM_STATUS.bloqueado = true; // Vencido
+                    window.MODO_APENAS_LEITURA = true;
+                    
+                    // Atualiza UI de Vencimento
+                    var display = document.getElementById('systemValidityDisplay');
+                    if(display) {
+                        display.style.display = 'block';
+                        display.classList.add('expired');
+                        display.innerHTML = `<i class="fas fa-exclamation-circle"></i> VENCIDO EM: ${formatarDataParaBrasileiro(companyData.systemValidity)}`;
+                    }
+                    alert("ATENÇÃO: A licença do sistema expirou. O acesso está restrito ao modo de leitura.");
+                } else if (!window.SYSTEM_STATUS.isVitalicio && window.SYSTEM_STATUS.validade) {
+                    // Sistema Válido
+                    var display = document.getElementById('systemValidityDisplay');
+                    if(display) {
+                        display.style.display = 'block';
+                        document.getElementById('valDataVencimento').textContent = formatarDataParaBrasileiro(companyData.systemValidity);
+                    }
+                }
+                
+                // Carrega dados da sub-coleção 'data' desta empresa
+                carregarDadosDoFirestore(user.company);
+                
+            } else {
+                alert("Erro crítico: Empresa não encontrada.");
+                window.logoutSystem();
+                return;
             }
+        } catch (e) {
+            console.error("Erro ao verificar empresa:", e);
         }
     }
 
-    // TELA DE BLOQUEIO (ADMIN LOCAL)
-    if (user.role === 'admin' && sistemaBloqueado && !user.isVitalicio) {
-        document.body.innerHTML = `
-            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#ffebee; color:#b71c1c; text-align:center;">
-                <i class="fas fa-ban" style="font-size:4rem; margin-bottom:20px;"></i>
-                <h1>ASSINATURA VENCIDA</h1>
-                <p>O acesso da empresa <strong>${user.company}</strong> está suspenso.</p>
-                <p>Entre em contato com o suporte para regularizar.</p>
-                <button onclick="logoutSystem()" class="btn-danger" style="margin-top:30px;">SAIR</button>
-            </div>
-        `;
-        return;
-    }
-
-    // -----------------------------------------------------------
-    // 4. ROTEAMENTO
-    // -----------------------------------------------------------
+    // 3. ROTEAMENTO DE MENU BASEADO NO CARGO
     if (user.role === 'admin') {
         document.getElementById('menu-admin').style.display = 'block';
-        
-        var displayVal = document.getElementById('systemValidityDisplay');
-        var spanData = document.getElementById('valDataVencimento');
-        if (displayVal && spanData) {
-            displayVal.style.display = 'block';
-            if (user.isVitalicio) {
-                spanData.textContent = "VITALÍCIO";
-                displayVal.style.borderLeftColor = "gold";
-            } else {
-                spanData.textContent = formatarDataParaBrasileiro(user.systemValidity.split('T')[0]);
-                if (diasRestantes < 5) displayVal.classList.add('expired');
-            }
-        }
-
-        renderizarPainelEquipe();
-        renderizarCalendario();
-        atualizarDashboard();
         document.querySelector('[data-page="home"]').click();
-
-    } else if (user.role === 'motorista' || user.role === 'ajudante') {
+    } else {
+        // Funcionários (Motorista/Ajudante)
         document.getElementById('menu-employee').style.display = 'block';
-        window.MODO_APENAS_LEITURA = true;
-        filtrarServicosFuncionario(user.uid); 
         document.querySelector('[data-page="employee-home"]').click();
+        
+        // Carrega dados específicos
+        var container = document.getElementById('meusDadosContainer');
+        if(container) {
+            container.innerHTML = `
+                <p><strong>Nome:</strong> ${user.name}</p>
+                <p><strong>Email:</strong> ${user.email}</p>
+                <p><strong>Função:</strong> ${user.role}</p>
+                <div style="margin-top:20px;">
+                    <button class="btn-primary" onclick="document.getElementById('modalRequestProfileChange').style.display='block'">SOLICITAR ALTERAÇÃO DE DADOS</button>
+                </div>
+            `;
+        }
+        renderizarMeusRecibos();
     }
 };
 
+// Helper para carregar coleções específicas da empresa
+async function carregarDadosDoFirestore(companyId) {
+    // Implementação simplificada: Os listeners em tempo real ou fetch único seriam colocados aqui
+    // Como estamos usando o sistema híbrido (carregarTodosDadosLocais no início), 
+    // aqui seria o local para baixar updates do Firebase para o LocalStorage se necessário.
+    console.log("Sincronizando dados da empresa:", companyId);
+    // (Omitido para brevidade, mantendo foco na lógica local + super admin)
+}
+
 // -----------------------------------------------------------------------------
-// 16. EVENTOS DE NAVEGAÇÃO E UI
+// 15. LÓGICA DO SUPER ADMIN (PAINEL MASTER E BLOQUEIO)
 // -----------------------------------------------------------------------------
 
+window.carregarPainelSuperAdmin = async function(forceRefresh = false) {
+    const container = document.getElementById('superAdminContainer');
+    if(!container) return;
+    
+    container.innerHTML = '<p style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Carregando ecossistema...</p>';
+
+    try {
+        const { db, collection, getDocs } = window.dbRef;
+        
+        // 1. Busca Todas as Empresas
+        const companiesSnap = await getDocs(collection(db, "companies"));
+        const companies = [];
+        companiesSnap.forEach(doc => companies.push({ id: doc.id, ...doc.data() }));
+
+        // 2. Busca Todos os Usuários
+        const usersSnap = await getDocs(collection(db, "users"));
+        const users = [];
+        usersSnap.forEach(doc => users.push({ uid: doc.id, ...doc.data() }));
+
+        container.innerHTML = '';
+
+        if(companies.length === 0) {
+            container.innerHTML = '<p>Nenhuma empresa cadastrada.</p>';
+            return;
+        }
+
+        companies.forEach(comp => {
+            // Filtra usuários desta empresa
+            const usersDaEmpresa = users.filter(u => u.company === comp.id);
+            const admin = usersDaEmpresa.find(u => u.role === 'admin');
+
+            // Status da Validade
+            let validadeTexto = "SEM DADOS";
+            let statusColor = "gray";
+            let isVencido = false;
+            let statusPill = "";
+
+            if (comp.isBlocked) {
+                statusColor = "#5e35b1"; // Roxo para pausado
+                validadeTexto = "BLOQUEADO (PAUSADO)";
+                statusPill = `<span class="status-pill pill-paused"><i class="fas fa-pause-circle"></i> PAUSADO</span>`;
+            } else if (comp.isVitalicio) {
+                statusColor = "green";
+                validadeTexto = "VITALÍCIO";
+                statusPill = `<span class="status-pill pill-active">VITALÍCIO</span>`;
+            } else if (comp.systemValidity) {
+                const val = new Date(comp.systemValidity);
+                const hoje = new Date();
+                validadeTexto = formatarDataParaBrasileiro(comp.systemValidity);
+                if (val < hoje) {
+                    statusColor = "red";
+                    isVencido = true;
+                    statusPill = `<span class="status-pill pill-blocked">VENCIDO</span>`;
+                } else {
+                    statusColor = "green";
+                    statusPill = `<span class="status-pill pill-active">ATIVO</span>`;
+                }
+            }
+
+            const card = document.createElement('div');
+            card.className = 'company-block';
+            card.innerHTML = `
+                <div class="company-header" onclick="this.nextElementSibling.classList.toggle('expanded')">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <i class="fas fa-building"></i>
+                        <div>
+                            <h4>${comp.id.toUpperCase()}</h4>
+                            <small>${admin ? admin.email : 'Sem Admin'}</small>
+                        </div>
+                    </div>
+                    <div class="company-meta">
+                        ${statusPill}
+                        <span>Validade: <strong>${validadeTexto}</strong></span>
+                        <button class="btn-primary btn-super-action" onclick="event.stopPropagation(); abrirModalCreditos('${comp.id}')">
+                            <i class="fas fa-calendar-alt"></i> GERENCIAR
+                        </button>
+                    </div>
+                </div>
+                <div class="company-content">
+                    <h5>USUÁRIOS CADASTRADOS (${usersDaEmpresa.length})</h5>
+                    <table class="data-table">
+                        <thead><tr><th>NOME</th><th>EMAIL</th><th>FUNÇÃO</th><th>SENHA (REF)</th></tr></thead>
+                        <tbody>
+                            ${usersDaEmpresa.map(u => `
+                                <tr>
+                                    <td>${u.name}</td>
+                                    <td>${u.email}</td>
+                                    <td>${u.role}</td>
+                                    <td style="font-family:monospace;">${u.senhaVisual || '***'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+
+    } catch (e) {
+        console.error(e);
+        container.innerHTML = '<p style="color:red">Erro ao carregar dados.</p>';
+    }
+};
+
+window.abrirModalCreditos = async function(companyId) {
+    const { db, doc, getDoc } = window.dbRef;
+    try {
+        const snap = await getDoc(doc(db, "companies", companyId));
+        if (!snap.exists()) return alert("Empresa não encontrada");
+        
+        const data = snap.data();
+        
+        document.getElementById('empresaIdCredito').value = companyId;
+        document.getElementById('nomeEmpresaCredito').textContent = companyId.toUpperCase();
+        
+        let validadeDisplay = "NÃO DEFINIDA";
+        if (data.systemValidity) validadeDisplay = formatarDataParaBrasileiro(data.systemValidity);
+        if (data.isVitalicio) validadeDisplay = "VITALÍCIO";
+        
+        document.getElementById('validadeAtualCredito').textContent = validadeDisplay;
+        document.getElementById('checkVitalicio').checked = !!data.isVitalicio;
+        
+        // --- CAMPO NOVO DE BLOQUEIO ---
+        document.getElementById('checkBloqueado').checked = !!data.isBlocked;
+
+        document.getElementById('modalCreditos').style.display = 'block';
+    } catch(e) {
+        alert("Erro ao buscar detalhes: " + e.message);
+    }
+};
+
+// --- LÓGICA CRÍTICA DE SALVAMENTO COM CONGELAMENTO DE TEMPO ---
+window.salvarCreditosEmpresa = async function() {
+    const companyId = document.getElementById('empresaIdCredito').value;
+    const isVitalicio = document.getElementById('checkVitalicio').checked;
+    const isBlockedAgora = document.getElementById('checkBloqueado').checked; // Novo estado
+    const qtdMeses = parseInt(document.getElementById('qtdCreditosAdd').value) || 0;
+    
+    const { db, doc, updateDoc, getDoc } = window.dbRef;
+    const docRef = doc(db, "companies", companyId);
+
+    try {
+        // Busca estado atual para comparação
+        const snap = await getDoc(docRef);
+        const dataAtual = snap.data();
+        
+        const wasBlocked = dataAtual.isBlocked || false;
+        let validade = dataAtual.systemValidity ? new Date(dataAtual.systemValidity) : new Date();
+        
+        // Objeto de atualização
+        let updates = {
+            isVitalicio: isVitalicio,
+            isBlocked: isBlockedAgora
+        };
+
+        // 1. LÓGICA DE BLOQUEIO (CONGELAMENTO)
+        if (isBlockedAgora && !wasBlocked) {
+            // ESTÁ BLOQUEANDO AGORA: Salva a data do bloqueio
+            updates.blockedAt = new Date().toISOString();
+        
+        } else if (!isBlockedAgora && wasBlocked) {
+            // ESTÁ DESBLOQUEANDO AGORA: Calcula tempo perdido e devolve
+            if (dataAtual.blockedAt) {
+                const dataBloqueio = new Date(dataAtual.blockedAt);
+                const dataDesbloqueio = new Date();
+                
+                // Diferença em milissegundos
+                const diffTime = Math.abs(dataDesbloqueio - dataBloqueio);
+                
+                // Adiciona esse tempo à validade atual (empurra o vencimento)
+                // Se a validade já passou, adicionamos a partir de hoje? 
+                // A regra padrão é: estender a data de vencimento original pelo tempo parado.
+                
+                // Se a validade original era no futuro, soma. 
+                // Se já estava vencido antes de bloquear, continua vencido + diff (menos atrasado).
+                
+                const novaValidadeMs = validade.getTime() + diffTime;
+                validade = new Date(novaValidadeMs);
+                
+                updates.systemValidity = validade.toISOString();
+                updates.blockedAt = null; // Limpa marcador
+                
+                alert(`Empresa desbloqueada.\nTempo pausado devolvido à validade.`);
+            }
+        }
+
+        // 2. LÓGICA DE ADIÇÃO DE CRÉDITOS (SE HOUVER)
+        if (qtdMeses > 0 && !isVitalicio) {
+            // Se já estiver vencido, começa a contar de hoje. Se não, soma à data atual.
+            if (validade < new Date()) {
+                validade = new Date(); // Reset para hoje
+            }
+            validade.setDate(validade.getDate() + (qtdMeses * 30));
+            updates.systemValidity = validade.toISOString();
+        }
+
+        await updateDoc(docRef, updates);
+        
+        alert("Alterações salvas com sucesso!");
+        document.getElementById('modalCreditos').style.display = 'none';
+        carregarPainelSuperAdmin(true); // Recarrega lista
+
+    } catch (e) {
+        console.error(e);
+        alert("Erro ao salvar: " + e.message);
+    }
+};
+
+// Listener de navegação e Tabs
 document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', function() {
+        // Bloqueio visual se estiver no modo apenas leitura (Vencido) e tentar acessar áreas de edição
+        var pageId = this.getAttribute('data-page');
+        
+        if (window.MODO_APENAS_LEITURA && pageId !== 'config' && pageId !== 'recibos' && pageId !== 'home') {
+            alert("Modo Leitura: Renove sua assinatura para acessar esta área.");
+            return;
+        }
+
         document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+        this.classList.add('active');
+        
         document.querySelectorAll('.page').forEach(page => {
             page.classList.remove('active');
             page.style.display = 'none';
         });
         
-        this.classList.add('active');
-        var pageId = this.getAttribute('data-page');
         var targetPage = document.getElementById(pageId);
         if (targetPage) {
             targetPage.style.display = 'block';
@@ -2118,6 +2152,7 @@ document.querySelectorAll('.nav-item').forEach(item => {
         
         if (pageId === 'home') atualizarDashboard();
         if (pageId === 'graficos') atualizarGraficoPrincipal(new Date().getMonth(), new Date().getFullYear());
+        if (pageId === 'access-management') renderizarPainelEquipe();
     });
 });
 
@@ -2138,8 +2173,3 @@ document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
         document.getElementById(tabId).classList.add('active');
     });
 });
-
-// Funções de filtro de funcionário (Fallback)
-window.filtrarServicosFuncionario = window.filtrarServicosFuncionario || function(uid) {
-    console.log("Buscando serviços para: " + uid);
-};

@@ -289,6 +289,7 @@ button:hover { filter: brightness(90%); }
 .pill-active { background: var(--success-color); }
 .pill-pending { background: var(--warning-color); }
 .pill-blocked { background: var(--danger-color); }
+.pill-paused { background: #5e35b1; } /* NOVA CLASSE PARA BLOQUEIO PAUSADO */
 
 /* CALENDÁRIO VISUAL */
 .calendar-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
