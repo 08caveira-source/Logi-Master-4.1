@@ -159,7 +159,112 @@ carregarTodosDadosLocais();
 // ARQUIVO: script.js
 // PARTE 2/5: LÓGICA DE DASHBOARD, CÁLCULOS FINANCEIROS E GRÁFICOS INTERATIVOS
 // =============================================================================
+// =============================================================================
+// CORREÇÃO: FUNÇÕES DE CONFIGURAÇÃO (BACKUP E RESET)
+// =============================================================================
 
+// 1. EXPORTAR DADOS (BACKUP JSON)
+window.exportDataBackup = function() {
+    // Reúne todos os caches atuais em um objeto
+    var backupData = {
+        funcionarios: CACHE_FUNCIONARIOS || [],
+        veiculos: CACHE_VEICULOS || [],
+        contratantes: CACHE_CONTRATANTES || [],
+        operacoes: CACHE_OPERACOES || [],
+        minhaEmpresa: CACHE_MINHA_EMPRESA || {},
+        despesas: CACHE_DESPESAS || [],
+        atividades: CACHE_ATIVIDADES || [],
+        recibos: CACHE_RECIBOS || [],
+        profileRequests: CACHE_PROFILE_REQUESTS || [],
+        exportDate: new Date().toISOString(),
+        version: "22.0"
+    };
+
+    // Cria o arquivo virtual para download
+    var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData));
+    var downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "backup_logimaster_" + new Date().toISOString().slice(0,10) + ".json");
+    document.body.appendChild(downloadAnchorNode); // Necessário para Firefox
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+};
+
+// 2. IMPORTAR DADOS (RESTORE)
+window.importDataBackup = function(event) {
+    var file = event.target.files[0];
+    if (!file) return;
+
+    var reader = new FileReader();
+    reader.onload = async function(e) {
+        try {
+            var data = JSON.parse(e.target.result);
+            
+            if(!confirm("ATENÇÃO: Importar um backup substituirá os dados atuais da tela (mesclagem).\nDeseja continuar?")) {
+                event.target.value = ''; // Limpa input
+                return;
+            }
+
+            // Atualiza memória e salva (Isso dispara atualização no Firebase também)
+            if(data.funcionarios) await salvarListaFuncionarios(data.funcionarios);
+            if(data.veiculos) await salvarListaVeiculos(data.veiculos);
+            if(data.contratantes) await salvarListaContratantes(data.contratantes);
+            if(data.operacoes) await salvarListaOperacoes(data.operacoes);
+            if(data.minhaEmpresa) await salvarDadosMinhaEmpresa(data.minhaEmpresa);
+            if(data.despesas) await salvarListaDespesas(data.despesas);
+            if(data.atividades) await salvarListaAtividades(data.atividades);
+            if(data.recibos) await salvarListaRecibos(data.recibos);
+
+            alert("Backup importado com sucesso! A página será recarregada.");
+            location.reload();
+            
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao ler arquivo de backup: " + error.message);
+        }
+    };
+    reader.readAsText(file);
+};
+
+// 3. ZERAR SISTEMA (WIPE COMPLETO)
+window.resetSystemData = async function() {
+    // Camada de segurança dupla
+    if(!confirm("PERIGO: Isso apagará TODOS os dados (Funcionários, Veículos, Operações, Financeiro) desta empresa.\n\nTem certeza absoluta?")) return;
+    
+    var confirmacao = prompt("Para confirmar, digite 'ZERAR' na caixa abaixo:");
+    if(confirmacao !== 'ZERAR') {
+        alert("Ação cancelada. O código de confirmação estava incorreto.");
+        return;
+    }
+
+    var btn = document.querySelector('button[onclick="resetSystemData()"]');
+    if(btn) {
+        btn.disabled = true;
+        btn.textContent = "LIMPANDO...";
+    }
+
+    try {
+        // Salva listas vazias para limpar o LocalStorage E o Firebase
+        await salvarListaFuncionarios([]);
+        await salvarListaVeiculos([]);
+        await salvarListaContratantes([]);
+        await salvarListaOperacoes([]);
+        await salvarDadosMinhaEmpresa({});
+        await salvarListaDespesas([]);
+        await salvarListaAtividades([]);
+        await salvarListaRecibos([]);
+        await salvarProfileRequests([]);
+
+        alert("Sistema limpo com sucesso.");
+        location.reload();
+    } catch (e) {
+        alert("Erro ao zerar sistema: " + e.message);
+        if(btn) {
+            btn.disabled = false;
+            btn.textContent = "ZERAR SISTEMA";
+        }
+    }
+};
 // -----------------------------------------------------------------------------
 // 6. CÁLCULOS FINANCEIROS E ATUALIZAÇÃO DO DASHBOARD (HOME)
 // -----------------------------------------------------------------------------
