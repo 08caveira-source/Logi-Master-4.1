@@ -4101,3 +4101,157 @@ window.visualizarContratanteDetalhes = function(cnpj) {
     document.getElementById('viewItemTitle').textContent = "DADOS DO CLIENTE";
     document.getElementById('viewItemModal').style.display = 'flex';
 };
+// =============================================================================
+// CORREÇÃO: VISUALIZAÇÃO E TABELAS DE VEÍCULOS E CLIENTES
+// =============================================================================
+
+// 1. FUNÇÃO DE VISUALIZAR VEÍCULO (MODAL)
+window.visualizarVeiculoDetalhes = function(placa) {
+    var v = CACHE_VEICULOS.find(item => item.placa === placa);
+    
+    if (!v) {
+        alert("Veículo não encontrado no cache.");
+        return;
+    }
+
+    var dadosTexto = `VEÍCULO: ${v.modelo}\nPLACA: ${v.placa}\nANO: ${v.ano}\nRENAVAM: ${v.renavam || '-'}\nCHASSI: ${v.chassi || '-'}`;
+
+    var html = `
+        <div style="font-size:0.9rem; color:#333;">
+            <div style="background:#fff3e0; padding:15px; border-radius:6px; margin-bottom:15px; border-left: 5px solid orange;">
+                <h3 style="margin:0; color:#e65100;">${v.placa}</h3>
+                <span style="font-weight:bold;">${v.modelo}</span>
+            </div>
+            
+            <div style="margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:5px;">
+                <strong>ANO:</strong> ${v.ano}
+            </div>
+            <div style="margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:5px;">
+                <strong>RENAVAM:</strong> ${v.renavam || '-'}
+            </div>
+            <div style="margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:5px;">
+                <strong>CHASSI:</strong> ${v.chassi || '-'}
+            </div>
+            
+            <div style="margin-top:20px; text-align:center;">
+                <button class="btn-info" style="width:100%; justify-content:center; padding:10px;" onclick="copiarDadosTexto(\`${dadosTexto}\`)">
+                    <i class="fas fa-copy"></i> COPIAR DADOS
+                </button>
+            </div>
+        </div>
+    `;
+
+    var modalBody = document.getElementById('viewItemBody');
+    var modalTitle = document.getElementById('viewItemTitle');
+    var modal = document.getElementById('viewItemModal');
+
+    if (modalBody && modalTitle && modal) {
+        modalBody.innerHTML = html;
+        modalTitle.textContent = "DETALHES DO VEÍCULO";
+        modal.style.display = 'flex';
+    }
+};
+
+// 2. FUNÇÃO DE VISUALIZAR CLIENTE/CONTRATANTE (MODAL)
+window.visualizarContratanteDetalhes = function(cnpj) {
+    // Busca convertendo para string para evitar erros de tipo
+    var c = CACHE_CONTRATANTES.find(item => String(item.cnpj) === String(cnpj));
+    
+    if (!c) {
+        alert("Cliente não encontrado no cache.");
+        return;
+    }
+
+    var dadosTexto = `CLIENTE: ${c.razaoSocial}\nCNPJ: ${c.cnpj}\nTELEFONE: ${c.telefone}`;
+
+    var html = `
+        <div style="font-size:0.9rem; color:#333;">
+            <div style="background:#e8f5e9; padding:15px; border-radius:6px; margin-bottom:15px; border-left: 5px solid green;">
+                <h3 style="margin:0; color:green;">${c.razaoSocial}</h3>
+                <small>CLIENTE / CONTRATANTE</small>
+            </div>
+            
+            <div style="margin-bottom:15px;">
+                <label style="color:#666; font-size:0.8rem;">CNPJ</label>
+                <div style="font-weight:bold; font-size:1.1rem;">${c.cnpj}</div>
+            </div>
+            
+            <div style="margin-bottom:15px;">
+                <label style="color:#666; font-size:0.8rem;">TELEFONE</label>
+                <div style="font-weight:bold; font-size:1.1rem;">${c.telefone || '-'}</div>
+            </div>
+            
+            <div style="margin-top:20px; text-align:center;">
+                <button class="btn-info" style="width:100%; justify-content:center; padding:10px;" onclick="copiarDadosTexto(\`${dadosTexto}\`)">
+                    <i class="fas fa-copy"></i> COPIAR DADOS
+                </button>
+            </div>
+        </div>
+    `;
+
+    var modalBody = document.getElementById('viewItemBody');
+    var modalTitle = document.getElementById('viewItemTitle');
+    var modal = document.getElementById('viewItemModal');
+
+    if (modalBody && modalTitle && modal) {
+        modalBody.innerHTML = html;
+        modalTitle.textContent = "DETALHES DO CLIENTE";
+        modal.style.display = 'flex';
+    }
+};
+
+// 3. ATUALIZAÇÃO DA TABELA DE VEÍCULOS (OVERWRITE)
+window.renderizarTabelaVeiculos = function() { 
+    var tbody = document.querySelector('#tabelaVeiculos tbody'); 
+    if(tbody) { 
+        tbody.innerHTML=''; 
+        if (!CACHE_VEICULOS || CACHE_VEICULOS.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Nenhum veículo cadastrado.</td></tr>';
+            return;
+        }
+
+        CACHE_VEICULOS.forEach(v => { 
+            var tr = document.createElement('tr'); 
+            tr.innerHTML=`
+                <td>${v.placa}</td>
+                <td>${v.modelo}</td>
+                <td>${v.ano}</td>
+                <td>
+                    <button class="btn-mini btn-info" onclick="visualizarVeiculoDetalhes('${v.placa}')" title="Visualizar Detalhes"><i class="fas fa-eye"></i></button>
+                    <button class="btn-mini edit-btn" onclick="preencherFormularioVeiculo('${v.placa}')" title="Editar"><i class="fas fa-edit"></i></button> 
+                    <button class="btn-mini delete-btn" onclick="excluirVeiculo('${v.placa}')" title="Excluir"><i class="fas fa-trash"></i></button>
+                </td>`; 
+            tbody.appendChild(tr); 
+        }); 
+    } 
+};
+
+// 4. ATUALIZAÇÃO DA TABELA DE CLIENTES (OVERWRITE)
+window.renderizarTabelaContratantes = function() { 
+    var tbody = document.querySelector('#tabelaContratantes tbody'); 
+    if(tbody) { 
+        tbody.innerHTML=''; 
+        if (!CACHE_CONTRATANTES || CACHE_CONTRATANTES.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Nenhum cliente cadastrado.</td></tr>';
+            return;
+        }
+
+        CACHE_CONTRATANTES.forEach(c => { 
+            var tr = document.createElement('tr'); 
+            tr.innerHTML=`
+                <td>${c.razaoSocial}</td>
+                <td>${c.cnpj}</td>
+                <td>${c.telefone}</td>
+                <td>
+                    <button class="btn-mini btn-info" onclick="visualizarContratanteDetalhes('${c.cnpj}')" title="Visualizar Detalhes"><i class="fas fa-eye"></i></button>
+                    <button class="btn-mini edit-btn" onclick="preencherFormularioContratante('${c.cnpj}')" title="Editar"><i class="fas fa-edit"></i></button> 
+                    <button class="btn-mini delete-btn" onclick="excluirContratante('${c.cnpj}')" title="Excluir"><i class="fas fa-trash"></i></button>
+                </td>`; 
+            tbody.appendChild(tr); 
+        }); 
+    } 
+};
+
+// Força a atualização imediata das tabelas caso já esteja na tela
+if (document.getElementById('tabelaVeiculos')) renderizarTabelaVeiculos();
+if (document.getElementById('tabelaContratantes')) renderizarTabelaContratantes();
