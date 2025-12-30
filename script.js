@@ -2226,72 +2226,76 @@ window.verStatusFunc = async function(id) {
     `;
 };
 
-// Função para Alternar Bloqueio (Ativo/Bloqueado)
+// =============================================================================
+// CORREÇÃO: FUNÇÃO DE BLOQUEIO/DESBLOQUEIO (COM VALIDAÇÃO DE EXISTÊNCIA NA NUVEM)
+// =============================================================================
+
 window.toggleBloqueioFunc = async function(id) {
     var f = buscarFuncionarioPorId(id);
-    if (!f) return;
+    if (!f) {
+        alert("Erro: Funcionário não encontrado na memória local.");
+        return;
+    }
 
     var newStatus = !f.isBlocked;
     var actionName = newStatus ? "BLOQUEAR" : "DESBLOQUEAR";
     
-    if (!confirm(`Tem certeza que deseja ${actionName} o funcionário ${f.nome}?\n\nEle ${newStatus ? 'perderá' : 'ganhará'} acesso ao sistema imediatamente.`)) {
-        return;
+    // Confirmação Visual
+    var confirmMsg = `Tem certeza que deseja ${actionName} o funcionário ${f.nome}?`;
+    if (newStatus) confirmMsg += "\n\nEle será desconectado do sistema imediatamente.";
+    else confirmMsg += "\n\nEle poderá fazer login novamente.";
+
+    if (!confirm(confirmMsg)) return;
+
+    // Mostra loading no modal se estiver aberto
+    var actionsContainer = document.getElementById('statusFuncionarioActions');
+    var originalActions = "";
+    if(actionsContainer && document.getElementById('modalStatusFuncionario').style.display === 'flex') {
+        originalActions = actionsContainer.innerHTML;
+        actionsContainer.innerHTML = '<p style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Processando na nuvem...</p>';
     }
 
-    // 1. Atualiza na Nuvem (Isso impede login futuro)
-    if (window.dbRef) {
-        try {
-            await window.dbRef.updateDoc(window.dbRef.doc(window.dbRef.db, "users", id), { isBlocked: newStatus });
-        } catch(e) {
-            alert("Erro ao atualizar status na nuvem: " + e.message);
-            return;
+    try {
+        // 1. Atualiza na Nuvem (Firebase Auth / Firestore Users)
+        if (window.dbRef) {
+            const userDocRef = window.dbRef.doc(window.dbRef.db, "users", id);
+            
+            // Verifica se o documento do usuário existe na nuvem antes de atualizar
+            const docSnap = await window.dbRef.getDoc(userDocRef);
+            
+            if (!docSnap.exists()) {
+                // Se não existe na nuvem, mas existe localmente, é um estado inconsistente
+                // (ex: após um reset onde o usuário foi recriado apenas no cache local)
+                throw new Error("registro do usuário não encontrado na nuvem. Tente recadastrar o funcionário para sincronizar.");
+            }
+
+            // Se existe, atualiza o status
+            await window.dbRef.updateDoc(userDocRef, { isBlocked: newStatus });
+        }
+
+        // 2. Atualiza Cache Local e Salva
+        f.isBlocked = newStatus;
+        await salvarListaFuncionarios(CACHE_FUNCIONARIOS);
+
+        alert(`Usuário ${newStatus ? 'BLOQUEADO' : 'DESBLOQUEADO'} com sucesso.`);
+        
+        // Fecha modal e atualiza tabela
+        if(document.getElementById('modalStatusFuncionario')) {
+             document.getElementById('modalStatusFuncionario').style.display = 'none';
+        }
+        if(typeof renderizarPainelEquipe === 'function') {
+            renderizarPainelEquipe();
+        }
+
+    } catch(e) {
+        console.error("Erro ao bloquear/desbloquear:", e);
+        alert("NÃO FOI POSSÍVEL ATUALIZAR O STATUS:\n" + e.message);
+        
+        // Restaura botões do modal se houve erro
+        if(actionsContainer && originalActions) {
+            actionsContainer.innerHTML = originalActions;
         }
     }
-
-    // 2. Atualiza Cache Local e Salva
-    f.isBlocked = newStatus;
-    await salvarListaFuncionarios(CACHE_FUNCIONARIOS);
-
-    alert(`Usuário ${newStatus ? 'BLOQUEADO' : 'DESBLOQUEADO'} com sucesso.`);
-    
-    // Fecha modal e atualiza tabela
-    document.getElementById('modalStatusFuncionario').style.display = 'none';
-    renderizarPainelEquipe();
-};
-
-window.aprovarUsuario = async function(uid) {
-    if(!confirm("Deseja aprovar o acesso deste usuário ao sistema?")) return;
-    
-    try { 
-        await window.dbRef.updateDoc(window.dbRef.doc(window.dbRef.db, "users", uid), { approved: true }); 
-        alert("Usuário aprovado!");
-        renderizarPainelEquipe(); 
-    } catch(e){ 
-        alert("Erro ao aprovar: " + e.message); 
-    }
-};
-
-window.aprovarProfileRequest = async function(reqId) {
-    var req = CACHE_PROFILE_REQUESTS.find(r => r.id === reqId);
-    if (!req) return;
-    
-    var func = CACHE_FUNCIONARIOS.find(f => String(f.id) === String(req.funcionarioId));
-    
-    if (func) {
-        // Atualiza o campo solicitado
-        if (req.campo === 'TELEFONE') func.telefone = req.valorNovo;
-        if (req.campo === 'ENDERECO') func.endereco = req.valorNovo;
-        if (req.campo === 'PIX') func.pix = req.valorNovo;
-        
-        await salvarListaFuncionarios(CACHE_FUNCIONARIOS);
-    }
-    
-    // Marca solicitação como aprovada
-    req.status = 'APROVADO';
-    await salvarProfileRequests(CACHE_PROFILE_REQUESTS);
-    
-    renderizarPainelEquipe();
-    alert("Dados atualizados.");
 };
 
 // -----------------------------------------------------------------------------
@@ -3321,28 +3325,97 @@ window.exportDataBackup = function() {
     a.click();
 };
 
+// =============================================================================
+// CORREÇÃO: IMPORTAÇÃO DE BACKUP COM RESTAURAÇÃO NA NUVEM (FIREBASE)
+// =============================================================================
+
 window.importDataBackup = function(event) {
+    var file = event.target.files[0];
+    if (!file) return;
+
     var reader = new FileReader();
-    reader.onload = function(e) {
-        if(confirm("Tem certeza? Isso substituirá os dados atuais.")) {
-            try {
-                var json = JSON.parse(e.target.result);
-                if(json.data) {
-                    localStorage.setItem(CHAVE_DB_FUNCIONARIOS, JSON.stringify(json.data.funcionarios));
-                    localStorage.setItem(CHAVE_DB_VEICULOS, JSON.stringify(json.data.veiculos));
-                    localStorage.setItem(CHAVE_DB_OPERACOES, JSON.stringify(json.data.operacoes));
-                    localStorage.setItem(CHAVE_DB_DESPESAS, JSON.stringify(json.data.despesas));
-                    alert("Restaurado com sucesso! Recarregando...");
-                    window.location.reload();
-                } else {
-                    alert("Arquivo inválido.");
-                }
-            } catch(err) {
-                alert("Erro ao ler arquivo: " + err.message);
+    reader.onload = async function(e) {
+        if(!confirm("ATENÇÃO: A restauração substituirá os dados ATUAIS (Locais e na Nuvem) pelos dados do arquivo de backup.\n\nDeseja continuar?")) {
+            event.target.value = ''; // Limpa o input file
+            return;
+        }
+        
+        // Mostra indicador de carregamento
+        var statusDiv = document.createElement('div');
+        statusDiv.id = 'restoreStatusOverlay';
+        statusDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(255,255,255,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;';
+        statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin fa-3x" style="color:var(--primary-color);"></i><h3 style="margin-top:20px;">Restaurando Dados... Por favor, aguarde.</h3><p>Não feche esta janela.</p>';
+        document.body.appendChild(statusDiv);
+
+        try {
+            var json = JSON.parse(e.target.result);
+
+            if(!json.data || !json.meta) {
+                throw new Error("Arquivo de backup inválido ou corrompido.");
             }
+
+            console.log("Iniciando restauração do backup de:", json.meta.date);
+
+            // 1. Restaura no LocalStorage
+            localStorage.setItem(CHAVE_DB_FUNCIONARIOS, JSON.stringify(json.data.funcionarios || []));
+            localStorage.setItem(CHAVE_DB_VEICULOS, JSON.stringify(json.data.veiculos || []));
+            localStorage.setItem(CHAVE_DB_OPERACOES, JSON.stringify(json.data.operacoes || []));
+            localStorage.setItem(CHAVE_DB_DESPESAS, JSON.stringify(json.data.despesas || []));
+            localStorage.setItem(CHAVE_DB_CONTRATANTES, JSON.stringify(json.data.contratantes || []));
+            localStorage.setItem(CHAVE_DB_ATIVIDADES, JSON.stringify(json.data.atividades || []));
+            localStorage.setItem(CHAVE_DB_RECIBOS, JSON.stringify(json.data.recibos || []));
+            
+            // Se houver dados da empresa no backup, restaura também
+            if(json.data.minhaEmpresa) {
+                localStorage.setItem(CHAVE_DB_MINHA_EMPRESA, JSON.stringify(json.data.minhaEmpresa));
+            }
+
+            // 2. Sincroniza TUDO de volta para o Firebase (Se estiver online e logado)
+            if (window.dbRef && window.USUARIO_ATUAL && window.USUARIO_ATUAL.company) {
+                const { db, doc, writeBatch } = window.dbRef;
+                const batch = writeBatch(db);
+                const companyPath = `companies/${window.USUARIO_ATUAL.company}/data`;
+                const metaInfo = { lastUpdate: new Date().toISOString(), updatedBy: 'RESTORE_BACKUP' };
+
+                // Helper para sanitizar dados antes de enviar (evita erros de undefined)
+                const sanitizar = (dados) => JSON.parse(JSON.stringify(dados));
+
+                batch.set(doc(db, companyPath, CHAVE_DB_FUNCIONARIOS), { items: sanitizar(json.data.funcionarios || []), ...metaInfo });
+                batch.set(doc(db, companyPath, CHAVE_DB_VEICULOS), { items: sanitizar(json.data.veiculos || []), ...metaInfo });
+                batch.set(doc(db, companyPath, CHAVE_DB_OPERACOES), { items: sanitizar(json.data.operacoes || []), ...metaInfo });
+                batch.set(doc(db, companyPath, CHAVE_DB_DESPESAS), { items: sanitizar(json.data.despesas || []), ...metaInfo });
+                batch.set(doc(db, companyPath, CHAVE_DB_CONTRATANTES), { items: sanitizar(json.data.contratantes || []), ...metaInfo });
+                batch.set(doc(db, companyPath, CHAVE_DB_ATIVIDADES), { items: sanitizar(json.data.atividades || []), ...metaInfo });
+                batch.set(doc(db, companyPath, CHAVE_DB_RECIBOS), { items: sanitizar(json.data.recibos || []), ...metaInfo });
+                
+                if(json.data.minhaEmpresa) {
+                    batch.set(doc(db, companyPath, CHAVE_DB_MINHA_EMPRESA), { items: sanitizar(json.data.minhaEmpresa), ...metaInfo });
+                }
+
+                console.log("Enviando dados restaurados para a nuvem...");
+                await batch.commit();
+                console.log("Sincronização na nuvem concluída.");
+            }
+
+            alert("SUCESSO!\nTodos os dados foram restaurados e sincronizados.\nO sistema será recarregado.");
+            window.location.reload();
+
+        } catch(err) {
+            console.error("Erro na restauração:", err);
+            alert("FALHA AO RESTAURAR BACKUP:\n" + err.message);
+            if(document.getElementById('restoreStatusOverlay')) {
+                document.body.removeChild(document.getElementById('restoreStatusOverlay'));
+            }
+            event.target.value = ''; // Limpa o input file
         }
     };
-    reader.readAsText(event.target.files[0]);
+    
+    reader.onerror = function() {
+        alert("Erro ao ler o arquivo.");
+        event.target.value = '';
+    };
+    
+    reader.readAsText(file);
 };
 
 // =============================================================================
