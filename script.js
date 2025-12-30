@@ -1415,6 +1415,7 @@ window.excluirDespesa = function(id) {
     }); 
 };
 
+// ATUALIZAÇÃO: TABELA FUNCIONÁRIOS (COM BOTÃO VISUALIZAR)
 function renderizarTabelaFuncionarios() { 
     var tbody = document.querySelector('#tabelaFuncionarios tbody'); 
     if (!tbody) return; 
@@ -1422,18 +1423,60 @@ function renderizarTabelaFuncionarios() {
     
     CACHE_FUNCIONARIOS.forEach(f => { 
         var tr = document.createElement('tr');
-        // Botões de CRUD Padrão na Aba de Cadastros
         tr.innerHTML = `
             <td>${f.nome}</td>
             <td>${f.funcao}</td>
             <td>${f.email || '-'}</td>
             <td>
-                <button class="btn-mini edit-btn" onclick="preencherFormularioFuncionario('${f.id}')"><i class="fas fa-edit"></i></button> 
-                <button class="btn-mini delete-btn" onclick="excluirFuncionario('${f.id}')"><i class="fas fa-trash"></i></button>
+                <button class="btn-mini btn-info" onclick="visualizarFuncionarioDetalhes('${f.id}')" title="Visualizar"><i class="fas fa-eye"></i></button>
+                <button class="btn-mini edit-btn" onclick="preencherFormularioFuncionario('${f.id}')" title="Editar"><i class="fas fa-edit"></i></button> 
+                <button class="btn-mini delete-btn" onclick="excluirFuncionario('${f.id}')" title="Excluir"><i class="fas fa-trash"></i></button>
             </td>
         `; 
         tbody.appendChild(tr);
     }); 
+}
+
+// ATUALIZAÇÃO: TABELA VEÍCULOS (COM BOTÃO VISUALIZAR)
+function renderizarTabelaVeiculos() { 
+    var tbody = document.querySelector('#tabelaVeiculos tbody'); 
+    if(tbody) { 
+        tbody.innerHTML=''; 
+        CACHE_VEICULOS.forEach(v => { 
+            var tr=document.createElement('tr'); 
+            tr.innerHTML=`
+                <td>${v.placa}</td>
+                <td>${v.modelo}</td>
+                <td>${v.ano}</td>
+                <td>
+                    <button class="btn-mini btn-info" onclick="visualizarVeiculoDetalhes('${v.placa}')" title="Visualizar"><i class="fas fa-eye"></i></button>
+                    <button class="btn-mini edit-btn" onclick="preencherFormularioVeiculo('${v.placa}')" title="Editar"><i class="fas fa-edit"></i></button> 
+                    <button class="btn-mini delete-btn" onclick="excluirVeiculo('${v.placa}')" title="Excluir"><i class="fas fa-trash"></i></button>
+                </td>`; 
+            tbody.appendChild(tr); 
+        }); 
+    } 
+}
+
+// ATUALIZAÇÃO: TABELA CLIENTES (COM BOTÃO VISUALIZAR)
+function renderizarTabelaContratantes() { 
+    var tbody = document.querySelector('#tabelaContratantes tbody'); 
+    if(tbody) { 
+        tbody.innerHTML=''; 
+        CACHE_CONTRATANTES.forEach(c => { 
+            var tr=document.createElement('tr'); 
+            tr.innerHTML=`
+                <td>${c.razaoSocial}</td>
+                <td>${c.cnpj}</td>
+                <td>${c.telefone}</td>
+                <td>
+                    <button class="btn-mini btn-info" onclick="visualizarContratanteDetalhes('${c.cnpj}')" title="Visualizar"><i class="fas fa-eye"></i></button>
+                    <button class="btn-mini edit-btn" onclick="preencherFormularioContratante('${c.cnpj}')" title="Editar"><i class="fas fa-edit"></i></button> 
+                    <button class="btn-mini delete-btn" onclick="excluirContratante('${c.cnpj}')" title="Excluir"><i class="fas fa-trash"></i></button>
+                </td>`; 
+            tbody.appendChild(tr); 
+        }); 
+    } 
 }
 
 // Funções de Exclusão
@@ -3939,4 +3982,122 @@ window.enviarReciboFuncionario = async function(reciboId) {
     } else {
         alert("Erro: Recibo não encontrado no sistema.");
     }
+};
+// =============================================================================
+// NOVO: VISUALIZAÇÃO DETALHADA DE CADASTROS (COM CÓPIA)
+// =============================================================================
+
+// Helper para Copiar Texto
+window.copiarDadosTexto = function(texto) {
+    navigator.clipboard.writeText(texto).then(() => {
+        alert("Dados copiados para a área de transferência!");
+    }).catch(err => {
+        console.error('Erro ao copiar:', err);
+        alert("Não foi possível copiar automaticamente. Tente selecionar e copiar manualmente.");
+    });
+};
+
+// 1. VISUALIZAR FUNCIONÁRIO
+window.visualizarFuncionarioDetalhes = function(id) {
+    var f = buscarFuncionarioPorId(id);
+    if (!f) return;
+
+    var dadosTexto = `NOME: ${f.nome}\nFUNÇÃO: ${f.funcao}\nDOC: ${f.documento}\nEMAIL: ${f.email}\nTEL: ${f.telefone}\nPIX: ${f.pix || '-'}\nENDEREÇO: ${f.endereco || '-'}`;
+    
+    if (f.funcao === 'motorista') {
+        dadosTexto += `\nCNH: ${f.cnh || '-'}\nVALIDADE: ${f.validadeCNH || '-'}\nCATEGORIA: ${f.categoriaCNH || '-'}`;
+    }
+
+    var html = `
+        <div style="font-size:0.9rem; color:#333;">
+            <div style="background:#e3f2fd; padding:15px; border-radius:6px; margin-bottom:15px; border-left: 5px solid var(--primary-color);">
+                <h3 style="margin:0; color:var(--primary-color);">${f.nome}</h3>
+                <span class="status-pill pill-active">${f.funcao.toUpperCase()}</span>
+            </div>
+            
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                <div><strong>DOCUMENTO:</strong><br>${f.documento}</div>
+                <div><strong>TELEFONE:</strong><br>${f.telefone}</div>
+                <div style="grid-column: span 2;"><strong>EMAIL:</strong><br>${f.email || '-'}</div>
+                <div style="grid-column: span 2;"><strong>ENDEREÇO:</strong><br>${f.endereco || '-'}</div>
+                <div style="grid-column: span 2;"><strong>PIX:</strong><br>${f.pix || '-'}</div>
+            </div>
+
+            ${f.funcao === 'motorista' ? `
+            <div style="margin-top:15px; padding-top:10px; border-top:1px dashed #ccc;">
+                <strong>DADOS CNH:</strong><br>
+                Nº ${f.cnh || '-'} | Cat: ${f.categoriaCNH || '-'} | Val: ${formatarDataParaBrasileiro(f.validadeCNH)}
+            </div>` : ''}
+            
+            <div style="margin-top:20px; text-align:center;">
+                <button class="btn-info" style="width:100%; justify-content:center;" onclick="copiarDadosTexto(\`${dadosTexto}\`)">
+                    <i class="fas fa-copy"></i> COPIAR DADOS
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('viewItemBody').innerHTML = html;
+    document.getElementById('viewItemTitle').textContent = "DADOS DO FUNCIONÁRIO";
+    document.getElementById('viewItemModal').style.display = 'flex';
+};
+
+// 2. VISUALIZAR VEÍCULO
+window.visualizarVeiculoDetalhes = function(placa) {
+    var v = buscarVeiculoPorPlaca(placa);
+    if (!v) return;
+
+    var dadosTexto = `VEÍCULO: ${v.modelo}\nPLACA: ${v.placa}\nANO: ${v.ano}\nRENAVAM: ${v.renavam || '-'}\nCHASSI: ${v.chassi || '-'}`;
+
+    var html = `
+        <div style="font-size:0.9rem; color:#333;">
+            <div style="background:#fff3e0; padding:15px; border-radius:6px; margin-bottom:15px; border-left: 5px solid orange;">
+                <h3 style="margin:0; color:#e65100;">${v.placa}</h3>
+                <span>${v.modelo}</span>
+            </div>
+            
+            <div style="margin-bottom:10px;"><strong>ANO:</strong> ${v.ano}</div>
+            <div style="margin-bottom:10px;"><strong>RENAVAM:</strong> ${v.renavam || '-'}</div>
+            <div style="margin-bottom:10px;"><strong>CHASSI:</strong> ${v.chassi || '-'}</div>
+            
+            <div style="margin-top:20px; text-align:center;">
+                <button class="btn-info" style="width:100%; justify-content:center;" onclick="copiarDadosTexto(\`${dadosTexto}\`)">
+                    <i class="fas fa-copy"></i> COPIAR DADOS
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('viewItemBody').innerHTML = html;
+    document.getElementById('viewItemTitle').textContent = "DADOS DO VEÍCULO";
+    document.getElementById('viewItemModal').style.display = 'flex';
+};
+
+// 3. VISUALIZAR CLIENTE
+window.visualizarContratanteDetalhes = function(cnpj) {
+    var c = buscarContratantePorCnpj(cnpj);
+    if (!c) return;
+
+    var dadosTexto = `CLIENTE: ${c.razaoSocial}\nCNPJ: ${c.cnpj}\nTELEFONE: ${c.telefone}`;
+
+    var html = `
+        <div style="font-size:0.9rem; color:#333;">
+            <div style="background:#e8f5e9; padding:15px; border-radius:6px; margin-bottom:15px; border-left: 5px solid green;">
+                <h3 style="margin:0; color:green;">${c.razaoSocial}</h3>
+            </div>
+            
+            <div style="margin-bottom:10px;"><strong>CNPJ:</strong> ${c.cnpj}</div>
+            <div style="margin-bottom:10px;"><strong>TELEFONE:</strong> ${c.telefone}</div>
+            
+            <div style="margin-top:20px; text-align:center;">
+                <button class="btn-info" style="width:100%; justify-content:center;" onclick="copiarDadosTexto(\`${dadosTexto}\`)">
+                    <i class="fas fa-copy"></i> COPIAR DADOS
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('viewItemBody').innerHTML = html;
+    document.getElementById('viewItemTitle').textContent = "DADOS DO CLIENTE";
+    document.getElementById('viewItemModal').style.display = 'flex';
 };
