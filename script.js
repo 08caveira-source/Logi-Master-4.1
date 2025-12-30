@@ -2507,6 +2507,11 @@ window.exportarRelatorioPDF = function() {
 // 4. EMISSÃO DE RECIBOS DE PAGAMENTO
 // -----------------------------------------------------------------------------
 
+// =============================================================================
+// ATUALIZAÇÃO: LAYOUT DO RECIBO COM DADOS DA EMPRESA (PAGADOR)
+// =============================================================================
+
+// 1. ATUALIZAÇÃO DA GERAÇÃO DO NOVO RECIBO (CÁLCULO)
 window.gerarReciboPagamento = function() {
     var motId = document.getElementById('selectMotoristaRecibo').value;
     var dataIni = document.getElementById('dataInicioRecibo').value;
@@ -2518,6 +2523,12 @@ window.gerarReciboPagamento = function() {
     
     var funcionario = buscarFuncionarioPorId(motId);
     if (!funcionario) return alert("Funcionário inválido.");
+
+    // Busca dados da Empresa (Pagador)
+    var empresa = CACHE_MINHA_EMPRESA || {};
+    var razaoSocial = empresa.razaoSocial || "EMPRESA NÃO CADASTRADA";
+    var cnpjEmpresa = empresa.cnpj || "-";
+    var telEmpresa = empresa.telefone ? formatarTelefoneBrasil(empresa.telefone) : "-";
 
     var totalValor = 0; 
     var opsEnvolvidas = [];
@@ -2546,26 +2557,43 @@ window.gerarReciboPagamento = function() {
         }
     });
 
-    // Gera HTML do Recibo (Estilo Papel)
+    // Gera HTML do Recibo (Com Cabeçalho da Empresa)
     var htmlRecibo = `
         <div style="border:2px solid #333; padding:20px; font-family:'Courier New', monospace; background:#fff; max-width:400px; margin:0 auto;">
-            <h3 style="text-align:center; border-bottom:2px dashed #333; padding-bottom:10px;">RECIBO DE PAGAMENTO</h3>
-            <p><strong>BENEFICIÁRIO:</strong><br> ${funcionario.nome}</p>
+            
+            <div style="text-align:center; border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:15px;">
+                <strong style="font-size:1.1rem; text-transform:uppercase;">${razaoSocial}</strong><br>
+                <span style="font-size:0.85rem;">CNPJ: ${cnpjEmpresa}</span><br>
+                <span style="font-size:0.85rem;">Tel: ${telEmpresa}</span>
+            </div>
+
+            <h3 style="text-align:center; border-bottom:1px dashed #333; padding-bottom:10px; margin-bottom:15px;">RECIBO DE PAGAMENTO</h3>
+            
+            <p><strong>BENEFICIÁRIO (RECEBEDOR):</strong><br> ${funcionario.nome}</p>
+            <p style="font-size:0.9rem;">CPF: ${funcionario.documento || '-'}</p>
+            
             <p><strong>PERÍODO:</strong><br> ${formatarDataParaBrasileiro(dataIni)} A ${formatarDataParaBrasileiro(dataFim)}</p>
-            <table style="width:100%; border-top:1px solid #333; border-bottom:1px solid #333; margin:10px 0;">
-                <tr><th align="left">DATA</th><th align="right">VALOR</th></tr>
+            
+            <table style="width:100%; border-top:1px solid #333; border-bottom:1px solid #333; margin:10px 0; font-size:0.9rem;">
+                <tr style="background:#eee;"><th align="left">DATA</th><th align="right">VALOR</th></tr>
                 ${opsEnvolvidas.map(o => `<tr><td>${formatarDataParaBrasileiro(o.data)}</td><td align="right">${formatarValorMoeda(o.valor)}</td></tr>`).join('')}
             </table>
-            <h3 style="text-align:right;">TOTAL: ${formatarValorMoeda(totalValor)}</h3>
-            <br>
-            <br>
-            <div style="text-align:center; border-top:1px solid #333; margin-top:20px; padding-top:5px;">Assinatura</div>
+            
+            <h3 style="text-align:right; margin-top:15px;">TOTAL: ${formatarValorMoeda(totalValor)}</h3>
+            
+            <div style="margin-top:40px; text-align:center;">
+                <div style="border-top:1px solid #333; width:80%; margin:0 auto;"></div>
+                <div style="padding-top:5px; font-size:0.8rem;">ASSINATURA DO RECEBEDOR</div>
+                <div style="font-weight:bold; font-size:0.9rem;">${funcionario.nome}</div>
+            </div>
+            
+            <div style="text-align:center; margin-top:20px; font-size:0.6rem; color:#999;">EMITIDO PELO SISTEMA LOGIMASTER</div>
         </div>
     `;
     
     document.getElementById('modalReciboContent').innerHTML = htmlRecibo;
     
-    // Botão para Salvar no Histórico
+    // Botão para Salvar no Histórico e Enviar
     document.getElementById('modalReciboActions').innerHTML = `
         <button class="btn-success" onclick="salvarReciboNoHistorico('${funcionario.id}', '${funcionario.nome}', '${dataIni}', '${dataFim}', ${totalValor})">
             <i class="fas fa-save"></i> SALVAR E REGISTRAR
@@ -2575,64 +2603,60 @@ window.gerarReciboPagamento = function() {
     document.getElementById('modalRecibo').style.display = 'flex';
 };
 
-window.salvarReciboNoHistorico = async function(funcId, funcNome, ini, fim, valor) {
-    var novoRecibo = { 
-        id: Date.now().toString(), 
-        dataEmissao: new Date().toISOString(), 
-        funcionarioId: funcId, 
-        funcionarioNome: funcNome, 
-        periodo: `${formatarDataParaBrasileiro(ini)} a ${formatarDataParaBrasileiro(fim)}`, 
-        valorTotal: valor, 
-        enviado: false 
-    };
-    
-    var lista = CACHE_RECIBOS || [];
-    lista.push(novoRecibo);
-    
-    await salvarListaRecibos(lista);
-    
-    alert("Recibo salvo no histórico!"); 
-    document.getElementById('modalRecibo').style.display = 'none'; 
-    renderizarHistoricoRecibos();
-};
+// 2. ATUALIZAÇÃO DA VISUALIZAÇÃO DE HISTÓRICO (ADMIN E FUNCIONÁRIO)
+window.visualizarReciboExistente = function(reciboId) {
+    var r = CACHE_RECIBOS.find(x => x.id === reciboId);
+    if(!r) return;
 
-window.renderizarHistoricoRecibos = function() {
-    var tbody = document.querySelector('#tabelaHistoricoRecibos tbody');
-    if (!tbody) return;
-    
-    tbody.innerHTML = '';
-    
-    (CACHE_RECIBOS || []).sort((a,b) => new Date(b.dataEmissao) - new Date(a.dataEmissao)).forEach(r => {
-        var statusLabel = r.enviado ? 
-            '<span class="status-pill pill-active">ENVIADO</span>' : 
-            '<span class="status-pill pill-pending">NÃO ENVIADO</span>';
-            
-        var btnEnviar = r.enviado ? '' : 
-            `<button class="btn-mini btn-primary" onclick="enviarReciboFuncionario('${r.id}')" title="Marcar como Enviado"><i class="fas fa-paper-plane"></i></button>`;
-            
-        var tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${new Date(r.dataEmissao).toLocaleDateString()}</td>
-            <td>${r.funcionarioNome}</td>
-            <td>${formatarValorMoeda(r.valorTotal)}</td>
-            <td>${statusLabel}</td>
-            <td>${btnEnviar}</td>
-        `;
-        tbody.appendChild(tr);
-    });
-};
+    // Busca dados da Empresa (Pagador)
+    var empresa = CACHE_MINHA_EMPRESA || {};
+    var razaoSocial = empresa.razaoSocial || "EMPRESA NÃO CADASTRADA";
+    var cnpjEmpresa = empresa.cnpj || "-";
+    var telEmpresa = empresa.telefone ? formatarTelefoneBrasil(empresa.telefone) : "-";
 
-window.enviarReciboFuncionario = async function(reciboId) {
-    if(!confirm("Marcar este recibo como ENVIADO para o funcionário?")) return;
+    var htmlRecibo = `
+        <div id="printAreaRecibo" style="border:2px solid #333; padding:20px; font-family:'Courier New', monospace; background:#fff; max-width:400px; margin:0 auto;">
+            
+            <div style="text-align:center; border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:15px;">
+                <strong style="font-size:1.1rem; text-transform:uppercase;">${razaoSocial}</strong><br>
+                <span style="font-size:0.85rem;">CNPJ: ${cnpjEmpresa}</span><br>
+                <span style="font-size:0.85rem;">Tel: ${telEmpresa}</span>
+            </div>
+
+            <h3 style="text-align:center; border-bottom:2px dashed #333; padding-bottom:10px;">RECIBO DE PAGAMENTO</h3>
+            <p style="text-align:right; font-size:0.8rem;">Emissão: ${formatarDataParaBrasileiro(r.dataEmissao)}</p>
+            
+            <p><strong>BENEFICIÁRIO:</strong><br> ${r.funcionarioNome}</p>
+            <p><strong>PERÍODO REF.:</strong><br> ${r.periodo}</p>
+            
+            <div style="margin:20px 0; border:1px solid #ccc; padding:10px; text-align:center;">
+                <span style="display:block; font-size:0.9rem;">VALOR LÍQUIDO RECEBIDO</span>
+                <strong style="font-size:1.4rem;">${formatarValorMoeda(r.valorTotal)}</strong>
+            </div>
+
+            <p style="font-size:0.8rem; text-align:justify;">
+                Declaro ter recebido a importância supra citada, referente aos serviços prestados (comissões/diárias) no período descrito.
+            </p>
+            
+            <div style="margin-top:50px; text-align:center;">
+                <div style="border-top:1px solid #333; width:80%; margin:0 auto;"></div>
+                <div style="padding-top:5px; font-size:0.8rem;">ASSINATURA DO BENEFICIÁRIO</div>
+            </div>
+            
+            <div style="text-align:center; margin-top:30px; font-size:0.7rem; color:#999;">LOGIMASTER SYSTEM</div>
+        </div>
+    `;
+
+    document.getElementById('modalReciboContent').innerHTML = htmlRecibo;
     
-    var rec = CACHE_RECIBOS.find(r => r.id === reciboId);
-    if(rec) {
-        rec.enviado = true;
-        await salvarListaRecibos(CACHE_RECIBOS);
-        
-        renderizarHistoricoRecibos();
-        alert("Status atualizado!");
-    }
+    // Ações do Modal (Apenas Imprimir)
+    document.getElementById('modalReciboActions').innerHTML = `
+        <button class="btn-secondary" onclick="imprimirElemento('printAreaRecibo')">
+            <i class="fas fa-print"></i> IMPRIMIR
+        </button>
+    `;
+    
+    document.getElementById('modalRecibo').style.display = 'flex';
 };
 // =============================================================================
 // PARTE 5: SUPER ADMIN, MEUS DADOS E INICIALIZAÇÃO
