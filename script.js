@@ -2462,68 +2462,112 @@ window.gerarRelatorioGeral = function() {
 };
 
 window.gerarRelatorioCobranca = function() {
-    var ops = filtrarOperacoesParaRelatorio();
-    if (!ops) return;
+    // 1. Validação de Filtros Obrigatórios
+    var inicio = document.getElementById('dataInicioRelatorio').value;
+    var fim = document.getElementById('dataFimRelatorio').value;
+    var clienteCNPJ = document.getElementById('selectContratanteRelatorio').value;
 
-    var porCliente = {};
-    
-    // Agrupa por cliente
-    ops.forEach(op => {
-        var cNome = buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial || 'CLIENTE DESCONHECIDO';
-        
-        if (!porCliente[cNome]) {
-            porCliente[cNome] = { ops: [], totalFat: 0, totalAdiant: 0 };
-        }
-        
-        porCliente[cNome].ops.push(op);
-        porCliente[cNome].totalFat += (Number(op.faturamento)||0);
-        porCliente[cNome].totalAdiant += (Number(op.adiantamento)||0);
+    if (!inicio || !fim) { 
+        alert("Por favor, selecione o período (Início e Fim)."); 
+        return; 
+    }
+
+    if (!clienteCNPJ) {
+        alert("ATENÇÃO: Para gerar o Relatório de Cobrança, é OBRIGATÓRIO selecionar um CLIENTE específico.");
+        return;
+    }
+
+    // 2. Busca dados do Cliente
+    var dadosCliente = buscarContratantePorCnpj(clienteCNPJ);
+    var nomeCliente = dadosCliente ? dadosCliente.razaoSocial : "CLIENTE NÃO ENCONTRADO";
+    var telCliente = dadosCliente ? dadosCliente.telefone : "";
+
+    // 3. Filtra Operações (Data + Cliente Específico + Não Canceladas)
+    var opsFiltradas = CACHE_OPERACOES.filter(function(op) {
+        if (op.status === 'CANCELADA') return false;
+        if (op.data < inicio || op.data > fim) return false;
+        if (op.contratanteCNPJ !== clienteCNPJ) return false; // Filtro Rigoroso
+        return true;
+    }).sort((a,b) => new Date(a.data) - new Date(b.data));
+
+    if (opsFiltradas.length === 0) {
+        alert("Nenhuma operação encontrada para este cliente neste período.");
+        return;
+    }
+
+    // 4. Cálculos Totais
+    var totalServicos = 0;
+    var totalAdiantamentos = 0;
+
+    // 5. Gera HTML do Extrato
+    var html = `
+        <div style="font-family: Arial, sans-serif; color:#333;">
+            <div style="text-align:center; border-bottom:2px solid #333; padding-bottom:15px; margin-bottom:20px;">
+                <h2 style="margin:0;">DEMONSTRATIVO DE COBRANÇA</h2>
+                <p style="margin:5px 0;">PERÍODO: ${formatarDataParaBrasileiro(inicio)} A ${formatarDataParaBrasileiro(fim)}</p>
+            </div>
+
+            <div style="background:#f8f9fa; padding:15px; border-radius:6px; border:1px solid #ddd; margin-bottom:20px;">
+                <h3 style="margin:0 0 5px 0; color:var(--primary-color);">${nomeCliente}</h3>
+                <div>CNPJ: ${clienteCNPJ}</div>
+                <div>Telefone: ${telCliente || '-'}</div>
+            </div>
+
+            <table class="data-table" style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:#eee;">
+                        <th style="border:1px solid #ccc; padding:8px;">DATA</th>
+                        <th style="border:1px solid #ccc; padding:8px;">PLACA / VEÍCULO</th>
+                        <th style="border:1px solid #ccc; padding:8px;">SERVIÇO</th>
+                        <th style="border:1px solid #ccc; padding:8px; text-align:right;">VALOR (R$)</th>
+                        <th style="border:1px solid #ccc; padding:8px; text-align:right;">ADIANTAMENTO (R$)</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    opsFiltradas.forEach(op => {
+        var valor = Number(op.faturamento) || 0;
+        var adiant = Number(op.adiantamento) || 0;
+        var servicoNome = buscarAtividadePorId(op.atividadeId)?.nome || '-';
+
+        totalServicos += valor;
+        totalAdiantamentos += adiant;
+
+        html += `
+            <tr>
+                <td style="border:1px solid #ccc; padding:8px;">${formatarDataParaBrasileiro(op.data)}</td>
+                <td style="border:1px solid #ccc; padding:8px;">${op.veiculoPlaca}</td>
+                <td style="border:1px solid #ccc; padding:8px;">${servicoNome}</td>
+                <td style="border:1px solid #ccc; padding:8px; text-align:right;">${formatarValorMoeda(valor)}</td>
+                <td style="border:1px solid #ccc; padding:8px; text-align:right; color:red;">${adiant > 0 ? '- ' + formatarValorMoeda(adiant) : '-'}</td>
+            </tr>
+        `;
     });
 
-    var html = `<div style="text-align:center; margin-bottom:30px;"><h2>RELATÓRIO DE COBRANÇA (LÍQUIDO A RECEBER)</h2></div>`;
-    
-    for (var cliente in porCliente) {
-        var liquido = porCliente[cliente].totalFat - porCliente[cliente].totalAdiant;
-        
-        html += `
-            <div style="margin-bottom:30px; border:1px solid #ccc; padding:15px; page-break-inside: avoid;">
-                <h3 style="background:#eee; padding:10px; margin-top:0;">${cliente}</h3>
-                <table class="data-table" style="width:100%;">
-                    <thead>
-                        <tr>
-                            <th>DATA</th>
-                            <th>PLACA</th>
-                            <th>VALOR SERVIÇO</th>
-                            <th>ADIANTAMENTO</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-        `;
-        
-        porCliente[cliente].ops.forEach(op => {
-            html += `
-                <tr>
-                    <td>${formatarDataParaBrasileiro(op.data)}</td>
-                    <td>${op.veiculoPlaca}</td>
-                    <td>${formatarValorMoeda(op.faturamento)}</td>
-                    <td style="color:red;">${op.adiantamento > 0 ? '- '+formatarValorMoeda(op.adiantamento) : '-'}</td>
-                </tr>
-            `;
-        });
-        
-        html += `
-                    </tbody>
-                    <tfoot>
-                        <tr style="background:#333; color:white;">
-                            <td colspan="3" style="text-align:right; font-weight:bold;">LÍQUIDO A RECEBER:</td>
-                            <td style="font-weight:bold; font-size:1.1rem; color:#4caf50;">${formatarValorMoeda(liquido)}</td>
-                        </tr>
-                    </tfoot>
-                </table>
+    var totalLiquido = totalServicos - totalAdiantamentos;
+
+    html += `
+                </tbody>
+                <tfoot>
+                    <tr style="background:#f0f0f0; font-weight:bold;">
+                        <td colspan="3" style="border:1px solid #ccc; padding:10px; text-align:right;">SUBTOTAIS:</td>
+                        <td style="border:1px solid #ccc; padding:10px; text-align:right;">${formatarValorMoeda(totalServicos)}</td>
+                        <td style="border:1px solid #ccc; padding:10px; text-align:right; color:red;">- ${formatarValorMoeda(totalAdiantamentos)}</td>
+                    </tr>
+                    <tr style="background:#333; color:white;">
+                        <td colspan="4" style="padding:15px; text-align:right; font-size:1.2rem;">TOTAL LÍQUIDO A PAGAR:</td>
+                        <td style="padding:15px; text-align:right; font-size:1.2rem; font-weight:bold; background:var(--success-color);">${formatarValorMoeda(totalLiquido)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+
+            <div style="margin-top:40px; text-align:center; font-size:0.8rem; color:#666;">
+                <p>Documento gerado eletronicamente pelo sistema LOGIMASTER.</p>
             </div>
-        `;
-    }
-    
+        </div>
+    `;
+
     document.getElementById('reportContent').innerHTML = html;
     document.getElementById('reportResults').style.display = 'block';
 };
@@ -3113,6 +3157,25 @@ window.initSystemByRole = async function(user) {
     console.log(">>> INIT SISTEMA:", user.role);
     window.USUARIO_ATUAL = user;
 
+    // --- NOVO: MONITORAMENTO DE BLOQUEIO EM TEMPO REAL ---
+    if (window.dbRef && user.uid) {
+        // Cria um listener no documento do usuário
+        window.dbRef.onSnapshot(window.dbRef.doc(window.dbRef.db, "users", user.uid), (docSnap) => {
+            if (docSnap.exists()) {
+                const dadosAtualizados = docSnap.data();
+                // Se o campo isBlocked virar true, derruba o usuário na hora
+                if (dadosAtualizados.isBlocked === true) {
+                    alert("SEU ACESSO FOI BLOQUEADO PELO ADMINISTRADOR.\nO sistema será encerrado.");
+                    window.logoutSystem();
+                }
+            } else {
+                // Se o usuário foi deletado
+                window.logoutSystem();
+            }
+        });
+    }
+    // -----------------------------------------------------
+
     // 1. Reseta a interface (Esconde todas as páginas)
     document.querySelectorAll('.page').forEach(p => { 
         p.style.display = 'none'; 
@@ -3138,11 +3201,12 @@ window.initSystemByRole = async function(user) {
 
     // 4. Lógica de Roteamento
     if (user.role === 'admin') {
-        // Bloqueios
+        // Bloqueio inicial (Login)
         if (user.isBlocked) {
             document.body.innerHTML = "<div style='display:flex;height:100vh;justify-content:center;align-items:center;color:red;flex-direction:column'><h1>ACESSO BLOQUEADO</h1><p>Contate o suporte.</p><button onclick='logoutSystem()'>SAIR</button></div>";
             return;
         }
+        // Verificação de Licença
         if (!user.isVitalicio) {
             if (!user.systemValidity || new Date(user.systemValidity) < new Date()) {
                 document.body.innerHTML = "<div style='display:flex;height:100vh;justify-content:center;align-items:center;color:orange;flex-direction:column'><h1>SISTEMA VENCIDO</h1><p>Renove sua licença.</p><button onclick='logoutSystem()'>SAIR</button></div>";
@@ -3150,7 +3214,7 @@ window.initSystemByRole = async function(user) {
             }
         }
 
-        // Mostra Menu
+        // Mostra Menu Admin
         document.getElementById('menu-admin').style.display = 'block';
         
         // Abre Home
@@ -3163,18 +3227,21 @@ window.initSystemByRole = async function(user) {
             if(menuHome) menuHome.classList.add('active');
         }
         
-        // CORREÇÃO CRÍTICA DO CALENDÁRIO:
-        // Aguarda 300ms para garantir que o DOM (div#calendarGrid) está visível e dimensionado
-        // antes de desenhar o grid. Isso previne o bug de precisar navegar para aparecer.
+        // Renderiza Calendário e Dashboard
         window.currentDate = new Date();
         setTimeout(() => {
-            console.log("Renderizando Calendário e Dashboard com delay...");
             renderizarCalendario();
             atualizarDashboard();
         }, 300);
 
     } else {
         // Funcionário
+        if (user.isBlocked) {
+            alert("Acesso Bloqueado.");
+            window.logoutSystem();
+            return;
+        }
+
         document.getElementById('menu-employee').style.display = 'block';
         window.MODO_APENAS_LEITURA = true;
         
