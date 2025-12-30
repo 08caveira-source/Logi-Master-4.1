@@ -3171,8 +3171,6 @@ document.querySelectorAll('.nav-item').forEach(item => {
                 renderizarCalendario();
             }, 100);
         }
-        // Atualizações específicas por página
-        if (targetId === 'home') atualizarDashboard();
         if (targetId === 'meus-dados') renderizarMeusDados();
         if (targetId === 'employee-checkin') renderizarCheckinFuncionario();
         if (targetId === 'performance') setTimeout(renderizarGraficoPerformance, 200);
