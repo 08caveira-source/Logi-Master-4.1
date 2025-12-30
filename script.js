@@ -1,12 +1,11 @@
 // =============================================================================
 // ARQUIVO: script.js
-// SISTEMA LOGIMASTER - VERSÃO 5.0 (INTEGRAL E CORRIGIDA)
+// SISTEMA LOGIMASTER - VERSÃO 5.0 (CORREÇÃO DE INICIALIZAÇÃO)
 // =============================================================================
 
 // -----------------------------------------------------------------------------
 // 1. CONSTANTES DE ARMAZENAMENTO (CHAVES DO BANCO DE DADOS)
 // -----------------------------------------------------------------------------
-// Estas chaves são usadas tanto no LocalStorage quanto nas coleções do Firebase
 const CHAVE_DB_FUNCIONARIOS = 'db_funcionarios';
 const CHAVE_DB_VEICULOS = 'db_veiculos';
 const CHAVE_DB_CONTRATANTES = 'db_contratantes';
@@ -20,25 +19,17 @@ const CHAVE_DB_RECIBOS = 'db_recibos';
 // -----------------------------------------------------------------------------
 // 2. VARIÁVEIS GLOBAIS DE ESTADO
 // -----------------------------------------------------------------------------
-// Lista de e-mails que possuem acesso total ao Painel Master
+// Lista de e-mails com permissão de Super Admin (Master)
 const EMAILS_MESTRES = ["admin@logimaster.com", "suporte@logimaster.com", "08caveira@gmail.com"]; 
 
-// Armazena o usuário logado atualmente
+// Variáveis de controle de sessão e interface
 window.USUARIO_ATUAL = null;
-
-// Define se o usuário é apenas funcionário (leitura) ou admin
 window.MODO_APENAS_LEITURA = false; 
-
-// Data atual para controle do calendário e dashboard
 window.currentDate = new Date(); 
-
-// Instância do gráfico para poder destruir e recriar
 window.chartInstance = null; 
-
-// Lista temporária para adicionar ajudantes em uma operação antes de salvar
 window._operacaoAjudantesTempList = []; 
 
-// Status da licença do sistema da empresa atual
+// Status do Sistema (Controle de Licença)
 window.SYSTEM_STATUS = {
     validade: null,
     isVitalicio: false,
@@ -46,9 +37,8 @@ window.SYSTEM_STATUS = {
 };
 
 // -----------------------------------------------------------------------------
-// 3. CACHE LOCAL (Sincronizado com a memória RAM)
+// 3. CACHE LOCAL (Mantém dados na RAM para performance)
 // -----------------------------------------------------------------------------
-// Estas variáveis mantêm os dados carregados para acesso rápido sem ler o disco/rede toda hora
 var CACHE_FUNCIONARIOS = [];
 var CACHE_VEICULOS = [];
 var CACHE_CONTRATANTES = [];
@@ -63,7 +53,7 @@ var CACHE_RECIBOS = [];
 // 4. FUNÇÕES DE FORMATAÇÃO (HELPERS)
 // -----------------------------------------------------------------------------
 
-// Formata um número para o padrão de moeda brasileiro (R$ 1.000,00)
+// Formata valor monetário (R$ 1.000,00)
 function formatarValorMoeda(valor) {
     var numero = Number(valor);
     if (isNaN(numero)) {
@@ -72,12 +62,11 @@ function formatarValorMoeda(valor) {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numero);
 }
 
-// Converte data ISO (YYYY-MM-DD) para Brasileiro (DD/MM/YYYY)
+// Formata data ISO (YYYY-MM-DD) para Brasileiro (DD/MM/AAAA)
 function formatarDataParaBrasileiro(dataIso) {
     if (!dataIso) {
         return '-';
     }
-    // Tenta dividir a data assumindo formato ISO
     var partes = dataIso.split('T')[0].split('-');
     if (partes.length >= 3) {
         return partes[2].substring(0, 2) + '/' + partes[1] + '/' + partes[0];
@@ -85,7 +74,7 @@ function formatarDataParaBrasileiro(dataIso) {
     return dataIso; 
 }
 
-// Formata telefone para padrão (XX) XXXXX-XXXX
+// Formata telefone (XX) XXXXX-XXXX
 function formatarTelefoneBrasil(telefone) {
     var numeros = String(telefone || '').replace(/\D/g, '');
     if (numeros.length > 10) {
@@ -96,17 +85,13 @@ function formatarTelefoneBrasil(telefone) {
     return telefone;
 }
 
-// Remove acentos de textos (útil para buscas e filtros)
+// Remove acentos para facilitar buscas
 function removerAcentos(texto) {
-    if (!texto) return "";
+    if(!texto) return "";
     return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
-// -----------------------------------------------------------------------------
-// 5. CAMADA DE DADOS (PERSISTÊNCIA LOCAL + FIREBASE)
-// -----------------------------------------------------------------------------
-
-// Remove valores 'undefined' de objetos, pois o Firestore não aceita
+// Limpa objetos para salvar no Firebase (remove undefined)
 function sanitizarObjetoParaFirebase(obj) {
     return JSON.parse(JSON.stringify(obj, (key, value) => {
         if (value === undefined) {
@@ -116,13 +101,16 @@ function sanitizarObjetoParaFirebase(obj) {
     }));
 }
 
-// FUNÇÃO CRÍTICA: Baixa TODOS os dados da nuvem ao iniciar o sistema
-// Isso garante que o usuário veja os dados mais recentes ao abrir a tela
+// -----------------------------------------------------------------------------
+// 5. SINCRONIZAÇÃO DE DADOS (NUVEM <-> LOCAL)
+// -----------------------------------------------------------------------------
+
+// Baixa todos os dados ao iniciar
 async function sincronizarDadosComFirebase() {
-    console.log(">>> INICIANDO SINCRONIA COMPLETA COM A NUVEM...");
+    console.log(">>> INICIANDO SINCRONIA COMPLETA...");
     
     if (!window.dbRef || !window.USUARIO_ATUAL || !window.USUARIO_ATUAL.company) {
-        console.warn("Usuário offline ou sem empresa definida. Carregando dados locais de backup.");
+        console.warn("Modo Offline ou Sem Empresa. Usando dados locais.");
         carregarTodosDadosLocais(); 
         return;
     }
@@ -130,7 +118,7 @@ async function sincronizarDadosComFirebase() {
     const { db, doc, getDoc } = window.dbRef;
     const companyId = window.USUARIO_ATUAL.company;
 
-    // Função auxiliar interna para baixar uma coleção específica
+    // Função interna para baixar uma coleção específica
     async function baixarColecao(chave, setter) {
         try {
             const docRef = doc(db, 'companies', companyId, 'data', chave);
@@ -138,27 +126,23 @@ async function sincronizarDadosComFirebase() {
             
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                const lista = data.items || [];
-                
-                // Define se é objeto único (dados da empresa) ou lista (cadastros)
+                // Verifica se é objeto único (Empresa) ou Lista (Outros)
                 if (chave === CHAVE_DB_MINHA_EMPRESA) {
                     setter(data.items || {});
                 } else {
-                    setter(lista);
+                    setter(data.items || []);
                 }
-                
-                // Atualiza o localStorage como backup para uso offline
+                // Salva backup local
                 localStorage.setItem(chave, JSON.stringify(data.items || []));
             } else {
-                // Se não existe na nuvem, define como vazio
-                setter([]); 
+                setter([]);
             }
         } catch (e) {
-            console.error(`Erro ao baixar ${chave} do Firebase:`, e);
+            console.error(`Erro ao baixar ${chave}:`, e);
         }
     }
 
-    // Executa todos os downloads simultaneamente para agilizar o carregamento
+    // Executa todos os downloads em paralelo
     await Promise.all([
         baixarColecao(CHAVE_DB_FUNCIONARIOS, (d) => CACHE_FUNCIONARIOS = d),
         baixarColecao(CHAVE_DB_VEICULOS, (d) => CACHE_VEICULOS = d),
@@ -171,21 +155,14 @@ async function sincronizarDadosComFirebase() {
         baixarColecao(CHAVE_DB_RECIBOS, (d) => CACHE_RECIBOS = d)
     ]);
 
-    console.log(">>> SINCRONIA CONCLUÍDA. Memória atualizada.");
+    console.log(">>> SINCRONIA CONCLUÍDA.");
 }
 
-// Carrega dados do LocalStorage (Fallback caso esteja offline ou erro no firebase)
+// Carrega dados locais se estiver offline
 function carregarTodosDadosLocais() {
-    function load(chave) {
-        try {
-            var dados = localStorage.getItem(chave);
-            return dados ? JSON.parse(dados) : [];
-        } catch (erro) {
-            console.error("Erro ao ler localStorage:", erro);
-            return [];
-        }
+    function load(k) { 
+        try { return JSON.parse(localStorage.getItem(k)) || []; } catch(e){ return []; } 
     }
-    
     CACHE_FUNCIONARIOS = load(CHAVE_DB_FUNCIONARIOS);
     CACHE_VEICULOS = load(CHAVE_DB_VEICULOS);
     CACHE_CONTRATANTES = load(CHAVE_DB_CONTRATANTES);
@@ -197,80 +174,47 @@ function carregarTodosDadosLocais() {
     CACHE_RECIBOS = load(CHAVE_DB_RECIBOS);
 }
 
-// Função Genérica de Salvamento (Atualiza Memória -> LocalStorage -> Firebase)
+// Função Genérica de Salvamento
 async function salvarDadosGenerico(chave, dados, atualizarCacheCallback) {
-    // 1. Atualiza Memória e LocalStorage imediatamente
+    // 1. Atualiza Memória
     atualizarCacheCallback(dados);
+    // 2. Atualiza LocalStorage
     localStorage.setItem(chave, JSON.stringify(dados));
     
-    // 2. Atualiza Nuvem (Se estiver logado e com empresa ativa)
+    // 3. Atualiza Firebase (se online e ativo)
     if (window.dbRef && window.USUARIO_ATUAL && window.USUARIO_ATUAL.company) {
-        // Bloqueio de escrita se o sistema estiver bloqueado/vencido (exceto super admin)
-        if (window.SYSTEM_STATUS.bloqueado && window.USUARIO_ATUAL.role !== 'admin_master') {
-             console.warn("Salvamento na nuvem bloqueado: Sistema sem créditos ou bloqueado.");
-             return;
-        }
+        if (window.SYSTEM_STATUS.bloqueado && window.USUARIO_ATUAL.role !== 'admin_master') return;
 
         const { db, doc, setDoc } = window.dbRef;
         try {
-            // Sanitiza para garantir que não vão campos inválidos
-            var dadosLimpos = sanitizarObjetoParaFirebase({ 
+            var payload = sanitizarObjetoParaFirebase({ 
                 items: dados, 
                 lastUpdate: new Date().toISOString(),
                 updatedBy: window.USUARIO_ATUAL.email
             });
-            
-            // Salva no caminho: companies/{empresa}/data/{colecao}
-            await setDoc(doc(db, 'companies', window.USUARIO_ATUAL.company, 'data', chave), dadosLimpos);
+            await setDoc(doc(db, 'companies', window.USUARIO_ATUAL.company, 'data', chave), payload);
         } catch (erro) {
-            console.error("Erro ao salvar no Firebase (" + chave + "):", erro);
-            alert("Atenção: Erro ao salvar na nuvem. Verifique sua conexão.");
+            console.error("Erro Firebase:", erro);
         }
     }
 }
 
-// Funções Específicas de Salvamento (Atalhos para facilitar o uso no código)
-async function salvarListaFuncionarios(lista) { 
-    await salvarDadosGenerico(CHAVE_DB_FUNCIONARIOS, lista, (d) => CACHE_FUNCIONARIOS = d); 
-}
-async function salvarListaVeiculos(lista) { 
-    await salvarDadosGenerico(CHAVE_DB_VEICULOS, lista, (d) => CACHE_VEICULOS = d); 
-}
-async function salvarListaContratantes(lista) { 
-    await salvarDadosGenerico(CHAVE_DB_CONTRATANTES, lista, (d) => CACHE_CONTRATANTES = d); 
-}
-async function salvarListaOperacoes(lista) { 
-    await salvarDadosGenerico(CHAVE_DB_OPERACOES, lista, (d) => CACHE_OPERACOES = d); 
-}
-async function salvarDadosMinhaEmpresa(dados) { 
-    await salvarDadosGenerico(CHAVE_DB_MINHA_EMPRESA, dados, (d) => CACHE_MINHA_EMPRESA = d); 
-}
-async function salvarListaDespesas(lista) { 
-    await salvarDadosGenerico(CHAVE_DB_DESPESAS, lista, (d) => CACHE_DESPESAS = d); 
-}
-async function salvarListaAtividades(lista) { 
-    await salvarDadosGenerico(CHAVE_DB_ATIVIDADES, lista, (d) => CACHE_ATIVIDADES = d); 
-}
-async function salvarListaRecibos(lista) { 
-    await salvarDadosGenerico(CHAVE_DB_RECIBOS, lista, (d) => CACHE_RECIBOS = d); 
-}
-async function salvarProfileRequests(lista) { 
-    await salvarDadosGenerico(CHAVE_DB_PROFILE_REQUESTS, lista, (d) => CACHE_PROFILE_REQUESTS = d); 
-}
+// Atalhos para salvar cada tipo de dado
+async function salvarListaFuncionarios(l) { await salvarDadosGenerico(CHAVE_DB_FUNCIONARIOS, l, (d) => CACHE_FUNCIONARIOS = d); }
+async function salvarListaVeiculos(l) { await salvarDadosGenerico(CHAVE_DB_VEICULOS, l, (d) => CACHE_VEICULOS = d); }
+async function salvarListaContratantes(l) { await salvarDadosGenerico(CHAVE_DB_CONTRATANTES, l, (d) => CACHE_CONTRATANTES = d); }
+async function salvarListaOperacoes(l) { await salvarDadosGenerico(CHAVE_DB_OPERACOES, l, (d) => CACHE_OPERACOES = d); }
+async function salvarDadosMinhaEmpresa(d) { await salvarDadosGenerico(CHAVE_DB_MINHA_EMPRESA, d, (v) => CACHE_MINHA_EMPRESA = v); }
+async function salvarListaDespesas(l) { await salvarDadosGenerico(CHAVE_DB_DESPESAS, l, (d) => CACHE_DESPESAS = d); }
+async function salvarListaAtividades(l) { await salvarDadosGenerico(CHAVE_DB_ATIVIDADES, l, (d) => CACHE_ATIVIDADES = d); }
+async function salvarListaRecibos(l) { await salvarDadosGenerico(CHAVE_DB_RECIBOS, l, (d) => CACHE_RECIBOS = d); }
+async function salvarProfileRequests(l) { await salvarDadosGenerico(CHAVE_DB_PROFILE_REQUESTS, l, (d) => CACHE_PROFILE_REQUESTS = d); }
 
-// Buscas Helpers (Para evitar repetição de código de busca)
-function buscarFuncionarioPorId(id) { 
-    return CACHE_FUNCIONARIOS.find(f => String(f.id) === String(id)); 
-}
-function buscarVeiculoPorPlaca(placa) { 
-    return CACHE_VEICULOS.find(v => v.placa === placa); 
-}
-function buscarContratantePorCnpj(cnpj) { 
-    return CACHE_CONTRATANTES.find(c => String(c.cnpj) === String(cnpj)); 
-}
-function buscarAtividadePorId(id) { 
-    return CACHE_ATIVIDADES.find(a => String(a.id) === String(id)); 
-}
+// Buscas Rápidas (Helpers)
+function buscarFuncionarioPorId(id) { return CACHE_FUNCIONARIOS.find(f => String(f.id) === String(id)); }
+function buscarVeiculoPorPlaca(placa) { return CACHE_VEICULOS.find(v => v.placa === placa); }
+function buscarContratantePorCnpj(cnpj) { return CACHE_CONTRATANTES.find(c => String(c.cnpj) === String(cnpj)); }
+function buscarAtividadePorId(id) { return CACHE_ATIVIDADES.find(a => String(a.id) === String(id)); }
 // =============================================================================
 // PARTE 2: DASHBOARD E FINANCEIRO (LÓGICA FINANCEIRA CORRIGIDA)
 // =============================================================================
@@ -1332,107 +1276,6 @@ function renderizarTabelaFuncionarios() {
     }); 
 }
 
-// Funções de Exclusão (Helpers)
-window.excluirFuncionario = async function(id) { 
-    if(!confirm("Excluir funcionário?")) return; 
-    if (window.dbRef) { 
-        try { 
-            await window.dbRef.deleteDoc(window.dbRef.doc(window.dbRef.db, "users", id)); 
-        } catch(e) {} 
-    }
-    var lista = CACHE_FUNCIONARIOS.filter(f => String(f.id) !== String(id)); 
-    await salvarListaFuncionarios(lista); 
-    alert("Funcionário removido."); 
-    preencherTodosSelects(); 
-};
-
-window.excluirVeiculo = function(placa) { 
-    if(!confirm("Excluir veículo?")) return; 
-    salvarListaVeiculos(CACHE_VEICULOS.filter(v => v.placa !== placa)).then(() => preencherTodosSelects()); 
-};
-
-window.excluirContratante = function(cnpj) { 
-    if(!confirm("Excluir cliente?")) return; 
-    salvarListaContratantes(CACHE_CONTRATANTES.filter(c => c.cnpj !== cnpj)).then(() => preencherTodosSelects()); 
-};
-
-window.excluirAtividade = function(id) { 
-    if(!confirm("Excluir serviço?")) return; 
-    salvarListaAtividades(CACHE_ATIVIDADES.filter(a => String(a.id) !== String(id))).then(() => preencherTodosSelects()); 
-};
-
-window.excluirOperacao = function(id) { 
-    if(!confirm("Excluir operação?")) return; 
-    salvarListaOperacoes(CACHE_OPERACOES.filter(o => String(o.id) !== String(id))).then(() => { 
-        preencherTodosSelects(); 
-        renderizarCalendario(); 
-        atualizarDashboard(); 
-    }); 
-};
-
-// Funções de Preenchimento de Formulário (Edição)
-window.preencherFormularioFuncionario = function(id) { 
-    var f = buscarFuncionarioPorId(id); if (!f) return; 
-    document.getElementById('funcionarioId').value = f.id; 
-    document.getElementById('funcNome').value = f.nome; 
-    document.getElementById('funcFuncao').value = f.funcao; 
-    document.getElementById('funcDocumento').value = f.documento; 
-    document.getElementById('funcEmail').value = f.email || ''; 
-    document.getElementById('funcTelefone').value = f.telefone; 
-    document.getElementById('funcPix').value = f.pix || ''; 
-    document.getElementById('funcEndereco').value = f.endereco || ''; 
-    toggleDriverFields(); 
-    if (f.funcao === 'motorista') { 
-        document.getElementById('funcCNH').value = f.cnh || ''; 
-        document.getElementById('funcValidadeCNH').value = f.validadeCNH || ''; 
-        document.getElementById('funcCategoriaCNH').value = f.categoriaCNH || ''; 
-        document.getElementById('funcCursoDescricao').value = f.cursoDescricao || ''; 
-    } 
-    document.querySelector('[data-page="cadastros"]').click(); 
-    document.querySelector('[data-tab="funcionarios"]').click(); 
-};
-
-window.preencherFormularioVeiculo = function(placa) { 
-    var v = buscarVeiculoPorPlaca(placa); if (!v) return; 
-    document.getElementById('veiculoPlaca').value = v.placa; 
-    document.getElementById('veiculoModelo').value = v.modelo; 
-    document.getElementById('veiculoAno').value = v.ano; 
-    document.getElementById('veiculoRenavam').value = v.renavam || ''; 
-    document.getElementById('veiculoChassi').value = v.chassi || ''; 
-    document.querySelector('[data-page="cadastros"]').click(); 
-    document.querySelector('[data-tab="veiculos"]').click(); 
-};
-
-window.preencherFormularioContratante = function(cnpj) { 
-    var c = buscarContratantePorCnpj(cnpj); if (!c) return; 
-    document.getElementById('contratanteCNPJ').value = c.cnpj; 
-    document.getElementById('contratanteRazaoSocial').value = c.razaoSocial; 
-    document.getElementById('contratanteTelefone').value = c.telefone; 
-    document.querySelector('[data-page="cadastros"]').click(); 
-    document.querySelector('[data-tab="contratantes"]').click(); 
-};
-
-window.preencherFormularioOperacao = function(id) { 
-    var op = CACHE_OPERACOES.find(o => String(o.id) === String(id)); if (!op) return; 
-    document.getElementById('operacaoId').value = op.id; 
-    document.getElementById('operacaoData').value = op.data; 
-    document.getElementById('selectMotoristaOperacao').value = op.motoristaId; 
-    document.getElementById('selectVeiculoOperacao').value = op.veiculoPlaca; 
-    document.getElementById('selectContratanteOperacao').value = op.contratanteCNPJ; 
-    document.getElementById('selectAtividadeOperacao').value = op.atividadeId; 
-    document.getElementById('operacaoFaturamento').value = op.faturamento; 
-    document.getElementById('operacaoAdiantamento').value = op.adiantamento || ''; 
-    document.getElementById('operacaoComissao').value = op.comissao || ''; 
-    document.getElementById('operacaoDespesas').value = op.despesas || ''; 
-    document.getElementById('operacaoCombustivel').value = op.combustivel || ''; 
-    document.getElementById('operacaoPrecoLitro').value = op.precoLitro || ''; 
-    document.getElementById('operacaoKmRodado').value = op.kmRodado || ''; 
-    window._operacaoAjudantesTempList = op.ajudantes || []; 
-    renderizarListaAjudantesAdicionados(); 
-    document.getElementById('operacaoIsAgendamento').checked = (op.status === 'AGENDADA' || op.status === 'EM_ANDAMENTO'); 
-    document.querySelector('[data-page="operacoes"]').click(); 
-};
-
 function renderizarTabelaVeiculos() { 
     var tbody = document.querySelector('#tabelaVeiculos tbody'); 
     if(tbody) { 
@@ -1563,6 +1406,107 @@ window.visualizarOperacao = function(id) {
     document.getElementById('viewItemModal').style.display = 'flex';
 };
 
+// Funções de Exclusão (Helpers)
+window.excluirFuncionario = async function(id) { 
+    if(!confirm("Excluir funcionário?")) return; 
+    if (window.dbRef) { 
+        try { 
+            await window.dbRef.deleteDoc(window.dbRef.doc(window.dbRef.db, "users", id)); 
+        } catch(e) {} 
+    }
+    var lista = CACHE_FUNCIONARIOS.filter(f => String(f.id) !== String(id)); 
+    await salvarListaFuncionarios(lista); 
+    alert("Funcionário removido."); 
+    preencherTodosSelects(); 
+};
+
+window.excluirVeiculo = function(placa) { 
+    if(!confirm("Excluir veículo?")) return; 
+    salvarListaVeiculos(CACHE_VEICULOS.filter(v => v.placa !== placa)).then(() => preencherTodosSelects()); 
+};
+
+window.excluirContratante = function(cnpj) { 
+    if(!confirm("Excluir cliente?")) return; 
+    salvarListaContratantes(CACHE_CONTRATANTES.filter(c => c.cnpj !== cnpj)).then(() => preencherTodosSelects()); 
+};
+
+window.excluirAtividade = function(id) { 
+    if(!confirm("Excluir serviço?")) return; 
+    salvarListaAtividades(CACHE_ATIVIDADES.filter(a => String(a.id) !== String(id))).then(() => preencherTodosSelects()); 
+};
+
+window.excluirOperacao = function(id) { 
+    if(!confirm("Excluir operação?")) return; 
+    salvarListaOperacoes(CACHE_OPERACOES.filter(o => String(o.id) !== String(id))).then(() => { 
+        preencherTodosSelects(); 
+        renderizarCalendario(); 
+        atualizarDashboard(); 
+    }); 
+};
+
+// Funções de Preenchimento de Formulário (Edição)
+window.preencherFormularioFuncionario = function(id) { 
+    var f = buscarFuncionarioPorId(id); if (!f) return; 
+    document.getElementById('funcionarioId').value = f.id; 
+    document.getElementById('funcNome').value = f.nome; 
+    document.getElementById('funcFuncao').value = f.funcao; 
+    document.getElementById('funcDocumento').value = f.documento; 
+    document.getElementById('funcEmail').value = f.email || ''; 
+    document.getElementById('funcTelefone').value = f.telefone; 
+    document.getElementById('funcPix').value = f.pix || ''; 
+    document.getElementById('funcEndereco').value = f.endereco || ''; 
+    toggleDriverFields(); 
+    if (f.funcao === 'motorista') { 
+        document.getElementById('funcCNH').value = f.cnh || ''; 
+        document.getElementById('funcValidadeCNH').value = f.validadeCNH || ''; 
+        document.getElementById('funcCategoriaCNH').value = f.categoriaCNH || ''; 
+        document.getElementById('funcCursoDescricao').value = f.cursoDescricao || ''; 
+    } 
+    document.querySelector('[data-page="cadastros"]').click(); 
+    document.querySelector('[data-tab="funcionarios"]').click(); 
+};
+
+window.preencherFormularioVeiculo = function(placa) { 
+    var v = buscarVeiculoPorPlaca(placa); if (!v) return; 
+    document.getElementById('veiculoPlaca').value = v.placa; 
+    document.getElementById('veiculoModelo').value = v.modelo; 
+    document.getElementById('veiculoAno').value = v.ano; 
+    document.getElementById('veiculoRenavam').value = v.renavam || ''; 
+    document.getElementById('veiculoChassi').value = v.chassi || ''; 
+    document.querySelector('[data-page="cadastros"]').click(); 
+    document.querySelector('[data-tab="veiculos"]').click(); 
+};
+
+window.preencherFormularioContratante = function(cnpj) { 
+    var c = buscarContratantePorCnpj(cnpj); if (!c) return; 
+    document.getElementById('contratanteCNPJ').value = c.cnpj; 
+    document.getElementById('contratanteRazaoSocial').value = c.razaoSocial; 
+    document.getElementById('contratanteTelefone').value = c.telefone; 
+    document.querySelector('[data-page="cadastros"]').click(); 
+    document.querySelector('[data-tab="contratantes"]').click(); 
+};
+
+window.preencherFormularioOperacao = function(id) { 
+    var op = CACHE_OPERACOES.find(o => String(o.id) === String(id)); if (!op) return; 
+    document.getElementById('operacaoId').value = op.id; 
+    document.getElementById('operacaoData').value = op.data; 
+    document.getElementById('selectMotoristaOperacao').value = op.motoristaId; 
+    document.getElementById('selectVeiculoOperacao').value = op.veiculoPlaca; 
+    document.getElementById('selectContratanteOperacao').value = op.contratanteCNPJ; 
+    document.getElementById('selectAtividadeOperacao').value = op.atividadeId; 
+    document.getElementById('operacaoFaturamento').value = op.faturamento; 
+    document.getElementById('operacaoAdiantamento').value = op.adiantamento || ''; 
+    document.getElementById('operacaoComissao').value = op.comissao || ''; 
+    document.getElementById('operacaoDespesas').value = op.despesas || ''; 
+    document.getElementById('operacaoCombustivel').value = op.combustivel || ''; 
+    document.getElementById('operacaoPrecoLitro').value = op.precoLitro || ''; 
+    document.getElementById('operacaoKmRodado').value = op.kmRodado || ''; 
+    window._operacaoAjudantesTempList = op.ajudantes || []; 
+    renderizarListaAjudantesAdicionados(); 
+    document.getElementById('operacaoIsAgendamento').checked = (op.status === 'AGENDADA' || op.status === 'EM_ANDAMENTO'); 
+    document.querySelector('[data-page="operacoes"]').click(); 
+};
+
 function renderizarInformacoesEmpresa() { var div = document.getElementById('viewMinhaEmpresaContent'); if (CACHE_MINHA_EMPRESA.razaoSocial) { div.innerHTML = `<strong>${CACHE_MINHA_EMPRESA.razaoSocial}</strong><br>CNPJ: ${CACHE_MINHA_EMPRESA.cnpj}<br>Tel: ${formatarTelefoneBrasil(CACHE_MINHA_EMPRESA.telefone)}`; } else { div.innerHTML = "Nenhum dado cadastrado."; } }
 
 window.closeModal = function() { document.getElementById('operationDetailsModal').style.display = 'none'; };
@@ -1570,7 +1514,7 @@ window.closeViewModal = function() { document.getElementById('viewItemModal').st
 window.closeCheckinConfirmModal = function() { document.getElementById('modalCheckinConfirm').style.display = 'none'; };
 window.closeAdicionarAjudanteModal = function() { document.getElementById('modalAdicionarAjudante').style.display = 'none'; };
 // =============================================================================
-// PARTE 4: MONITORAMENTO, EQUIPE E RELATÓRIOS
+// PARTE 4: MONITORAMENTO, EQUIPE, RELATÓRIOS E RECIBOS
 // =============================================================================
 
 // -----------------------------------------------------------------------------
@@ -1587,7 +1531,7 @@ window.renderizarTabelaMonitoramento = function() {
         return (op.status === 'AGENDADA' || op.status === 'EM_ANDAMENTO');
     }).sort((a,b) => new Date(a.data) - new Date(b.data));
 
-    // Atualiza contador no menu lateral
+    // Atualiza contador no menu lateral (Badge Vermelho)
     var badge = document.getElementById('badgeCheckins');
     if (badge) {
         badge.textContent = pendentes.length;
@@ -1602,11 +1546,12 @@ window.renderizarTabelaMonitoramento = function() {
     pendentes.forEach(function(op) {
         var cliente = buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial || 'CLIENTE';
         
+        // Status Visual
         var statusHtml = op.status === 'EM_ANDAMENTO' 
             ? '<span class="status-pill" style="background:orange; color:white; animation: pulse 2s infinite;">EM ROTA</span>' 
             : '<span class="status-pill pill-pending">AGENDADA</span>';
 
-        // Linha do Motorista
+        // 1. Linha do Motorista Principal
         var mot = buscarFuncionarioPorId(op.motoristaId);
         if (mot) {
             var faltouMot = (op.checkins && op.checkins.faltaMotorista);
@@ -1638,7 +1583,7 @@ window.renderizarTabelaMonitoramento = function() {
             tbody.appendChild(trM);
         }
 
-        // Linhas dos Ajudantes
+        // 2. Linhas dos Ajudantes (Vinculados à mesma operação)
         if (op.ajudantes && op.ajudantes.length > 0) {
             op.ajudantes.forEach(ajItem => {
                 var aj = buscarFuncionarioPorId(ajItem.id);
@@ -1673,6 +1618,7 @@ window.registrarFalta = async function(opId, funcId, tipo) {
     var op = CACHE_OPERACOES.find(o => String(o.id) === String(opId));
     if (!op) return;
 
+    // Inicializa estrutura de checkins se não existir
     if (!op.checkins) op.checkins = { motorista: false, faltaMotorista: false, faltas: {} };
     if (!op.checkins.faltas) op.checkins.faltas = {};
 
@@ -1697,7 +1643,7 @@ window.renderizarTabelaFaltas = function() {
     CACHE_OPERACOES.forEach(function(op) {
         if (!op.checkins) return;
         
-        // Faltas Motorista
+        // Faltas de Motoristas
         if (op.checkins.faltaMotorista) {
             var m = buscarFuncionarioPorId(op.motoristaId);
             if(m) {
@@ -1707,7 +1653,7 @@ window.renderizarTabelaFaltas = function() {
             }
         }
         
-        // Faltas Ajudante
+        // Faltas de Ajudantes
         if (op.checkins.faltas) {
             Object.keys(op.checkins.faltas).forEach(k => {
                 if(op.checkins.faltas[k]) {
@@ -1728,6 +1674,7 @@ window.renderizarTabelaFaltas = function() {
 // -----------------------------------------------------------------------------
 
 window.renderizarPainelEquipe = async function() {
+    // 1. Tabela de Funcionários Ativos
     var tbodyAtivos = document.querySelector('#tabelaCompanyAtivos tbody');
     if (tbodyAtivos) {
         tbodyAtivos.innerHTML = '';
@@ -1739,7 +1686,8 @@ window.renderizarPainelEquipe = async function() {
                 
                 var isBlocked = f.isBlocked || false;
                 
-                // Botões Solicitados: Apenas Bloquear e Status
+                // Botões Exclusivos Solicitados: Bloquear e Status
+                // (Sem Editar/Excluir aqui, conforme regra)
                 var btnBloquear = isBlocked 
                     ? `<button class="btn-mini btn-danger" onclick="toggleBloqueioFunc('${f.id}')" title="DESBLOQUEAR ACESSO"><i class="fas fa-lock"></i></button>`
                     : `<button class="btn-mini btn-success" onclick="toggleBloqueioFunc('${f.id}')" title="BLOQUEAR ACESSO"><i class="fas fa-unlock"></i></button>`;
@@ -1760,7 +1708,7 @@ window.renderizarPainelEquipe = async function() {
         }
     }
 
-    // Tabela de Pendentes (Mantida)
+    // 2. Tabela de Pendentes (Aprovação de novos cadastros)
     if (window.dbRef && window.USUARIO_ATUAL) {
         try {
             const { db, collection, query, where, getDocs } = window.dbRef;
@@ -1780,7 +1728,7 @@ window.renderizarPainelEquipe = async function() {
         } catch(e) { console.error(e); }
     }
     
-    // Tabela de Solicitações (Mantida)
+    // 3. Tabela de Solicitações de Dados (Profile Requests)
     var tbodyReq = document.getElementById('tabelaProfileRequests')?.querySelector('tbody');
     if(tbodyReq) {
         tbodyReq.innerHTML = '';
@@ -1801,10 +1749,10 @@ window.verStatusFunc = async function(id) {
     var container = document.getElementById('statusFuncionarioBody');
     var actions = document.getElementById('statusFuncionarioActions');
     
-    container.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Carregando...';
+    container.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Carregando status...';
     document.getElementById('modalStatusFuncionario').style.display = 'flex';
 
-    // Verifica se está em rota
+    // Verifica se está em rota atualmente
     var emRota = false;
     var veiculoRota = "";
     var opAtiva = CACHE_OPERACOES.find(o => o.status === 'EM_ANDAMENTO' && (o.motoristaId === id || (o.ajudantes && o.ajudantes.some(a=>a.id===id))));
@@ -1815,7 +1763,7 @@ window.verStatusFunc = async function(id) {
 
     var isBlocked = f.isBlocked || false;
 
-    // Renderiza Status
+    // Renderiza HTML do Status
     var html = `
         <h2 style="color:var(--primary-color); margin:0 0 5px 0;">${f.nome}</h2>
         <p style="color:#666;">${f.funcao.toUpperCase()}</p>
@@ -1834,13 +1782,14 @@ window.verStatusFunc = async function(id) {
     `;
     container.innerHTML = html;
 
-    // Ação do Modal
+    // Ação Rápida no Modal
     var btnLabel = isBlocked ? 'DESBLOQUEAR ACESSO' : 'BLOQUEAR ACESSO';
     var btnClass = isBlocked ? 'btn-success' : 'btn-danger';
     
     actions.innerHTML = `<button class="${btnClass}" style="width:100%; padding:12px; font-size:1rem;" onclick="toggleBloqueioFunc('${f.id}')"><i class="fas fa-power-off"></i> ${btnLabel}</button>`;
 };
 
+// Toggle de Bloqueio
 window.toggleBloqueioFunc = async function(id) {
     var f = buscarFuncionarioPorId(id);
     if (!f) return;
@@ -2183,152 +2132,224 @@ window.filtrarServicosFuncionario = function(uid) {
 // PARTE 5: SUPER ADMIN, MEUS DADOS E INICIALIZAÇÃO
 // =============================================================================
 
-const EMAILS_MESTRES = ["admin@logimaster.com", "suporte@logimaster.com", "08caveira@gmail.com"]; 
-
 // -----------------------------------------------------------------------------
-// PAINEL SUPER ADMIN (VISUAL LIMPO E CORRIGIDO)
+// 1. PAINEL SUPER ADMIN (VISUAL LIMPO E FUNCIONAL)
 // -----------------------------------------------------------------------------
 
+// Carrega a lista de empresas e usuários para o Super Admin
 window.carregarPainelSuperAdmin = async function() {
     const container = document.getElementById('superAdminContainer');
     if(!container) return;
     
-    container.innerHTML = '<p style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Atualizando lista...</p>';
+    container.innerHTML = '<p style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Carregando dados globais...</p>';
 
     try {
         const { db, collection, getDocs } = window.dbRef;
+        
+        // Busca todas as empresas e todos os usuários do banco de dados
         const companiesSnap = await getDocs(collection(db, "companies"));
         const usersSnap = await getDocs(collection(db, "users"));
         
         const companies = [];
         companiesSnap.forEach(doc => companies.push({ id: doc.id, ...doc.data() }));
+        
         const users = [];
         usersSnap.forEach(doc => users.push({ uid: doc.id, ...doc.data() }));
 
         container.innerHTML = '';
 
         if(companies.length === 0) {
-            container.innerHTML = '<div class="alert alert-info">Nenhuma empresa encontrada.</div>';
+            container.innerHTML = '<div class="alert alert-info">Nenhuma empresa encontrada no sistema.</div>';
             return;
         }
 
+        // Renderiza cada empresa como um item de lista expansível (Accordion)
         companies.forEach(comp => {
             const usersDaEmpresa = users.filter(u => u.company === comp.id);
             const admin = usersDaEmpresa.find(u => u.role === 'admin');
             
-            let validadeTexto = comp.isVitalicio ? "VITALÍCIO" : (comp.systemValidity ? formatarDataParaBrasileiro(comp.systemValidity) : "SEM DADOS");
-            let borderColor = comp.isBlocked ? "var(--danger-color)" : (comp.isVitalicio ? "gold" : "#ddd");
+            // Lógica de Status para exibição visual
+            let statusBadge = "";
+            let borderColor = "#ddd"; // Cinza padrão
 
+            if (comp.isBlocked) {
+                statusBadge = '<span class="status-pill pill-blocked">BLOQUEADO</span>';
+                borderColor = "var(--danger-color)";
+            } else if (comp.isVitalicio) {
+                statusBadge = '<span class="status-pill pill-active">VITALÍCIO</span>';
+                borderColor = "gold";
+            } else {
+                // Verifica vencimento
+                let vencido = comp.systemValidity && new Date(comp.systemValidity) < new Date();
+                if (vencido) {
+                    statusBadge = '<span class="status-pill pill-blocked">VENCIDO</span>';
+                    borderColor = "orange";
+                } else {
+                    statusBadge = '<span class="status-pill pill-active">ATIVO</span>';
+                    borderColor = "var(--success-color)";
+                }
+            }
+            
+            let validadeTexto = comp.isVitalicio ? "VITALÍCIO" : (comp.systemValidity ? formatarDataParaBrasileiro(comp.systemValidity) : "SEM DADOS");
+
+            // Valores seguros para passar na função onclick
             const safeValidity = comp.systemValidity || '';
             const safeVitalicio = comp.isVitalicio || false;
             const safeBlocked = comp.isBlocked || false;
 
             const div = document.createElement('div');
             div.className = 'company-wrapper';
-            div.style.cssText = `margin-bottom:15px; border:1px solid ${borderColor}; border-radius:8px; background:white; overflow:hidden;`;
+            div.style.cssText = `margin-bottom:15px; border:1px solid ${borderColor}; border-radius:8px; background:white; overflow:hidden; box-shadow:0 2px 5px rgba(0,0,0,0.05);`;
 
             div.innerHTML = `
                 <div class="company-header" onclick="this.nextElementSibling.style.display = (this.nextElementSibling.style.display === 'none' ? 'block' : 'none')" style="padding:15px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#f8f9fa;">
                     <div style="display:flex; align-items:center; gap:15px;">
-                        <div style="background:var(--primary-color); color:white; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;">
+                        <div style="background:var(--primary-color); color:white; width:45px; height:45px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:1.2rem;">
                             ${comp.id.substring(0,2).toUpperCase()}
                         </div>
                         <div>
-                            <h4 style="margin:0; text-transform:uppercase;">${comp.id}</h4>
-                            <small style="color:#666;">Admin: ${admin ? admin.email : '<span style="color:red">Erro</span>'}</small>
+                            <h4 style="margin:0; text-transform:uppercase; color:#333;">${comp.id}</h4>
+                            <small style="color:#666;">Admin: ${admin ? admin.email : '<span style="color:red">Não encontrado</span>'}</small>
                         </div>
                     </div>
-                    <div style="display:flex; align-items:center; gap:15px;">
-                        <div style="text-align:right;">
-                            <div style="font-size:0.7rem; color:#888;">VALIDADE</div>
-                            <strong style="font-size:0.9rem;">${validadeTexto}</strong>
+                    <div style="display:flex; align-items:center; gap:15px; text-align:right;">
+                        <div>
+                            <div style="font-size:0.7rem; color:#888; text-transform:uppercase;">Validade</div>
+                            <strong style="font-size:0.9rem; color:#333;">${validadeTexto}</strong>
                         </div>
-                        ${comp.isBlocked ? '<span class="status-pill pill-blocked">BLOQUEADO</span>' : '<span class="status-pill pill-active">ATIVO</span>'}
+                        ${statusBadge}
+                        <i class="fas fa-chevron-down" style="color:#999;"></i>
                     </div>
                 </div>
                 
-                <div class="company-body" style="display:none; padding:20px; border-top:1px solid #eee;">
-                    <div style="margin-bottom:15px; display:flex; gap:10px;">
-                        <button class="btn-mini btn-primary" onclick="abrirModalCreditos('${comp.id}', '${safeValidity}', ${safeVitalicio}, ${safeBlocked})">
-                            <i class="fas fa-edit"></i> GERENCIAR ACESSO
+                <div class="company-body" style="display:none; padding:20px; border-top:1px solid #eee; background:white;">
+                    <div style="margin-bottom:20px; display:flex; gap:10px; flex-wrap:wrap;">
+                        <button class="btn-primary" onclick="abrirModalCreditos('${comp.id}', '${safeValidity}', ${safeVitalicio}, ${safeBlocked})">
+                            <i class="fas fa-edit"></i> GERENCIAR ACESSO / CRÉDITOS
                         </button>
-                        <button class="btn-mini btn-danger" onclick="excluirEmpresaTotal('${comp.id}')">
-                            <i class="fas fa-trash"></i> EXCLUIR EMPRESA
+                        <button class="btn-danger" onclick="excluirEmpresaTotal('${comp.id}')">
+                            <i class="fas fa-trash"></i> EXCLUIR EMPRESA E DADOS
                         </button>
                     </div>
                     
-                    <h5 style="color:#666; margin-bottom:10px;">USUÁRIOS (${usersDaEmpresa.length})</h5>
-                    <table class="data-table" style="width:100%;">
-                        <thead><tr><th>NOME</th><th>EMAIL</th><th>SENHA</th><th>AÇÃO</th></tr></thead>
-                        <tbody>
-                            ${usersDaEmpresa.map(u => `
-                                <tr>
-                                    <td>${u.name}</td>
-                                    <td>${u.email}</td>
-                                    <td style="font-family:monospace; color:#007bff;">${u.senhaVisual || '***'}</td>
-                                    <td>
-                                        <button class="btn-mini btn-warning" onclick="resetarSenhaComMigracao('${u.uid}', '${u.email}', '${u.name}')">RESET</button>
-                                        <button class="btn-mini btn-danger" onclick="excluirUsuarioGlobal('${u.uid}')">DEL</button>
-                                    </td>
-                                </tr>`).join('')}
-                        </tbody>
-                    </table>
+                    <h5 style="color:#666; margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:5px;">USUÁRIOS CADASTRADOS (${usersDaEmpresa.length})</h5>
+                    <div class="table-responsive">
+                        <table class="data-table" style="width:100%;">
+                            <thead><tr><th>NOME</th><th>EMAIL</th><th>FUNÇÃO</th><th>SENHA VISUAL</th><th>AÇÃO</th></tr></thead>
+                            <tbody>
+                                ${usersDaEmpresa.map(u => `
+                                    <tr>
+                                        <td>${u.name}</td>
+                                        <td>${u.email}</td>
+                                        <td>${u.role}</td>
+                                        <td style="font-family:monospace; color:#007bff;">${u.senhaVisual || '***'}</td>
+                                        <td>
+                                            <button class="btn-mini btn-warning" onclick="resetarSenhaComMigracao('${u.uid}', '${u.email}', '${u.name}')" title="Resetar Senha"><i class="fas fa-key"></i></button>
+                                            <button class="btn-mini btn-danger" onclick="excluirUsuarioGlobal('${u.uid}')" title="Excluir Usuário"><i class="fas fa-trash"></i></button>
+                                        </td>
+                                    </tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             `;
             container.appendChild(div);
         });
     } catch (e) {
-        container.innerHTML = `<p style="color:red">Erro: ${e.message}</p>`;
+        console.error(e);
+        container.innerHTML = `<div class="alert alert-danger">Erro ao carregar dados: ${e.message}</div>`;
     }
 };
 
+// Formulário de Criação de Empresa (Super Admin)
 document.addEventListener('submit', async function(e) {
     if (e.target.id === 'formCreateCompany') {
         e.preventDefault();
+        
         var dominio = document.getElementById('newCompanyDomain').value.trim().toLowerCase();
         var email = document.getElementById('newAdminEmail').value.trim();
         var senha = document.getElementById('newAdminPassword').value.trim();
         
-        if (dominio.length < 3) return alert("Domínio inválido.");
+        if (dominio.length < 3) return alert("O domínio da empresa deve ter pelo menos 3 letras.");
 
         try {
+            // 1. Cria o usuário Admin no Auth e no Firestore
             var uid = await window.dbRef.criarAuthUsuario(email, senha);
+            
             await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "users", uid), {
-                uid: uid, name: "ADMIN " + dominio.toUpperCase(), email: email, role: 'admin', 
-                company: dominio, createdAt: new Date().toISOString(), approved: true, 
-                isVitalicio: false, isBlocked: false, senhaVisual: senha,
-                systemValidity: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
+                uid: uid, 
+                name: "ADMIN " + dominio.toUpperCase(), 
+                email: email, 
+                role: 'admin', 
+                company: dominio, 
+                createdAt: new Date().toISOString(), 
+                approved: true, 
+                isVitalicio: false, 
+                isBlocked: false, 
+                senhaVisual: senha,
+                systemValidity: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString() // 30 dias grátis inicial
             });
+
         } catch (erro) {
+            // Se o e-mail já existe, permite criar só a empresa (caso seja um admin reaproveitado ou erro de digitação anterior)
             if (erro.code === 'auth/email-already-in-use') {
-                if(!confirm("E-mail já existe. Criar empresa mesmo assim?")) return;
+                if(!confirm(`O e-mail ${email} JÁ EXISTE no sistema.\n\nDeseja criar apenas a estrutura da empresa "${dominio}"?`)) {
+                    return;
+                }
             } else {
-                return alert("Erro: " + erro.message);
+                return alert("Erro fatal ao criar usuário: " + erro.message);
             }
         }
 
-        await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "companies", dominio), { 
-            id: dominio, createdAt: new Date().toISOString(), isBlocked: false, isVitalicio: false,
-            systemValidity: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
-        }, { merge: true });
+        try {
+            // 2. Cria o documento da Empresa
+            await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "companies", dominio), { 
+                id: dominio, 
+                createdAt: new Date().toISOString(),
+                isBlocked: false, 
+                isVitalicio: false,
+                systemValidity: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
+            }, { merge: true });
 
-        alert("Criado!"); e.target.reset(); carregarPainelSuperAdmin();
+            alert(`Empresa "${dominio}" criada com sucesso!`);
+            e.target.reset();
+            carregarPainelSuperAdmin();
+
+        } catch (dbError) {
+            alert("Erro ao salvar empresa no banco: " + dbError.message);
+        }
     }
 });
 
+// Modal de Gerenciamento de Créditos e Status da Empresa
 window.abrirModalCreditos = function(companyId, validade, isVitalicio, isBlocked) {
     document.getElementById('empresaIdCredito').value = companyId;
     document.getElementById('nomeEmpresaCredito').textContent = companyId.toUpperCase();
-    document.getElementById('validadeAtualCredito').textContent = isVitalicio ? "VITALÍCIO" : (validade ? formatarDataParaBrasileiro(validade.split('T')[0]) : "SEM REGISTRO");
     
-    var elVit = document.getElementById('checkVitalicio');
-    var elBlk = document.getElementById('checkBloqueado');
-    if(elVit) elVit.checked = isVitalicio;
-    if(elBlk) elBlk.checked = isBlocked;
+    var textoValidade = isVitalicio ? "VITALÍCIO" : (validade ? formatarDataParaBrasileiro(validade.split('T')[0]) : "SEM REGISTRO");
+    document.getElementById('validadeAtualCredito').textContent = textoValidade;
+    
+    // Configura Checkboxes com segurança
+    var elVitalicio = document.getElementById('checkVitalicio');
+    var elBloqueado = document.getElementById('checkBloqueado');
+    var elDivAdd = document.getElementById('divAddCreditos');
+
+    if(elVitalicio) {
+        elVitalicio.checked = isVitalicio;
+        // Mostra/Oculta campo de meses baseado no checkbox vitalício
+        elVitalicio.onchange = function() { 
+            if(elDivAdd) elDivAdd.style.display = this.checked ? 'none' : 'block'; 
+        };
+        // Estado inicial
+        if(elDivAdd) elDivAdd.style.display = isVitalicio ? 'none' : 'block';
+    }
+    
+    if(elBloqueado) elBloqueado.checked = isBlocked;
     
     document.getElementById('modalCreditos').style.display = 'flex';
 };
 
+// Salvar alterações de créditos/status da empresa
 window.salvarCreditosEmpresa = async function() {
     var companyId = document.getElementById('empresaIdCredito').value;
     var isVitalicio = document.getElementById('checkVitalicio').checked;
@@ -2336,129 +2357,267 @@ window.salvarCreditosEmpresa = async function() {
     var meses = parseInt(document.getElementById('qtdCreditosAdd').value);
     
     try {
-        const { db, collection, query, where, getDocs, updateDoc, doc, setDoc, writeBatch } = window.dbRef;
+        const { db, collection, query, where, getDocs, doc, setDoc, writeBatch } = window.dbRef;
+        
         var dadosEmpresa = { isVitalicio: isVitalicio, isBlocked: isBloqueado };
         var novaData = null;
 
+        // Se não for vitalício nem bloqueado, calcula nova data de validade
         if (!isVitalicio && !isBloqueado) {
             const q = query(collection(db, "users"), where("company", "==", companyId), where("role", "==", "admin"));
             const snap = await getDocs(q);
+            
             var base = new Date();
-            if(!snap.empty && snap.docs[0].data().systemValidity) {
-                var dv = new Date(snap.docs[0].data().systemValidity);
-                if(dv > base) base = dv;
+            // Tenta pegar a data atual do admin para somar (não perder dias já pagos)
+            if(!snap.empty) {
+                var adm = snap.docs[0].data();
+                if(adm.systemValidity && new Date(adm.systemValidity) > base) {
+                    base = new Date(adm.systemValidity);
+                }
             }
-            if (meses > 0) base.setDate(base.getDate() + (meses * 30));
+            
+            if (meses > 0) {
+                base.setDate(base.getDate() + (meses * 30));
+            }
+            
             novaData = base.toISOString();
             dadosEmpresa.systemValidity = novaData;
         }
 
+        // 1. Atualiza documento da Empresa
         await setDoc(doc(db, "companies", companyId), dadosEmpresa, { merge: true });
         
+        // 2. Atualiza TODOS os usuários da empresa (Batch Update) para refletir o status
         const qUsers = query(collection(db, "users"), where("company", "==", companyId));
         const snapUsers = await getDocs(qUsers);
         const batch = writeBatch(db);
+        
         snapUsers.forEach(uDoc => {
             let updateData = { isBlocked: isBloqueado, isVitalicio: isVitalicio };
             if (novaData) updateData.systemValidity = novaData;
             batch.update(uDoc.ref, updateData);
         });
+        
         await batch.commit();
 
-        alert("Atualizado!");
+        alert("Alterações salvas com sucesso!");
         document.getElementById('modalCreditos').style.display = 'none';
         carregarPainelSuperAdmin();
-    } catch(e) { alert("Erro: " + e.message); }
+
+    } catch(e) { 
+        alert("Erro ao salvar: " + e.message); 
+    }
 };
 
 window.excluirEmpresaTotal = async function(companyId) {
-    if (prompt(`Digite "DELETAR" para apagar a empresa ${companyId}:`) !== "DELETAR") return;
+    var confirmacao = prompt(`ATENÇÃO PERIGO:\nIsso apagará TODOS os dados, usuários e registros da empresa "${companyId}".\n\nPara confirmar, digite "DELETAR":`);
+    
+    if (confirmacao !== "DELETAR") return;
+    
     try {
         const { db, collection, query, where, getDocs, doc, writeBatch } = window.dbRef;
         const batch = writeBatch(db);
+        
+        // 1. Deleta usuários
         const q = query(collection(db, "users"), where("company", "==", companyId));
         const snap = await getDocs(q);
         snap.forEach(d => batch.delete(d.ref));
+        
+        // 2. Deleta documento da empresa
         batch.delete(doc(db, "companies", companyId));
+        
         await batch.commit();
-        alert("Excluído!"); carregarPainelSuperAdmin();
-    } catch (e) { alert("Erro: " + e.message); }
+        
+        alert("Empresa excluída permanentemente.");
+        carregarPainelSuperAdmin();
+    } catch (e) { 
+        alert("Erro ao excluir: " + e.message); 
+    }
 };
 
 window.excluirUsuarioGlobal = async function(uid) {
-    if(!confirm("Remover usuário?")) return;
-    try { await window.dbRef.deleteDoc(window.dbRef.doc(window.dbRef.db, "users", uid)); carregarPainelSuperAdmin(); } 
-    catch(e) { alert(e.message); }
+    if(!confirm("Tem certeza que deseja excluir este usuário do banco de dados?")) return;
+    try { 
+        await window.dbRef.deleteDoc(window.dbRef.doc(window.dbRef.db, "users", uid)); 
+        carregarPainelSuperAdmin(); 
+    } catch(e) { 
+        alert(e.message); 
+    }
 };
 
+// Reset de senha forçado (Recria o Auth mantendo o ID se possível, ou migrando dados)
 window.resetarSenhaComMigracao = async function(uid, email, nome) {
-    var p = prompt("Nova senha:");
-    if(p) {
+    var novaSenha = prompt(`Digite a nova senha para ${email}:`);
+    if(novaSenha) {
         try {
-            let nid = await window.dbRef.criarAuthUsuario(email, p);
-            var old = await window.dbRef.getDoc(window.dbRef.doc(window.dbRef.db, "users", uid));
-            if(old.exists()){
-                var d = old.data(); d.uid=nid; d.senhaVisual=p;
-                await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "users", nid), d);
-                await window.dbRef.deleteDoc(old.ref);
+            // Cria novo Auth
+            let novoUid = await window.dbRef.criarAuthUsuario(email, novaSenha);
+            
+            // Lê dados antigos
+            var oldDocRef = window.dbRef.doc(window.dbRef.db, "users", uid);
+            var oldDoc = await window.dbRef.getDoc(oldDocRef);
+            
+            if(oldDoc.exists()){
+                var dados = oldDoc.data();
+                dados.uid = novoUid; // Atualiza ID
+                dados.senhaVisual = novaSenha;
+                
+                // Salva com novo ID
+                await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "users", novoUid), dados);
+                
+                // Apaga antigo
+                await window.dbRef.deleteDoc(oldDocRef);
             }
-            alert("Senha alterada!"); carregarPainelSuperAdmin();
-        } catch(e){ alert(e.message); }
+            alert("Senha alterada com sucesso!"); 
+            carregarPainelSuperAdmin();
+        } catch(e){ 
+            alert("Erro ao resetar: " + e.message); 
+        }
     }
 };
 
 // -----------------------------------------------------------------------------
-// MEUS DADOS E INICIALIZAÇÃO
+// 2. MEUS DADOS (PERFIL DO USUÁRIO)
 // -----------------------------------------------------------------------------
 
 window.renderizarMeusDados = function() {
-    var u = window.USUARIO_ATUAL;
-    var d = CACHE_FUNCIONARIOS.find(f => String(f.id) === String(u.uid)) || u;
-    var c = document.getElementById('meusDadosContainer');
-    if(c) c.innerHTML = `<div style="background:white; padding:20px; text-align:center;"><h3>${d.nome || d.name}</h3><p>${d.funcao || d.role}</p><hr><p>Tel: ${d.telefone || '-'}</p><p>Email: ${d.email}</p></div>`;
+    var user = window.USUARIO_ATUAL;
+    // Tenta pegar dados completos do cache local se disponível
+    var dados = CACHE_FUNCIONARIOS.find(f => String(f.id) === String(user.uid)) || user;
+    
+    var container = document.getElementById('meusDadosContainer');
+    if(!container) return;
+
+    var html = `
+        <div style="background:white; padding:30px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.05); max-width:600px; margin:0 auto;">
+            <div style="text-align:center; margin-bottom:30px;">
+                <div style="width:80px; height:80px; background:var(--primary-color); color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:2.5rem; margin:0 auto 15px auto;">
+                    <i class="fas fa-user"></i>
+                </div>
+                <h3 style="margin:0; color:#333;">${dados.nome || dados.name}</h3>
+                <span class="status-pill pill-active" style="margin-top:5px; display:inline-block;">${dados.funcao || dados.role || 'Usuário'}</span>
+            </div>
+            
+            <div style="border-top:1px solid #eee; padding-top:20px;">
+                ${makeLine('Email de Acesso', dados.email, null)}
+                ${makeLine('Telefone', dados.telefone, 'TELEFONE')}
+                ${makeLine('Endereço', dados.endereco, 'ENDERECO')}
+                ${makeLine('Chave PIX', dados.pix, 'PIX')}
+            </div>
+    `;
+    
+    if(dados.funcao === 'motorista') {
+        html += `
+            <div style="margin-top:30px;">
+                <h4 style="color:#666; border-bottom:1px solid #eee; padding-bottom:5px; margin-bottom:15px;">DADOS DE HABILITAÇÃO</h4>
+                ${makeLine('Nº CNH', dados.cnh, 'CNH')}
+                ${makeLine('Validade', formatarDataParaBrasileiro(dados.validadeCNH), 'VALIDADE_CNH')}
+                ${makeLine('Categoria', dados.categoriaCNH, 'CATEGORIA_CNH')}
+            </div>
+        `;
+    }
+    
+    html += `</div>`;
+    container.innerHTML = html;
 };
 
+// Helper para criar linha de dados com botão de edição
+function makeLine(label, val, fieldCode) {
+    var btn = fieldCode ? 
+        `<button class="btn-mini btn-secondary" onclick="solicitarAlteracao('${fieldCode}', '${val}')" title="Solicitar Alteração"><i class="fas fa-pen"></i></button>` : 
+        '';
+        
+    return `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid #f8f9fa;">
+            <div>
+                <span style="font-size:0.8rem; color:#888; display:block;">${label}</span>
+                <span style="font-size:1rem; color:#333; font-weight:600;">${val || '-'}</span>
+            </div>
+            ${btn}
+        </div>
+    `;
+}
+
+window.solicitarAlteracao = function(campo, atual) {
+    var novo = prompt(`Digite o novo valor para ${campo}:`, atual);
+    if(novo && novo !== atual) {
+        var req = { 
+            id: Date.now().toString(), 
+            data: new Date().toISOString(), 
+            funcionarioId: window.USUARIO_ATUAL.uid, 
+            funcionarioEmail: window.USUARIO_ATUAL.email, 
+            campo: campo, 
+            valorAntigo: atual, 
+            valorNovo: novo, 
+            status: 'PENDENTE' 
+        };
+        
+        var lista = CACHE_PROFILE_REQUESTS || [];
+        lista.push(req);
+        
+        salvarProfileRequests(lista).then(() => alert("Solicitação enviada para aprovação do administrador."));
+    }
+};
+
+// -----------------------------------------------------------------------------
+// 3. INICIALIZAÇÃO E ROTEAMENTO (ESSENCIAL)
+// -----------------------------------------------------------------------------
+
 window.initSystemByRole = async function(user) {
-    console.log(">>> INIT:", user.role);
+    console.log(">>> SISTEMA INICIADO. PERFIL:", user.role);
     window.USUARIO_ATUAL = user;
 
-    document.querySelectorAll('.page').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); });
+    // 1. Reseta a interface (Esconde tudo inicialmente para evitar flash)
+    document.querySelectorAll('.page').forEach(p => { 
+        p.style.display = 'none'; 
+        p.classList.remove('active'); 
+    });
     document.querySelectorAll('.sidebar ul').forEach(ul => ul.style.display = 'none');
 
-    // Super Admin
+    // 2. Verifica se é Super Admin (Master)
     if (EMAILS_MESTRES.includes(user.email) || user.role === 'admin_master') {
         document.getElementById('menu-super-admin').style.display = 'block';
-        var p = document.getElementById('super-admin');
-        p.style.display = 'block'; setTimeout(() => p.classList.add('active'), 50);
+        
+        var page = document.getElementById('super-admin');
+        if(page) {
+            page.style.display = 'block'; 
+            setTimeout(() => page.classList.add('active'), 50);
+        }
+        
         carregarPainelSuperAdmin();
-        return;
+        return; 
     }
 
-    // Sync
+    // 3. Carrega dados da empresa (Sync)
     await sincronizarDadosComFirebase(); 
-    preencherTodosSelects();
+    preencherTodosSelects(); // Popula selects e tabelas com os dados baixados
 
-    // Roteamento
+    // 4. Roteamento Comum (Admin ou Funcionário)
     if (user.role === 'admin') {
-        if (user.isBlocked) return document.body.innerHTML = "<div style='text-align:center;padding:50px;color:red'><h1>BLOQUEADO</h1></div>";
+        // Verifica Bloqueio
+        if (user.isBlocked) {
+            document.body.innerHTML = "<div style='display:flex; height:100vh; justify-content:center; align-items:center; flex-direction:column; background:#f8d7da; color:#721c24;'><h1>ACESSO BLOQUEADO</h1><p>Sua conta foi suspensa pelo administrador.</p><button onclick='logoutSystem()'>SAIR</button></div>";
+            return;
+        }
         
+        // Verifica Validade
         if (!user.isVitalicio) {
             if (!user.systemValidity || new Date(user.systemValidity) < new Date()) {
-                document.body.innerHTML = "<div style='text-align:center; padding:50px; color:red'><h1>SISTEMA VENCIDO</h1><button onclick='logoutSystem()'>SAIR</button></div>";
+                document.body.innerHTML = "<div style='display:flex; height:100vh; justify-content:center; align-items:center; flex-direction:column; background:#fff3cd; color:#856404;'><h1>SISTEMA VENCIDO</h1><p>Sua licença expirou. Entre em contato para renovar.</p><button onclick='logoutSystem()'>SAIR</button></div>";
                 return;
             }
         }
 
+        // Mostra Menu Admin
         document.getElementById('menu-admin').style.display = 'block';
         
-        // CORREÇÃO DO FLASH DE TELA BRANCA:
-        // Primeiro removemos 'active' de todos, depois mostramos apenas o home
+        // Abre Dashboard por padrão
         var home = document.getElementById('home');
         if(home) { 
             home.style.display = 'block'; 
             setTimeout(() => home.classList.add('active'), 50); 
             
-            // Marca o menu como ativo também
+            // Marca menu ativo
             var menuHome = document.querySelector('.nav-item[data-page="home"]');
             if(menuHome) menuHome.classList.add('active');
         }
@@ -2467,59 +2626,110 @@ window.initSystemByRole = async function(user) {
         renderizarCalendario();
 
     } else {
+        // Perfil Funcionário
         document.getElementById('menu-employee').style.display = 'block';
         window.MODO_APENAS_LEITURA = true;
         
-        var eh = document.getElementById('employee-home');
-        if(eh) { 
-            eh.style.display = 'block'; 
-            setTimeout(() => eh.classList.add('active'), 50);
+        var empHome = document.getElementById('employee-home');
+        if(empHome) { 
+            empHome.style.display = 'block'; 
+            setTimeout(() => empHome.classList.add('active'), 50);
             
             var menuEmp = document.querySelector('.nav-item[data-page="employee-home"]');
             if(menuEmp) menuEmp.classList.add('active');
         }
+        
         renderizarCheckinFuncionario();
         renderizarMeusDados();
     }
 };
 
-// Navegação
+// -----------------------------------------------------------------------------
+// 4. EVENTOS DE NAVEGAÇÃO E SISTEMA
+// -----------------------------------------------------------------------------
+
+// Clique no Menu Lateral
 document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', function() {
+        // Remove ativo de todos os menus
         document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
-        document.querySelectorAll('.page').forEach(page => { page.classList.remove('active'); page.style.display = 'none'; });
-        this.classList.add('active');
-        var target = document.getElementById(this.getAttribute('data-page'));
-        if (target) { target.style.display = 'block'; setTimeout(() => target.classList.add('active'), 10); }
-        if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('active');
         
-        var pg = this.getAttribute('data-page');
-        if (pg === 'home') atualizarDashboard();
-        if (pg === 'meus-dados') renderizarMeusDados();
-        if (pg === 'employee-checkin') renderizarCheckinFuncionario();
+        // Esconde todas as páginas
+        document.querySelectorAll('.page').forEach(page => { 
+            page.classList.remove('active'); 
+            page.style.display = 'none'; 
+        });
+        
+        // Ativa o clicado
+        this.classList.add('active');
+        
+        // Mostra a página alvo
+        var targetId = this.getAttribute('data-page');
+        var targetPage = document.getElementById(targetId);
+        
+        if (targetPage) { 
+            targetPage.style.display = 'block'; 
+            setTimeout(() => targetPage.classList.add('active'), 10); 
+        }
+        
+        // Fecha menu no mobile
+        if (window.innerWidth <= 768) {
+            document.getElementById('sidebar').classList.remove('active');
+        }
+        
+        // Atualizações específicas por página para garantir dados frescos
+        if (targetId === 'home') atualizarDashboard();
+        if (targetId === 'meus-dados') renderizarMeusDados();
+        if (targetId === 'employee-checkin') renderizarCheckinFuncionario();
     });
 });
 
-document.getElementById('mobileMenuBtn')?.addEventListener('click', () => document.getElementById('sidebar').classList.toggle('active'));
-document.getElementById('sidebarOverlay')?.addEventListener('click', () => document.getElementById('sidebar').classList.remove('active'));
+// Menu Mobile
+document.getElementById('mobileMenuBtn')?.addEventListener('click', () => {
+    document.getElementById('sidebar').classList.toggle('active');
+});
 
+// Fechar Menu ao clicar fora (Overlay)
+document.getElementById('sidebarOverlay')?.addEventListener('click', () => {
+    document.getElementById('sidebar').classList.remove('active');
+});
+
+// Funções de Backup
 window.exportDataBackup = function() {
-    var data = { meta: { date: new Date(), user: window.USUARIO_ATUAL.email }, data: { funcionarios: CACHE_FUNCIONARIOS, veiculos: CACHE_VEICULOS, operacoes: CACHE_OPERACOES, despesas: CACHE_DESPESAS } };
-    var a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data)); a.download = "backup.json"; a.click();
+    var data = { 
+        meta: { date: new Date(), user: window.USUARIO_ATUAL.email }, 
+        data: { 
+            funcionarios: CACHE_FUNCIONARIOS, 
+            veiculos: CACHE_VEICULOS, 
+            operacoes: CACHE_OPERACOES, 
+            despesas: CACHE_DESPESAS 
+        } 
+    };
+    var a = document.createElement('a'); 
+    a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data)); 
+    a.download = "backup_logimaster.json"; 
+    a.click();
 };
 
 window.importDataBackup = function(event) {
     var reader = new FileReader();
     reader.onload = function(e) {
-        if(confirm("Restaurar backup?")) {
-            var json = JSON.parse(e.target.result);
-            if(json.data) {
-                localStorage.setItem(CHAVE_DB_FUNCIONARIOS, JSON.stringify(json.data.funcionarios));
-                localStorage.setItem(CHAVE_DB_VEICULOS, JSON.stringify(json.data.veiculos));
-                localStorage.setItem(CHAVE_DB_OPERACOES, JSON.stringify(json.data.operacoes));
-                localStorage.setItem(CHAVE_DB_DESPESAS, JSON.stringify(json.data.despesas));
-                alert("Backup restaurado! Recarregando...");
-                window.location.reload();
+        if(confirm("Tem certeza? Isso substituirá os dados atuais pelo backup.")) {
+            try {
+                var json = JSON.parse(e.target.result);
+                if(json.data) {
+                    localStorage.setItem(CHAVE_DB_FUNCIONARIOS, JSON.stringify(json.data.funcionarios));
+                    localStorage.setItem(CHAVE_DB_VEICULOS, JSON.stringify(json.data.veiculos));
+                    localStorage.setItem(CHAVE_DB_OPERACOES, JSON.stringify(json.data.operacoes));
+                    localStorage.setItem(CHAVE_DB_DESPESAS, JSON.stringify(json.data.despesas));
+                    
+                    alert("Backup restaurado com sucesso! O sistema será recarregado.");
+                    window.location.reload();
+                } else {
+                    alert("Arquivo de backup inválido.");
+                }
+            } catch(err) {
+                alert("Erro ao ler arquivo: " + err.message);
             }
         }
     };
