@@ -304,82 +304,51 @@ function buscarAtividadePorId(id) {
     return CACHE_ATIVIDADES.find(a => String(a.id) === String(id)); 
 }
 // =============================================================================
-// PARTE 2: DASHBOARD E FINANCEIRO (VERSÃO 5.3 - CÁLCULOS SEGUROS)
+// PARTE 2: DASHBOARD E FINANCEIRO (CORREÇÃO DEFINITIVA)
 // =============================================================================
 
 // -----------------------------------------------------------------------------
-// FUNÇÕES AUXILIARES E PARSERS (ESSENCIAL PARA CORRIGIR VALORES ZERADOS)
+// FUNÇÕES AUXILIARES E PARSERS
 // -----------------------------------------------------------------------------
 
-// Função Helper: Converte String Brasileira (R$ 1.000,00) para Float JS (1000.00)
-// Resolve o problema de cálculos resultarem em NaN ou Zero
+// Helper: Garante que o valor seja um número válido para cálculos
 function parseValorBrasileiro(valor) {
-    if (typeof valor === 'number') {
-        return valor;
-    }
-    
-    if (!valor) {
-        return 0;
-    }
+    if (typeof valor === 'number') return valor;
+    if (!valor) return 0;
     
     var str = String(valor).trim();
     
-    // Remove R$ e espaços extras
-    str = str.replace('R$', '').trim();
-    
-    // Tratamento para milhar e decimal (1.200,50)
-    if (str.includes(',') && str.includes('.')) {
-        str = str.replace(/\./g, ''); // Remove ponto de milhar
-        str = str.replace(',', '.');  // Troca vírgula por ponto
-    } 
-    // Tratamento apenas decimal (1200,50)
-    else if (str.includes(',')) {
-        str = str.replace(',', '.');
+    // Se for formato Brasileiro (tem vírgula como decimal)
+    if (str.includes(',')) {
+        str = str.replace(/\./g, ''); // Remove ponto de milhar (1.000 -> 1000)
+        str = str.replace(',', '.');  // Troca vírgula por ponto (1000,50 -> 1000.50)
     }
     
-    var numero = parseFloat(str);
-    
-    // Retorna 0 se der erro na conversão
-    if (isNaN(numero)) {
-        return 0;
-    }
-    
-    return numero;
+    var num = parseFloat(str);
+    return isNaN(num) ? 0 : num;
 }
 
 window.toggleDashboardPrivacy = function() {
     const targets = document.querySelectorAll('.privacy-target');
     const icon = document.getElementById('btnPrivacyIcon');
-    
     if (targets.length === 0) return;
-
     const isBlurred = targets[0].classList.contains('privacy-blur');
-    targets.forEach(el => {
-        if (isBlurred) el.classList.remove('privacy-blur');
-        else el.classList.add('privacy-blur');
-    });
-
-    if (icon) {
-        icon.className = isBlurred ? 'fas fa-eye' : 'fas fa-eye-slash';
-    }
+    targets.forEach(el => el.classList.toggle('privacy-blur'));
+    if (icon) icon.className = isBlurred ? 'fas fa-eye' : 'fas fa-eye-slash';
 };
 
 // -----------------------------------------------------------------------------
-// CÁLCULOS FINANCEIROS AVANÇADOS
+// CÁLCULOS FINANCEIROS
 // -----------------------------------------------------------------------------
 
 window.calcularMediaGlobalVeiculo = function(placa) {
-    var ops = CACHE_OPERACOES.filter(function(o) {
-        return o.veiculoPlaca === placa && (o.status === 'CONFIRMADA' || o.status === 'FINALIZADA');
-    });
-
+    var ops = CACHE_OPERACOES.filter(o => o.veiculoPlaca === placa && (o.status === 'CONFIRMADA' || o.status === 'FINALIZADA'));
     if (ops.length === 0) return 0;
 
     var tKm = 0;
     var tLit = 0;
 
-    ops.forEach(function(op) {
-        // Usa o parseValorBrasileiro para garantir números válidos
+    ops.forEach(op => {
         var km = parseValorBrasileiro(op.kmRodado);
         var abastecido = parseValorBrasileiro(op.combustivel);
         var preco = parseValorBrasileiro(op.precoLitro);
@@ -394,49 +363,34 @@ window.calcularMediaGlobalVeiculo = function(placa) {
 };
 
 window.obterPrecoMedioCombustivel = function(placa) {
-    var ops = CACHE_OPERACOES.filter(function(o) {
-        return o.veiculoPlaca === placa && parseValorBrasileiro(o.precoLitro) > 0;
-    });
-
+    var ops = CACHE_OPERACOES.filter(o => o.veiculoPlaca === placa && parseValorBrasileiro(o.precoLitro) > 0);
     if (ops.length === 0) return 6.00;
-
-    var ultimas = ops.slice(-5);
-    var soma = ultimas.reduce(function(acc, curr) {
-        return acc + parseValorBrasileiro(curr.precoLitro);
-    }, 0);
-
-    return soma / ultimas.length;
+    
+    var ult = ops.slice(-5);
+    var soma = ult.reduce((acc, curr) => acc + parseValorBrasileiro(curr.precoLitro), 0);
+    return soma / ult.length;
 };
 
 window.calcularCustoCombustivelOperacao = function(op) {
     var km = parseValorBrasileiro(op.kmRodado);
     var valorComb = parseValorBrasileiro(op.combustivel);
     
-    // Se não rodou, retorna valor cheio lançado
-    if (km <= 0) return valorComb;
-    
-    if (!op.veiculoPlaca) return valorComb;
+    if (km <= 0 || !op.veiculoPlaca) return valorComb;
 
     var media = calcularMediaGlobalVeiculo(op.veiculoPlaca);
     if (media <= 0) return valorComb;
 
     var preco = parseValorBrasileiro(op.precoLitro) || obterPrecoMedioCombustivel(op.veiculoPlaca);
-    
-    // Cálculo Proporcional
     return (km / media) * preco;
 };
 
 // -----------------------------------------------------------------------------
-// LÓGICA CENTRAL DO DASHBOARD (COM PARSE SEGURO)
+// LÓGICA CENTRAL DO DASHBOARD
 // -----------------------------------------------------------------------------
 
 window.atualizarDashboard = function() {
-    if (window.USUARIO_ATUAL && (window.USUARIO_ATUAL.role === 'admin_master' || window.EMAILS_MESTRES.includes(window.USUARIO_ATUAL.email))) {
-        return;
-    }
+    if (window.USUARIO_ATUAL && (window.USUARIO_ATUAL.role === 'admin_master' || window.EMAILS_MESTRES.includes(window.USUARIO_ATUAL.email))) return;
 
-    console.log("Calculando Dashboard com Parse Seguro...");
-    
     var mesAtual = window.currentDate.getMonth();
     var anoAtual = window.currentDate.getFullYear();
     var faturamentoMes = 0;
@@ -444,29 +398,23 @@ window.atualizarDashboard = function() {
     var receitaHistorico = 0;
 
     // 1. Operações
-    CACHE_OPERACOES.forEach(function(op) {
+    CACHE_OPERACOES.forEach(op => {
         if (op.status === 'CANCELADA') return;
 
         var valFat = parseValorBrasileiro(op.faturamento);
-        
         var custoComb = window.calcularCustoCombustivelOperacao(op);
         var custoOp = parseValorBrasileiro(op.despesas) + custoComb;
 
         if (!op.checkins || !op.checkins.faltaMotorista) {
             custoOp += parseValorBrasileiro(op.comissao);
         }
-        
         if (op.ajudantes) {
-            op.ajudantes.forEach(function(aj) {
-                if (!op.checkins || !op.checkins.faltas || !op.checkins.faltas[aj.id]) {
-                    custoOp += parseValorBrasileiro(aj.diaria);
-                }
+            op.ajudantes.forEach(aj => {
+                if (!op.checkins?.faltas?.[aj.id]) custoOp += parseValorBrasileiro(aj.diaria);
             });
         }
 
-        if (op.status === 'CONFIRMADA' || op.status === 'FINALIZADA') {
-            receitaHistorico += valFat;
-        }
+        if (op.status === 'CONFIRMADA' || op.status === 'FINALIZADA') receitaHistorico += valFat;
 
         var d = new Date(op.data + 'T12:00:00');
         if (d.getMonth() === mesAtual && d.getFullYear() === anoAtual) {
@@ -476,7 +424,7 @@ window.atualizarDashboard = function() {
     });
 
     // 2. Despesas Gerais
-    CACHE_DESPESAS.forEach(function(d) {
+    CACHE_DESPESAS.forEach(d => {
         var val = parseValorBrasileiro(d.valor);
         var dt = new Date(d.data + 'T12:00:00');
         
@@ -486,18 +434,16 @@ window.atualizarDashboard = function() {
             for (var i = 0; i < qtd; i++) {
                 var pDt = new Date(dt);
                 pDt.setDate(pDt.getDate() + (i * 30));
-                if (pDt.getMonth() === mesAtual && pDt.getFullYear() === anoAtual) {
-                    custosMes += valParc;
-                }
+                if (pDt.getMonth() === mesAtual && pDt.getFullYear() === anoAtual) custosMes += valParc;
             }
         } else {
-            if (dt.getMonth() === mesAtual && dt.getFullYear() === anoAtual) {
-                custosMes += val;
-            }
+            if (dt.getMonth() === mesAtual && dt.getFullYear() === anoAtual) custosMes += val;
         }
     });
 
     var lucroMes = faturamentoMes - custosMes;
+    
+    // CORREÇÃO MARGEM MÉDIA
     var margem = 0;
     if (faturamentoMes > 0) {
         margem = (lucroMes / faturamentoMes) * 100;
@@ -518,49 +464,53 @@ window.atualizarDashboard = function() {
         document.getElementById('margemLucroMedia').textContent = margem.toFixed(1) + '%';
     }
 
+    // Atualiza o gráfico (performance) sempre que o dashboard roda
     atualizarGraficoPrincipal(mesAtual, anoAtual);
-    
-    // Tenta renderizar o gráfico de performance se ele estiver visível na tela
-    if(document.getElementById('performanceChart')) {
-        window.renderizarGraficoPerformance();
-    }
 };
 
 // -----------------------------------------------------------------------------
-// GRÁFICOS (Chart.js)
+// GRÁFICOS (Chart.js) - Performance Operacional
 // -----------------------------------------------------------------------------
 
-function atualizarGraficoPrincipal(mes, ano) {
-    if (window.USUARIO_ATUAL && (window.USUARIO_ATUAL.role === 'admin_master' || window.EMAILS_MESTRES.includes(window.USUARIO_ATUAL.email))) return;
+window.atualizarGraficoPrincipal = function(mes, ano) {
+    if (window.USUARIO_ATUAL && window.USUARIO_ATUAL.role === 'admin_master') return;
 
+    // ALVO: mainChart (que está dentro da section "graficos" no seu HTML)
     var ctx = document.getElementById('mainChart');
     if (!ctx) return; 
     
-    var fV = document.getElementById('filtroVeiculoGrafico') ? document.getElementById('filtroVeiculoGrafico').value : "";
-    var fM = document.getElementById('filtroMotoristaGrafico') ? document.getElementById('filtroMotoristaGrafico').value : "";
+    var fV = document.getElementById('filtroVeiculoGrafico')?.value;
+    var fM = document.getElementById('filtroMotoristaGrafico')?.value;
+    var sumCont = document.getElementById('chartVehicleSummaryContainer');
     
+    // Estatísticas para o Gráfico
     var gFat = 0, gComb = 0, gPes = 0, gMan = 0;
+    var stats = { viagens: 0, faltas: 0, lucro: 0 };
 
-    CACHE_OPERACOES.forEach(function(op) {
+    CACHE_OPERACOES.forEach(op => {
         if (op.status === 'CANCELADA') return;
         if (fV && op.veiculoPlaca !== fV) return;
         if (fM && op.motoristaId !== fM) return;
 
         var d = new Date(op.data + 'T12:00:00');
         if (d.getMonth() === mes && d.getFullYear() === ano) {
+            if (fM && op.checkins?.faltaMotorista) stats.faltas++;
+            stats.viagens++;
+
             var rec = parseValorBrasileiro(op.faturamento);
             var comb = window.calcularCustoCombustivelOperacao(op);
             var desp = parseValorBrasileiro(op.despesas);
             var com = 0;
             
-            if (!op.checkins || !op.checkins.faltaMotorista) com += parseValorBrasileiro(op.comissao);
+            if (!op.checkins?.faltaMotorista) com += parseValorBrasileiro(op.comissao);
             if (op.ajudantes) op.ajudantes.forEach(aj => { if (!op.checkins?.faltas?.[aj.id]) com += parseValorBrasileiro(aj.diaria); });
 
             gFat += rec; gComb += comb; gPes += com; gMan += desp;
         }
     });
 
-    CACHE_DESPESAS.forEach(function(d) {
+    // Despesas
+    CACHE_DESPESAS.forEach(d => {
         if (fV && d.veiculoPlaca && d.veiculoPlaca !== fV) return;
         var val = 0;
         var dt = new Date(d.data + 'T12:00:00');
@@ -585,6 +535,23 @@ function atualizarGraficoPrincipal(mes, ano) {
     });
 
     var gLucro = gFat - (gComb + gPes + gMan);
+    stats.lucro = gLucro;
+
+    // Renderiza Resumo Acima do Gráfico (Se filtrado)
+    if (sumCont) {
+        sumCont.innerHTML = '';
+        if (fV || fM) {
+            var lbl = fV ? "VEÍCULO" : "MOTORISTA";
+            var tit = fV || (CACHE_FUNCIONARIOS.find(f=>f.id==fM)?.nome || "-");
+            sumCont.innerHTML = `
+                <div id="chartVehicleSummary">
+                    <div class="veh-stat-box"><small>${lbl}</small><span>${tit}</span></div>
+                    <div class="veh-stat-box"><small>VIAGENS</small><span>${stats.viagens}</span></div>
+                    <div class="veh-stat-box"><small>FATURAMENTO</small><span style="color:var(--success-color)">${formatarValorMoeda(gFat)}</span></div>
+                    <div class="veh-stat-box"><small>LUCRO EST.</small><span style="color:${gLucro>=0?'var(--success-color)':'var(--danger-color)'}">${formatarValorMoeda(gLucro)}</span></div>
+                </div>`;
+        }
+    }
 
     if (window.chartInstance) window.chartInstance.destroy();
     
@@ -593,69 +560,16 @@ function atualizarGraficoPrincipal(mes, ano) {
         data: {
             labels: ['FATURAMENTO', 'COMBUSTÍVEL', 'PESSOAL', 'MANUTENÇÃO', 'LUCRO'],
             datasets: [{
-                label: 'Valores (R$)',
+                label: 'R$',
                 data: [gFat, gComb, gPes, gMan, gLucro],
                 backgroundColor: ['#28a745', '#dc3545', '#ffc107', '#17a2b8', (gLucro >= 0 ? '#20c997' : '#e83e8c')]
             }]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
-    });
-}
-
-// --- GRÁFICO DE PERFORMANCE OPERACIONAL (GLOBAL E CORRIGIDO) ---
-window.renderizarGraficoPerformance = function() {
-    var ctx = document.getElementById('performanceChart');
-    if (!ctx) return; // Se não houver canvas no HTML, para.
-
-    console.log("Renderizando Gráfico de Performance (Parse Seguro)...");
-
-    var dadosVeiculos = {};
-
-    CACHE_OPERACOES.forEach(function(op) {
-        if (op.status === 'CANCELADA') return;
-        var placa = op.veiculoPlaca || 'GERAL';
-        
-        if (!dadosVeiculos[placa]) {
-            dadosVeiculos[placa] = { fat: 0, cust: 0 };
-        }
-        
-        var fat = parseValorBrasileiro(op.faturamento);
-        var cust = parseValorBrasileiro(op.despesas) + window.calcularCustoCombustivelOperacao(op);
-        
-        if (!op.checkins || !op.checkins.faltaMotorista) {
-            cust += parseValorBrasileiro(op.comissao);
-        }
-        if (op.ajudantes) {
-            op.ajudantes.forEach(aj => { 
-                if(!op.checkins?.faltas?.[aj.id]) cust += parseValorBrasileiro(aj.diaria); 
-            });
-        }
-
-        dadosVeiculos[placa].fat += fat;
-        dadosVeiculos[placa].cust += cust;
-    });
-
-    var labels = Object.keys(dadosVeiculos);
-    var dataFat = labels.map(function(k) { return dadosVeiculos[k].fat; });
-    var dataCust = labels.map(function(k) { return dadosVeiculos[k].cust; });
-
-    if (window.chartPerformanceInstance) {
-        window.chartPerformanceInstance.destroy();
-    }
-
-    window.chartPerformanceInstance = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [
-                { label: 'Faturamento', data: dataFat, backgroundColor: '#28a745' },
-                { label: 'Custos', data: dataCust, backgroundColor: '#dc3545' }
-            ]
-        },
         options: { 
             responsive: true, 
             maintainAspectRatio: false, 
-            scales: { y: { beginAtZero: true } } 
+            plugins: { legend: { display: false } }, 
+            scales: { y: { beginAtZero: true, ticks: { callback: function(v){ return 'R$ ' + v; } } } } 
         }
     });
 };
@@ -2372,7 +2286,7 @@ window.enviarReciboFuncionario = async function(reciboId) {
 // =============================================================================
 
 // -----------------------------------------------------------------------------
-// 1. PAINEL SUPER ADMIN (VISUAL LIMPO E FUNCIONAL)
+// 1. PAINEL SUPER ADMIN (ACESSO RESTRITO)
 // -----------------------------------------------------------------------------
 
 window.carregarPainelSuperAdmin = async function() {
@@ -2456,10 +2370,10 @@ window.carregarPainelSuperAdmin = async function() {
                 <div class="company-body" style="display:none; padding:20px; border-top:1px solid #eee; background:white;">
                     <div style="margin-bottom:20px; display:flex; gap:10px; flex-wrap:wrap;">
                         <button class="btn-primary" onclick="abrirModalCreditos('${comp.id}', '${safeValidity}', ${safeVitalicio}, ${safeBlocked})">
-                            <i class="fas fa-edit"></i> GERENCIAR
+                            <i class="fas fa-edit"></i> GERENCIAR ACESSO / CRÉDITOS
                         </button>
                         <button class="btn-danger" onclick="excluirEmpresaTotal('${comp.id}')">
-                            <i class="fas fa-trash"></i> EXCLUIR EMPRESA
+                            <i class="fas fa-trash"></i> EXCLUIR EMPRESA E DADOS
                         </button>
                     </div>
                     
@@ -2487,6 +2401,7 @@ window.carregarPainelSuperAdmin = async function() {
             container.appendChild(div);
         });
     } catch (e) {
+        console.error(e);
         container.innerHTML = `<div class="alert alert-danger">Erro ao carregar dados: ${e.message}</div>`;
     }
 };
@@ -2765,14 +2680,14 @@ window.initSystemByRole = async function(user) {
     console.log(">>> SISTEMA INICIADO. PERFIL:", user.role);
     window.USUARIO_ATUAL = user;
 
-    // Reseta a interface
+    // 1. Reseta a interface
     document.querySelectorAll('.page').forEach(p => { 
         p.style.display = 'none'; 
         p.classList.remove('active'); 
     });
     document.querySelectorAll('.sidebar ul').forEach(ul => ul.style.display = 'none');
 
-    // Verifica se é Super Admin
+    // 2. Verifica se é Super Admin
     if (EMAILS_MESTRES.includes(user.email) || user.role === 'admin_master') {
         document.getElementById('menu-super-admin').style.display = 'block';
         var page = document.getElementById('super-admin');
@@ -2784,11 +2699,11 @@ window.initSystemByRole = async function(user) {
         return; 
     }
 
-    // Sincroniza dados
+    // 3. Sincroniza dados
     await sincronizarDadosComFirebase(); 
     preencherTodosSelects(); 
 
-    // Roteamento Admin/Employee
+    // 4. Roteamento
     if (user.role === 'admin') {
         if (user.isBlocked) {
             document.body.innerHTML = "<div style='display:flex;height:100vh;justify-content:center;align-items:center;color:red;flex-direction:column'><h1>ACESSO BLOQUEADO</h1><p>Contate o suporte.</p><button onclick='logoutSystem()'>SAIR</button></div>";
@@ -2810,6 +2725,7 @@ window.initSystemByRole = async function(user) {
             if(menuHome) menuHome.classList.add('active');
         }
         
+        // CORREÇÃO CRÍTICA DO CALENDÁRIO: 
         // Delay para garantir renderização correta do calendário e dashboard
         window.currentDate = new Date();
         setTimeout(() => {
@@ -2862,10 +2778,14 @@ document.querySelectorAll('.nav-item').forEach(item => {
             }, 100);
         }
         
-        // GATILHO DO GRÁFICO DE PERFORMANCE (IMPORTANTE)
-        // Certifique-se de que o ID da sua página no HTML seja 'performance' ou 'analise-grafica'
-        if (targetId === 'performance' || targetId === 'analise-grafica') {
-            setTimeout(renderizarGraficoPerformance, 300);
+        // CORREÇÃO DO GATILHO DO GRÁFICO:
+        // O HTML diz 'graficos', então o script deve ouvir 'graficos'.
+        if (targetId === 'graficos') {
+            // Chama a função principal de atualização do dashboard, 
+            // que por sua vez chama a função do gráfico.
+            setTimeout(() => {
+                atualizarDashboard();
+            }, 100);
         }
 
         if (targetId === 'meus-dados') renderizarMeusDados();
