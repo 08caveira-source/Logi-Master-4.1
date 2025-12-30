@@ -3687,3 +3687,207 @@ newFormCheckin.addEventListener('submit', async function(e) {
     closeCheckinConfirmModal();
     renderizarCheckinFuncionario();
 });
+
+// =============================================================================
+// PARTE 7: GESTÃO AVANÇADA DE RECIBOS (ADMIN VS FUNCIONÁRIO)
+// =============================================================================
+
+// 1. FUNÇÃO CENTRALIZADORA (CHAMADA AO CLICAR NO MENU "RECIBOS" OU "MEUS RECIBOS")
+window.renderizarPaginaRecibos = function() {
+    var user = window.USUARIO_ATUAL;
+    var adminPanel = document.getElementById('adminRecibosPanel');
+    var empPanel = document.getElementById('employeeRecibosPanel');
+    
+    // Reseta visibilidade
+    if(adminPanel) adminPanel.style.display = 'none';
+    if(empPanel) empPanel.style.display = 'none';
+
+    if (user.role === 'admin' || user.role === 'admin_master') {
+        // VISÃO DO ADMIN
+        if(adminPanel) adminPanel.style.display = 'block';
+        renderizarHistoricoRecibosAdmin(); // Renderiza tabela completa
+    } else {
+        // VISÃO DO FUNCIONÁRIO
+        if(empPanel) empPanel.style.display = 'block';
+        renderizarMeusRecibosFuncionario(); // Renderiza apenas os seus
+    }
+};
+
+// 2. VISÃO DO ADMIN: HISTÓRICO COMPLETO COM TODAS AS AÇÕES
+window.renderizarHistoricoRecibosAdmin = function() {
+    var tbody = document.querySelector('#tabelaHistoricoRecibos tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    // Ordena por data de emissão (mais recente primeiro)
+    var lista = (CACHE_RECIBOS || []).slice().sort((a,b) => new Date(b.dataEmissao) - new Date(a.dataEmissao));
+    
+    lista.forEach(r => {
+        // Status Visual
+        var statusLabel = r.enviado ? 
+            '<span class="status-pill pill-active"><i class="fas fa-check"></i> ENVIADO</span>' : 
+            '<span class="status-pill pill-pending">RASCUNHO</span>';
+            
+        // Botões de Ação
+        var btnVisualizar = `<button class="btn-mini btn-info" onclick="visualizarReciboExistente('${r.id}')" title="Visualizar/Imprimir"><i class="fas fa-eye"></i></button>`;
+        var btnEditar = `<button class="btn-mini btn-secondary" onclick="editarRecibo('${r.id}')" title="Editar (Recalcular)"><i class="fas fa-edit"></i></button>`;
+        var btnExcluir = `<button class="btn-mini btn-danger" onclick="excluirRecibo('${r.id}')" title="Excluir Permanentemente"><i class="fas fa-trash"></i></button>`;
+        
+        // Botão de Enviar (Só aparece se ainda não foi enviado)
+        var btnEnviar = r.enviado ? '' : 
+            `<button class="btn-mini btn-success" onclick="enviarReciboFuncionario('${r.id}')" title="Enviar para Funcionário"><i class="fas fa-paper-plane"></i></button>`;
+            
+        var tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${formatarDataParaBrasileiro(r.dataEmissao)}</td>
+            <td>${r.funcionarioNome}</td>
+            <td style="font-size:0.85rem;">${r.periodo}</td>
+            <td style="font-weight:bold;">${formatarValorMoeda(r.valorTotal)}</td>
+            <td>${statusLabel}</td>
+            <td>
+                ${btnVisualizar}
+                ${btnEnviar}
+                ${btnEditar}
+                ${btnExcluir}
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    if (lista.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">Nenhum recibo gerado ainda.</td></tr>';
+    }
+};
+
+// 3. VISÃO DO FUNCIONÁRIO: APENAS RECIBOS ENVIADOS PELO ADMIN
+window.renderizarMeusRecibosFuncionario = function() {
+    var tbody = document.querySelector('#tabelaMeusRecibos tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    var uid = window.USUARIO_ATUAL.uid;
+
+    // Filtra: Pertence a mim E já foi enviado pelo admin
+    var meusRecibos = (CACHE_RECIBOS || []).filter(r => String(r.funcionarioId) === String(uid) && r.enviado === true);
+    
+    // Ordena
+    meusRecibos.sort((a,b) => new Date(b.dataEmissao) - new Date(a.dataEmissao));
+
+    meusRecibos.forEach(r => {
+        var btnImprimir = `<button class="btn-mini btn-info" onclick="visualizarReciboExistente('${r.id}')"><i class="fas fa-print"></i> IMPRIMIR</button>`;
+        
+        var tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${formatarDataParaBrasileiro(r.dataEmissao)}</td>
+            <td>${r.periodo}</td>
+            <td style="font-weight:bold; color:var(--success-color);">${formatarValorMoeda(r.valorTotal)}</td>
+            <td>${btnImprimir}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    if (meusRecibos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">Nenhum recibo disponível no momento.</td></tr>';
+    }
+};
+
+// 4. FUNÇÕES DE AÇÃO (CRUD RECIBOS)
+
+// Visualizar Recibo (Serve tanto para Admin quanto para Funcionário)
+window.visualizarReciboExistente = function(reciboId) {
+    var r = CACHE_RECIBOS.find(x => x.id === reciboId);
+    if(!r) return;
+
+    // Reconstrói o HTML do recibo baseado nos dados salvos
+    var htmlRecibo = `
+        <div id="printAreaRecibo" style="border:2px solid #333; padding:20px; font-family:'Courier New', monospace; background:#fff; max-width:400px; margin:0 auto;">
+            <h3 style="text-align:center; border-bottom:2px dashed #333; padding-bottom:10px;">RECIBO DE PAGAMENTO</h3>
+            <p style="text-align:right; font-size:0.8rem;">Emissão: ${formatarDataParaBrasileiro(r.dataEmissao)}</p>
+            <p><strong>BENEFICIÁRIO:</strong><br> ${r.funcionarioNome}</p>
+            <p><strong>PERÍODO REF.:</strong><br> ${r.periodo}</p>
+            
+            <div style="margin:20px 0; border:1px solid #ccc; padding:10px; text-align:center;">
+                <span style="display:block; font-size:0.9rem;">VALOR LÍQUIDO RECEBIDO</span>
+                <strong style="font-size:1.4rem;">${formatarValorMoeda(r.valorTotal)}</strong>
+            </div>
+
+            <p style="font-size:0.8rem; text-align:justify;">
+                Declaro ter recebido a importância supra citada, referente aos serviços prestados (comissões/diárias) no período descrito.
+            </p>
+            <br><br>
+            <div style="text-align:center; border-top:1px solid #333; margin-top:20px; padding-top:5px;">Assinatura do Beneficiário</div>
+            <div style="text-align:center; margin-top:30px; font-size:0.7rem; color:#999;">LOGIMASTER SYSTEM</div>
+        </div>
+    `;
+
+    document.getElementById('modalReciboContent').innerHTML = htmlRecibo;
+    
+    // Ações do Modal (Apenas Imprimir)
+    document.getElementById('modalReciboActions').innerHTML = `
+        <button class="btn-secondary" onclick="imprimirElemento('printAreaRecibo')">
+            <i class="fas fa-print"></i> IMPRIMIR
+        </button>
+    `;
+    
+    document.getElementById('modalRecibo').style.display = 'flex';
+};
+
+// Função auxiliar de impressão
+window.imprimirElemento = function(elemId) {
+    var conteudo = document.getElementById(elemId).innerHTML;
+    var telaImpressao = window.open('', '', 'height=600,width=800');
+    telaImpressao.document.write('<html><head><title>Imprimir Recibo</title>');
+    telaImpressao.document.write('</head><body >');
+    telaImpressao.document.write(conteudo);
+    telaImpressao.document.write('</body></html>');
+    telaImpressao.document.close();
+    telaImpressao.print();
+};
+
+// Excluir Recibo
+window.excluirRecibo = async function(reciboId) {
+    if(!confirm("Tem certeza que deseja EXCLUIR este recibo do histórico?\nIsso não afetará as operações, apenas o registro do documento.")) return;
+    
+    var novaLista = CACHE_RECIBOS.filter(r => r.id !== reciboId);
+    await salvarListaRecibos(novaLista);
+    
+    alert("Recibo excluído.");
+    renderizarHistoricoRecibosAdmin();
+};
+
+// Editar Recibo (Recarrega dados no formulário para gerar novo)
+window.editarRecibo = function(reciboId) {
+    var r = CACHE_RECIBOS.find(x => x.id === reciboId);
+    if(!r) return;
+
+    if(!confirm("A edição carregará os dados para o formulário de 'Novo Recibo'.\n\nVocê deverá clicar em 'CALCULAR' novamente para gerar uma versão atualizada.")) return;
+
+    // Tenta extrair datas da string de período (Ex: "01/01/2024 a 31/01/2024")
+    try {
+        var partes = r.periodo.split(' a ');
+        if(partes.length === 2) {
+            // Helper reverso de data (BR -> ISO)
+            const brToIso = (d) => {
+                var p = d.split('/');
+                return `${p[2]}-${p[1]}-${p[0]}`;
+            };
+            document.getElementById('dataInicioRecibo').value = brToIso(partes[0].trim());
+            document.getElementById('dataFimRecibo').value = brToIso(partes[1].trim());
+        }
+    } catch(e) { console.log("Não foi possível preencher datas auto."); }
+
+    document.getElementById('selectMotoristaRecibo').value = r.funcionarioId;
+    
+    // Rola para o topo do formulário
+    document.getElementById('formRecibo').scrollIntoView({behavior: "smooth"});
+};
+
+// 5. UPDATE NO EVENTO DE NAVEGAÇÃO
+// Adicione este trecho para garantir que ao clicar no menu, a função correta seja chamada
+document.querySelectorAll('.nav-item[data-page="recibos"]').forEach(btn => {
+    btn.addEventListener('click', function() {
+        // Pequeno delay para garantir que o container da página "recibos" já está visível
+        setTimeout(renderizarPaginaRecibos, 100);
+    });
+});
