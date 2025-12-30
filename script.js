@@ -3379,55 +3379,235 @@ window.confirmarCheckinAjudante = async function(opId) {
     renderizarCheckinFuncionario();
 };
 
-/**
- * Filtra e exibe o histórico de serviços do funcionário.
- */
+// =============================================================================
+// ATUALIZAÇÃO: PAINEL MEUS SERVIÇOS E REGISTRO DE HORÁRIO DE CHECK-IN
+// =============================================================================
+
+// 1. FUNÇÃO ATUALIZADA: FILTRO E EXIBIÇÃO DETALHADA DOS SERVIÇOS
 window.filtrarServicosFuncionario = function(uid) {
-    var tbody = document.querySelector('#tabelaMeusServicos tbody');
-    if (!tbody) return;
+    var tabela = document.getElementById('tabelaMeusServicos');
+    if (!tabela) return;
+    
+    var thead = tabela.querySelector('thead');
+    var tbody = tabela.querySelector('tbody');
+    
+    // Atualiza os cabeçalhos da tabela dinamicamente para comportar as novas colunas
+    thead.innerHTML = `
+        <tr>
+            <th>DATA</th>
+            <th>VEÍCULO</th>
+            <th>FUNÇÃO</th>
+            <th>CHECK-IN</th>
+            <th>STATUS</th>
+            <th style="text-align:right;">MEU GANHO</th>
+        </tr>
+    `;
     
     tbody.innerHTML = '';
     
     var ini = document.getElementById('dataInicioServicosFunc').value;
     var fim = document.getElementById('dataFimServicosFunc').value;
     
-    if (!ini || !fim) return alert("Selecione o período.");
+    if (!ini || !fim) return alert("Selecione o período (Início e Fim).");
 
     var totalGanho = 0;
+    var encontrouRegistros = false;
 
-    CACHE_OPERACOES.forEach(op => {
+    // Ordena por data (mais recente primeiro)
+    var listaOrdenada = CACHE_OPERACOES.slice().sort((a,b) => new Date(b.data) - new Date(a.data));
+
+    listaOrdenada.forEach(op => {
+        // Filtra Operações Canceladas ou fora da data
         if (op.status === 'CANCELADA' || op.data < ini || op.data > fim) return;
         
-        var valor = 0;
-        var funcao = '-';
+        var souMotorista = (String(op.motoristaId) === String(uid));
+        var souAjudante = (op.ajudantes && op.ajudantes.some(a => String(a.id) === String(uid)));
         
-        if (String(op.motoristaId) === String(uid)) {
-            // Se não teve falta, soma comissão
-            if (!op.checkins || !op.checkins.faltaMotorista) {
-                valor = Number(op.comissao) || 0;
-                funcao = 'MOTORISTA';
+        // Se não participei dessa operação, pula
+        if (!souMotorista && !souAjudante) return;
+
+        encontrouRegistros = true;
+
+        var valorGanho = 0;
+        var funcaoTexto = '-';
+        var teveFalta = false;
+        var horarioCheckin = '-';
+        var statusTexto = '<span class="status-pill pill-active">REALIZADO</span>'; // Padrão
+
+        // --- LÓGICA PARA MOTORISTA ---
+        if (souMotorista) {
+            funcaoTexto = 'MOTORISTA';
+            
+            // Verifica Falta
+            if (op.checkins && op.checkins.faltaMotorista) {
+                teveFalta = true;
+                statusTexto = '<span class="status-pill pill-blocked">FALTA</span>';
+                valorGanho = 0; // Se faltou, não recebe
+            } else {
+                valorGanho = Number(op.comissao) || 0;
             }
-        } else if (op.ajudantes && op.ajudantes.some(a => String(a.id) === String(uid))) {
-            // Se não teve falta, soma diária
-            if (!op.checkins || !op.checkins.faltas || !op.checkins.faltas[uid]) {
-                var ajData = op.ajudantes.find(a => String(a.id) === String(uid));
-                valor = Number(ajData.diaria) || 0;
-                funcao = 'AJUDANTE';
+
+            // Verifica Horário Check-in
+            if (op.checkins && op.checkins.motorista) {
+                // Suporte retroativo: Se for boolean (true), é antigo. Se for string, é data ISO.
+                var dadoCheckin = op.checkins.motorista;
+                if (typeof dadoCheckin === 'string' && dadoCheckin.includes('T')) {
+                    // Pega hora e minuto do ISO String
+                    var dataObj = new Date(dadoCheckin);
+                    horarioCheckin = dataObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                } else {
+                    horarioCheckin = 'CONFIRMADO';
+                }
+            } else {
+                horarioCheckin = 'PENDENTE';
+                if (!teveFalta) statusTexto = '<span class="status-pill pill-pending">AGENDADO</span>';
+            }
+        } 
+        
+        // --- LÓGICA PARA AJUDANTE ---
+        else if (souAjudante) {
+            funcaoTexto = 'AJUDANTE';
+            var ajData = op.ajudantes.find(a => String(a.id) === String(uid));
+            
+            // Verifica Falta
+            if (op.checkins && op.checkins.faltas && op.checkins.faltas[uid]) {
+                teveFalta = true;
+                statusTexto = '<span class="status-pill pill-blocked">FALTA</span>';
+                valorGanho = 0;
+            } else {
+                valorGanho = Number(ajData.diaria) || 0;
+            }
+
+            // Verifica Horário Check-in
+            if (op.checkins && op.checkins.ajudantes && op.checkins.ajudantes[uid]) {
+                var dadoCheckin = op.checkins.ajudantes[uid];
+                // Verifica se é falta (às vezes o sistema marca falta no objeto de checkin, mas aqui já validamos acima)
+                if (teveFalta) {
+                    horarioCheckin = '-';
+                } else if (typeof dadoCheckin === 'string' && dadoCheckin.includes('T')) {
+                    var dataObj = new Date(dadoCheckin);
+                    horarioCheckin = dataObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                } else if (dadoCheckin === true) {
+                    horarioCheckin = 'CONFIRMADO';
+                } else {
+                    horarioCheckin = 'PENDENTE';
+                }
+            } else {
+                horarioCheckin = 'PENDENTE';
+                if (!teveFalta) statusTexto = '<span class="status-pill pill-pending">AGENDADO</span>';
             }
         }
 
-        if (valor > 0) {
-            totalGanho += valor;
-            var tr = document.createElement('tr');
-            tr.innerHTML = `<td>${formatarDataParaBrasileiro(op.data)}</td><td>${op.veiculoPlaca}</td><td>${funcao}</td><td>${formatarValorMoeda(valor)}</td>`;
-            tbody.appendChild(tr);
-        }
+        totalGanho += valorGanho;
+        
+        // Renderiza Linha
+        var tr = document.createElement('tr');
+        // Se teve falta, deixa a linha com opacidade reduzida ou cor de alerta
+        if (teveFalta) tr.style.background = '#fff0f0';
+
+        tr.innerHTML = `
+            <td>${formatarDataParaBrasileiro(op.data)}</td>
+            <td>${op.veiculoPlaca || 'N/A'}</td>
+            <td style="font-size:0.85rem;">${funcaoTexto}</td>
+            <td style="font-weight:bold; color:var(--primary-color);">${horarioCheckin}</td>
+            <td>${statusTexto}</td>
+            <td style="text-align:right; font-weight:bold; color:${teveFalta ? 'red' : 'green'};">
+                ${formatarValorMoeda(valorGanho)}
+            </td>
+        `;
+        tbody.appendChild(tr);
     });
     
-    // Linha de Total
-    var trTotal = document.createElement('tr');
-    trTotal.style.fontWeight = 'bold';
-    trTotal.style.background = '#f0f0f0';
-    trTotal.innerHTML = `<td colspan="3" style="text-align:right;">TOTAL NO PERÍODO:</td><td>${formatarValorMoeda(totalGanho)}</td>`;
-    tbody.appendChild(trTotal);
+    if (!encontrouRegistros) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">Nenhum registro encontrado neste período.</td></tr>';
+    } else {
+        // Linha de Totalização
+        var trTotal = document.createElement('tr');
+        trTotal.style.background = '#e8f5e9';
+        trTotal.style.borderTop = '2px solid var(--success-color)';
+        trTotal.innerHTML = `
+            <td colspan="5" style="text-align:right; font-weight:bold; color:#333;">TOTAL RECEBIDO NO PERÍODO:</td>
+            <td style="text-align:right; font-weight:bold; font-size:1.1rem; color:var(--success-color);">${formatarValorMoeda(totalGanho)}</td>
+        `;
+        tbody.appendChild(trTotal);
+    }
 };
+
+// 2. ATUALIZAÇÃO DO CHECK-IN DE AJUDANTE (PARA SALVAR DATA/HORA)
+window.confirmarCheckinAjudante = async function(opId) {
+    if (!confirm("Confirmar sua presença nesta operação agora?")) return;
+
+    var op = CACHE_OPERACOES.find(o => String(o.id) === String(opId));
+    if (!op) return;
+
+    if (!op.checkins) op.checkins = {};
+    if (!op.checkins.ajudantes) op.checkins.ajudantes = {};
+
+    var uid = window.USUARIO_ATUAL.uid;
+    
+    // ATUALIZAÇÃO: Salva a data ISO em vez de apenas 'true'
+    op.checkins.ajudantes[uid] = new Date().toISOString();
+
+    await salvarListaOperacoes(CACHE_OPERACOES);
+    
+    alert("Presença Confirmada com horário!");
+    renderizarCheckinFuncionario();
+};
+
+// 3. ATUALIZAÇÃO DO CHECK-IN DE MOTORISTA (PARA SALVAR DATA/HORA)
+// Nota: Removemos o listener antigo substituindo-o por este novo bloco.
+// Como não podemos remover eventos anônimos facilmente, certifique-se de que este código
+// seja carregado após o anterior ou substitua o bloco do formulário 'formCheckinConfirm'.
+
+var formCheckin = document.getElementById('formCheckinConfirm');
+// Clona e substitui o elemento para remover listeners antigos e evitar duplicação
+var newFormCheckin = formCheckin.cloneNode(true);
+formCheckin.parentNode.replaceChild(newFormCheckin, formCheckin);
+
+newFormCheckin.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    var opId = document.getElementById('checkinOpId').value;
+    var step = document.getElementById('checkinStep').value;
+    var op = CACHE_OPERACOES.find(o => String(o.id) === String(opId));
+    
+    if (!op) return;
+    if (!op.checkins) op.checkins = {};
+
+    var agora = new Date().toISOString();
+
+    // Atualização dos dados
+    if (step === 'INICIO') {
+        var kmIni = Number(document.getElementById('checkinKmInicial').value);
+        if (kmIni <= 0) return alert("Informe o KM Inicial válido.");
+
+        op.kmInicial = kmIni;
+        
+        // ATUALIZAÇÃO: Salva data/hora
+        op.checkins.motorista = agora; 
+        
+        op.status = 'EM_ANDAMENTO';
+        
+    } else { // FIM
+        var kmFinal = Number(document.getElementById('checkinKmFinal').value);
+        var kmIni = Number(document.getElementById('checkinKmInicialReadonly').value);
+        var abastecido = Number(document.getElementById('checkinValorAbastecido').value);
+        var preco = Number(document.getElementById('checkinPrecoLitroConfirm').value);
+
+        if (kmFinal <= kmIni) return alert(`O KM Final deve ser maior que o Inicial (${kmIni}).`);
+
+        op.kmFinal = kmFinal;
+        op.kmRodado = kmFinal - (op.kmInicial || 0);
+        
+        if (abastecido > 0) op.combustivel = abastecido;
+        if (preco > 0) op.precoLitro = preco;
+
+        op.status = 'FINALIZADA';
+    }
+
+    await salvarListaOperacoes(CACHE_OPERACOES);
+    
+    alert(step === 'INICIO' ? "Viagem Iniciada!" : "Viagem Finalizada com Sucesso!");
+    closeCheckinConfirmModal();
+    renderizarCheckinFuncionario();
+});
