@@ -2129,24 +2129,29 @@ window.filtrarServicosFuncionario = function(uid) {
     }
 };
 // =============================================================================
+// =============================================================================
 // PARTE 5: SUPER ADMIN, MEUS DADOS E INICIALIZAÇÃO
 // =============================================================================
 
 // -----------------------------------------------------------------------------
-// 1. PAINEL SUPER ADMIN (VISUAL LIMPO E FUNCIONAL)
+// 1. PAINEL SUPER ADMIN (ACESSO RESTRITO)
 // -----------------------------------------------------------------------------
 
-// Carrega a lista de empresas e usuários para o Super Admin
+/**
+ * Carrega a lista de todas as empresas e usuários do sistema.
+ * Exclusivo para os e-mails listados em EMAILS_MESTRES.
+ */
 window.carregarPainelSuperAdmin = async function() {
     const container = document.getElementById('superAdminContainer');
-    if(!container) return;
     
-    container.innerHTML = '<p style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Carregando dados globais...</p>';
+    if (!container) return;
+    
+    container.innerHTML = '<p style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Carregando dados globais do sistema...</p>';
 
     try {
         const { db, collection, getDocs } = window.dbRef;
         
-        // Busca todas as empresas e todos os usuários do banco de dados
+        // Busca todas as coleções de empresas e usuários
         const companiesSnap = await getDocs(collection(db, "companies"));
         const usersSnap = await getDocs(collection(db, "users"));
         
@@ -2158,19 +2163,20 @@ window.carregarPainelSuperAdmin = async function() {
 
         container.innerHTML = '';
 
-        if(companies.length === 0) {
-            container.innerHTML = '<div class="alert alert-info">Nenhuma empresa encontrada no sistema.</div>';
+        if (companies.length === 0) {
+            container.innerHTML = '<div class="alert alert-info">Nenhuma empresa encontrada no banco de dados.</div>';
             return;
         }
 
-        // Renderiza cada empresa como um item de lista expansível (Accordion)
+        // Renderiza lista de empresas
         companies.forEach(comp => {
+            // Filtra usuários desta empresa
             const usersDaEmpresa = users.filter(u => u.company === comp.id);
             const admin = usersDaEmpresa.find(u => u.role === 'admin');
             
-            // Lógica de Status para exibição visual
+            // Define visual do status
             let statusBadge = "";
-            let borderColor = "#ddd"; // Cinza padrão
+            let borderColor = "#ddd"; 
 
             if (comp.isBlocked) {
                 statusBadge = '<span class="status-pill pill-blocked">BLOQUEADO</span>';
@@ -2179,7 +2185,7 @@ window.carregarPainelSuperAdmin = async function() {
                 statusBadge = '<span class="status-pill pill-active">VITALÍCIO</span>';
                 borderColor = "gold";
             } else {
-                // Verifica vencimento
+                // Verifica data de vencimento
                 let vencido = comp.systemValidity && new Date(comp.systemValidity) < new Date();
                 if (vencido) {
                     statusBadge = '<span class="status-pill pill-blocked">VENCIDO</span>';
@@ -2192,7 +2198,7 @@ window.carregarPainelSuperAdmin = async function() {
             
             let validadeTexto = comp.isVitalicio ? "VITALÍCIO" : (comp.systemValidity ? formatarDataParaBrasileiro(comp.systemValidity) : "SEM DADOS");
 
-            // Valores seguros para passar na função onclick
+            // Prepara variáveis seguras para o HTML
             const safeValidity = comp.systemValidity || '';
             const safeVitalicio = comp.isVitalicio || false;
             const safeBlocked = comp.isBlocked || false;
@@ -2201,6 +2207,7 @@ window.carregarPainelSuperAdmin = async function() {
             div.className = 'company-wrapper';
             div.style.cssText = `margin-bottom:15px; border:1px solid ${borderColor}; border-radius:8px; background:white; overflow:hidden; box-shadow:0 2px 5px rgba(0,0,0,0.05);`;
 
+            // HTML Interno do Card da Empresa
             div.innerHTML = `
                 <div class="company-header" onclick="this.nextElementSibling.style.display = (this.nextElementSibling.style.display === 'none' ? 'block' : 'none')" style="padding:15px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#f8f9fa;">
                     <div style="display:flex; align-items:center; gap:15px;">
@@ -2213,7 +2220,7 @@ window.carregarPainelSuperAdmin = async function() {
                         </div>
                     </div>
                     <div style="display:flex; align-items:center; gap:15px; text-align:right;">
-                        <div>
+                        <div class="mobile-hide">
                             <div style="font-size:0.7rem; color:#888; text-transform:uppercase;">Validade</div>
                             <strong style="font-size:0.9rem; color:#333;">${validadeTexto}</strong>
                         </div>
@@ -2261,7 +2268,7 @@ window.carregarPainelSuperAdmin = async function() {
     }
 };
 
-// Formulário de Criação de Empresa (Super Admin)
+// Formulário de Criação de Empresa
 document.addEventListener('submit', async function(e) {
     if (e.target.id === 'formCreateCompany') {
         e.preventDefault();
@@ -2273,9 +2280,10 @@ document.addEventListener('submit', async function(e) {
         if (dominio.length < 3) return alert("O domínio da empresa deve ter pelo menos 3 letras.");
 
         try {
-            // 1. Cria o usuário Admin no Auth e no Firestore
+            // 1. Cria o usuário Admin no Auth
             var uid = await window.dbRef.criarAuthUsuario(email, senha);
             
+            // 2. Salva o usuário no Firestore
             await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "users", uid), {
                 uid: uid, 
                 name: "ADMIN " + dominio.toUpperCase(), 
@@ -2287,11 +2295,10 @@ document.addEventListener('submit', async function(e) {
                 isVitalicio: false, 
                 isBlocked: false, 
                 senhaVisual: senha,
-                systemValidity: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString() // 30 dias grátis inicial
+                systemValidity: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString() // 30 dias grátis
             });
 
         } catch (erro) {
-            // Se o e-mail já existe, permite criar só a empresa (caso seja um admin reaproveitado ou erro de digitação anterior)
             if (erro.code === 'auth/email-already-in-use') {
                 if(!confirm(`O e-mail ${email} JÁ EXISTE no sistema.\n\nDeseja criar apenas a estrutura da empresa "${dominio}"?`)) {
                     return;
@@ -2302,7 +2309,7 @@ document.addEventListener('submit', async function(e) {
         }
 
         try {
-            // 2. Cria o documento da Empresa
+            // 3. Cria a estrutura da Empresa
             await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "companies", dominio), { 
                 id: dominio, 
                 createdAt: new Date().toISOString(),
@@ -2316,12 +2323,12 @@ document.addEventListener('submit', async function(e) {
             carregarPainelSuperAdmin();
 
         } catch (dbError) {
-            alert("Erro ao salvar empresa no banco: " + dbError.message);
+            alert("Erro ao salvar empresa: " + dbError.message);
         }
     }
 });
 
-// Modal de Gerenciamento de Créditos e Status da Empresa
+// Modal de Gerenciamento de Créditos
 window.abrirModalCreditos = function(companyId, validade, isVitalicio, isBlocked) {
     document.getElementById('empresaIdCredito').value = companyId;
     document.getElementById('nomeEmpresaCredito').textContent = companyId.toUpperCase();
@@ -2329,14 +2336,12 @@ window.abrirModalCreditos = function(companyId, validade, isVitalicio, isBlocked
     var textoValidade = isVitalicio ? "VITALÍCIO" : (validade ? formatarDataParaBrasileiro(validade.split('T')[0]) : "SEM REGISTRO");
     document.getElementById('validadeAtualCredito').textContent = textoValidade;
     
-    // Configura Checkboxes com segurança
     var elVitalicio = document.getElementById('checkVitalicio');
     var elBloqueado = document.getElementById('checkBloqueado');
     var elDivAdd = document.getElementById('divAddCreditos');
 
     if(elVitalicio) {
         elVitalicio.checked = isVitalicio;
-        // Mostra/Oculta campo de meses baseado no checkbox vitalício
         elVitalicio.onchange = function() { 
             if(elDivAdd) elDivAdd.style.display = this.checked ? 'none' : 'block'; 
         };
@@ -2349,7 +2354,6 @@ window.abrirModalCreditos = function(companyId, validade, isVitalicio, isBlocked
     document.getElementById('modalCreditos').style.display = 'flex';
 };
 
-// Salvar alterações de créditos/status da empresa
 window.salvarCreditosEmpresa = async function() {
     var companyId = document.getElementById('empresaIdCredito').value;
     var isVitalicio = document.getElementById('checkVitalicio').checked;
@@ -2362,13 +2366,13 @@ window.salvarCreditosEmpresa = async function() {
         var dadosEmpresa = { isVitalicio: isVitalicio, isBlocked: isBloqueado };
         var novaData = null;
 
-        // Se não for vitalício nem bloqueado, calcula nova data de validade
+        // Cálculo de nova data se não for vitalício
         if (!isVitalicio && !isBloqueado) {
             const q = query(collection(db, "users"), where("company", "==", companyId), where("role", "==", "admin"));
             const snap = await getDocs(q);
             
             var base = new Date();
-            // Tenta pegar a data atual do admin para somar (não perder dias já pagos)
+            // Pega a data atual do admin para somar e não perder dias
             if(!snap.empty) {
                 var adm = snap.docs[0].data();
                 if(adm.systemValidity && new Date(adm.systemValidity) > base) {
@@ -2384,10 +2388,10 @@ window.salvarCreditosEmpresa = async function() {
             dadosEmpresa.systemValidity = novaData;
         }
 
-        // 1. Atualiza documento da Empresa
+        // 1. Atualiza Empresa
         await setDoc(doc(db, "companies", companyId), dadosEmpresa, { merge: true });
         
-        // 2. Atualiza TODOS os usuários da empresa (Batch Update) para refletir o status
+        // 2. Atualiza Usuários (Batch)
         const qUsers = query(collection(db, "users"), where("company", "==", companyId));
         const snapUsers = await getDocs(qUsers);
         const batch = writeBatch(db);
@@ -2400,17 +2404,17 @@ window.salvarCreditosEmpresa = async function() {
         
         await batch.commit();
 
-        alert("Alterações salvas com sucesso!");
+        alert("Atualizado com sucesso!");
         document.getElementById('modalCreditos').style.display = 'none';
         carregarPainelSuperAdmin();
 
     } catch(e) { 
-        alert("Erro ao salvar: " + e.message); 
+        alert("Erro: " + e.message); 
     }
 };
 
 window.excluirEmpresaTotal = async function(companyId) {
-    var confirmacao = prompt(`ATENÇÃO PERIGO:\nIsso apagará TODOS os dados, usuários e registros da empresa "${companyId}".\n\nPara confirmar, digite "DELETAR":`);
+    var confirmacao = prompt(`ATENÇÃO: Isso apagará TODOS os dados da empresa "${companyId}".\nDigite "DELETAR" para confirmar:`);
     
     if (confirmacao !== "DELETAR") return;
     
@@ -2418,25 +2422,23 @@ window.excluirEmpresaTotal = async function(companyId) {
         const { db, collection, query, where, getDocs, doc, writeBatch } = window.dbRef;
         const batch = writeBatch(db);
         
-        // 1. Deleta usuários
         const q = query(collection(db, "users"), where("company", "==", companyId));
         const snap = await getDocs(q);
         snap.forEach(d => batch.delete(d.ref));
         
-        // 2. Deleta documento da empresa
         batch.delete(doc(db, "companies", companyId));
         
         await batch.commit();
         
-        alert("Empresa excluída permanentemente.");
+        alert("Empresa excluída.");
         carregarPainelSuperAdmin();
     } catch (e) { 
-        alert("Erro ao excluir: " + e.message); 
+        alert("Erro: " + e.message); 
     }
 };
 
 window.excluirUsuarioGlobal = async function(uid) {
-    if(!confirm("Tem certeza que deseja excluir este usuário do banco de dados?")) return;
+    if(!confirm("Excluir este usuário permanentemente?")) return;
     try { 
         await window.dbRef.deleteDoc(window.dbRef.doc(window.dbRef.db, "users", uid)); 
         carregarPainelSuperAdmin(); 
@@ -2445,48 +2447,51 @@ window.excluirUsuarioGlobal = async function(uid) {
     }
 };
 
-// Reset de senha forçado (Recria o Auth mantendo o ID se possível, ou migrando dados)
 window.resetarSenhaComMigracao = async function(uid, email, nome) {
-    var novaSenha = prompt(`Digite a nova senha para ${email}:`);
+    var novaSenha = prompt(`Nova senha para ${email}:`);
     if(novaSenha) {
         try {
-            // Cria novo Auth
             let novoUid = await window.dbRef.criarAuthUsuario(email, novaSenha);
             
-            // Lê dados antigos
             var oldDocRef = window.dbRef.doc(window.dbRef.db, "users", uid);
             var oldDoc = await window.dbRef.getDoc(oldDocRef);
             
             if(oldDoc.exists()){
                 var dados = oldDoc.data();
-                dados.uid = novoUid; // Atualiza ID
+                dados.uid = novoUid;
                 dados.senhaVisual = novaSenha;
                 
-                // Salva com novo ID
                 await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "users", novoUid), dados);
-                
-                // Apaga antigo
                 await window.dbRef.deleteDoc(oldDocRef);
             }
-            alert("Senha alterada com sucesso!"); 
+            alert("Senha alterada!"); 
             carregarPainelSuperAdmin();
         } catch(e){ 
-            alert("Erro ao resetar: " + e.message); 
+            alert("Erro: " + e.message); 
         }
     }
 };
 
 // -----------------------------------------------------------------------------
-// 2. MEUS DADOS (PERFIL DO USUÁRIO)
+// 2. MEUS DADOS
 // -----------------------------------------------------------------------------
 
 window.renderizarMeusDados = function() {
     var user = window.USUARIO_ATUAL;
-    // Tenta pegar dados completos do cache local se disponível
     var dados = CACHE_FUNCIONARIOS.find(f => String(f.id) === String(user.uid)) || user;
-    
     var container = document.getElementById('meusDadosContainer');
+    
     if(!container) return;
+
+    // Helper para criar linha de dados
+    const makeLine = (label, val, fieldCode) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid #f8f9fa;">
+            <div>
+                <span style="font-size:0.8rem; color:#888; display:block;">${label}</span>
+                <span style="font-size:1rem; color:#333; font-weight:600;">${val || '-'}</span>
+            </div>
+            ${fieldCode ? `<button class="btn-mini btn-secondary" onclick="solicitarAlteracao('${fieldCode}', '${val}')"><i class="fas fa-pen"></i></button>` : ''}
+        </div>`;
 
     var html = `
         <div style="background:white; padding:30px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.05); max-width:600px; margin:0 auto;">
@@ -2521,23 +2526,6 @@ window.renderizarMeusDados = function() {
     container.innerHTML = html;
 };
 
-// Helper para criar linha de dados com botão de edição
-function makeLine(label, val, fieldCode) {
-    var btn = fieldCode ? 
-        `<button class="btn-mini btn-secondary" onclick="solicitarAlteracao('${fieldCode}', '${val}')" title="Solicitar Alteração"><i class="fas fa-pen"></i></button>` : 
-        '';
-        
-    return `
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid #f8f9fa;">
-            <div>
-                <span style="font-size:0.8rem; color:#888; display:block;">${label}</span>
-                <span style="font-size:1rem; color:#333; font-weight:600;">${val || '-'}</span>
-            </div>
-            ${btn}
-        </div>
-    `;
-}
-
 window.solicitarAlteracao = function(campo, atual) {
     var novo = prompt(`Digite o novo valor para ${campo}:`, atual);
     if(novo && novo !== atual) {
@@ -2551,82 +2539,82 @@ window.solicitarAlteracao = function(campo, atual) {
             valorNovo: novo, 
             status: 'PENDENTE' 
         };
-        
         var lista = CACHE_PROFILE_REQUESTS || [];
         lista.push(req);
-        
-        salvarProfileRequests(lista).then(() => alert("Solicitação enviada para aprovação do administrador."));
+        salvarProfileRequests(lista).then(() => alert("Solicitação enviada."));
     }
 };
 
 // -----------------------------------------------------------------------------
-// 3. INICIALIZAÇÃO E ROTEAMENTO (ESSENCIAL)
+// 3. INICIALIZAÇÃO DO SISTEMA (CORREÇÃO DE FLASH E CALENDÁRIO)
 // -----------------------------------------------------------------------------
 
 window.initSystemByRole = async function(user) {
-    console.log(">>> SISTEMA INICIADO. PERFIL:", user.role);
+    console.log(">>> INIT SISTEMA:", user.role);
     window.USUARIO_ATUAL = user;
 
-    // 1. Reseta a interface (Esconde tudo inicialmente para evitar flash)
+    // 1. Reseta a interface (Esconde todas as páginas)
     document.querySelectorAll('.page').forEach(p => { 
         p.style.display = 'none'; 
         p.classList.remove('active'); 
     });
     document.querySelectorAll('.sidebar ul').forEach(ul => ul.style.display = 'none');
 
-    // 2. Verifica se é Super Admin (Master)
+    // 2. Verifica se é Super Admin
     if (EMAILS_MESTRES.includes(user.email) || user.role === 'admin_master') {
         document.getElementById('menu-super-admin').style.display = 'block';
-        
         var page = document.getElementById('super-admin');
         if(page) {
             page.style.display = 'block'; 
             setTimeout(() => page.classList.add('active'), 50);
         }
-        
         carregarPainelSuperAdmin();
         return; 
     }
 
-    // 3. Carrega dados da empresa (Sync)
+    // 3. Sincroniza dados antes de abrir
     await sincronizarDadosComFirebase(); 
-    preencherTodosSelects(); // Popula selects e tabelas com os dados baixados
+    preencherTodosSelects(); 
 
-    // 4. Roteamento Comum (Admin ou Funcionário)
+    // 4. Lógica de Roteamento
     if (user.role === 'admin') {
-        // Verifica Bloqueio
+        // Bloqueios
         if (user.isBlocked) {
-            document.body.innerHTML = "<div style='display:flex; height:100vh; justify-content:center; align-items:center; flex-direction:column; background:#f8d7da; color:#721c24;'><h1>ACESSO BLOQUEADO</h1><p>Sua conta foi suspensa pelo administrador.</p><button onclick='logoutSystem()'>SAIR</button></div>";
+            document.body.innerHTML = "<div style='display:flex;height:100vh;justify-content:center;align-items:center;color:red;flex-direction:column'><h1>ACESSO BLOQUEADO</h1><p>Contate o suporte.</p><button onclick='logoutSystem()'>SAIR</button></div>";
             return;
         }
-        
-        // Verifica Validade
         if (!user.isVitalicio) {
             if (!user.systemValidity || new Date(user.systemValidity) < new Date()) {
-                document.body.innerHTML = "<div style='display:flex; height:100vh; justify-content:center; align-items:center; flex-direction:column; background:#fff3cd; color:#856404;'><h1>SISTEMA VENCIDO</h1><p>Sua licença expirou. Entre em contato para renovar.</p><button onclick='logoutSystem()'>SAIR</button></div>";
+                document.body.innerHTML = "<div style='display:flex;height:100vh;justify-content:center;align-items:center;color:orange;flex-direction:column'><h1>SISTEMA VENCIDO</h1><p>Renove sua licença.</p><button onclick='logoutSystem()'>SAIR</button></div>";
                 return;
             }
         }
 
-        // Mostra Menu Admin
+        // Mostra Menu
         document.getElementById('menu-admin').style.display = 'block';
         
-        // Abre Dashboard por padrão
+        // Abre Home
         var home = document.getElementById('home');
         if(home) { 
             home.style.display = 'block'; 
             setTimeout(() => home.classList.add('active'), 50); 
             
-            // Marca menu ativo
             var menuHome = document.querySelector('.nav-item[data-page="home"]');
             if(menuHome) menuHome.classList.add('active');
         }
         
-        atualizarDashboard();
-        renderizarCalendario();
+        // CORREÇÃO CRÍTICA DO CALENDÁRIO:
+        // Aguarda 300ms para garantir que o DOM (div#calendarGrid) está visível e dimensionado
+        // antes de desenhar o grid. Isso previne o bug de precisar navegar para aparecer.
+        window.currentDate = new Date();
+        setTimeout(() => {
+            console.log("Renderizando Calendário e Dashboard com delay...");
+            renderizarCalendario();
+            atualizarDashboard();
+        }, 300);
 
     } else {
-        // Perfil Funcionário
+        // Funcionário
         document.getElementById('menu-employee').style.display = 'block';
         window.MODO_APENAS_LEITURA = true;
         
@@ -2645,25 +2633,18 @@ window.initSystemByRole = async function(user) {
 };
 
 // -----------------------------------------------------------------------------
-// 4. EVENTOS DE NAVEGAÇÃO E SISTEMA
+// 4. EVENTOS DE NAVEGAÇÃO E BACKUP
 // -----------------------------------------------------------------------------
 
-// Clique no Menu Lateral
 document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', function() {
-        // Remove ativo de todos os menus
         document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
-        
-        // Esconde todas as páginas
         document.querySelectorAll('.page').forEach(page => { 
             page.classList.remove('active'); 
             page.style.display = 'none'; 
         });
         
-        // Ativa o clicado
         this.classList.add('active');
-        
-        // Mostra a página alvo
         var targetId = this.getAttribute('data-page');
         var targetPage = document.getElementById(targetId);
         
@@ -2672,29 +2653,31 @@ document.querySelectorAll('.nav-item').forEach(item => {
             setTimeout(() => targetPage.classList.add('active'), 10); 
         }
         
-        // Fecha menu no mobile
         if (window.innerWidth <= 768) {
             document.getElementById('sidebar').classList.remove('active');
         }
         
-        // Atualizações específicas por página para garantir dados frescos
-        if (targetId === 'home') atualizarDashboard();
+        // Recarrega componentes específicos ao navegar
+        if (targetId === 'home') {
+            // Pequeno delay também na navegação para garantir renderização correta
+            setTimeout(() => {
+                atualizarDashboard();
+                renderizarCalendario();
+            }, 100);
+        }
         if (targetId === 'meus-dados') renderizarMeusDados();
         if (targetId === 'employee-checkin') renderizarCheckinFuncionario();
     });
 });
 
-// Menu Mobile
 document.getElementById('mobileMenuBtn')?.addEventListener('click', () => {
     document.getElementById('sidebar').classList.toggle('active');
 });
 
-// Fechar Menu ao clicar fora (Overlay)
 document.getElementById('sidebarOverlay')?.addEventListener('click', () => {
     document.getElementById('sidebar').classList.remove('active');
 });
 
-// Funções de Backup
 window.exportDataBackup = function() {
     var data = { 
         meta: { date: new Date(), user: window.USUARIO_ATUAL.email }, 
@@ -2714,7 +2697,7 @@ window.exportDataBackup = function() {
 window.importDataBackup = function(event) {
     var reader = new FileReader();
     reader.onload = function(e) {
-        if(confirm("Tem certeza? Isso substituirá os dados atuais pelo backup.")) {
+        if(confirm("Tem certeza? Isso substituirá os dados atuais.")) {
             try {
                 var json = JSON.parse(e.target.result);
                 if(json.data) {
@@ -2722,11 +2705,10 @@ window.importDataBackup = function(event) {
                     localStorage.setItem(CHAVE_DB_VEICULOS, JSON.stringify(json.data.veiculos));
                     localStorage.setItem(CHAVE_DB_OPERACOES, JSON.stringify(json.data.operacoes));
                     localStorage.setItem(CHAVE_DB_DESPESAS, JSON.stringify(json.data.despesas));
-                    
-                    alert("Backup restaurado com sucesso! O sistema será recarregado.");
+                    alert("Restaurado com sucesso! Recarregando...");
                     window.location.reload();
                 } else {
-                    alert("Arquivo de backup inválido.");
+                    alert("Arquivo inválido.");
                 }
             } catch(err) {
                 alert("Erro ao ler arquivo: " + err.message);
