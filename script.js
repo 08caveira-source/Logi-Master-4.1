@@ -2512,6 +2512,10 @@ window.exportarRelatorioPDF = function() {
 // =============================================================================
 
 // 1. ATUALIZAÇÃO DA GERAÇÃO DO NOVO RECIBO (CÁLCULO)
+// =============================================================================
+// CORREÇÃO: BOTÃO SALVAR RECIBO E PROTEÇÃO DE DADOS
+// =============================================================================
+
 window.gerarReciboPagamento = function() {
     var motId = document.getElementById('selectMotoristaRecibo').value;
     var dataIni = document.getElementById('dataInicioRecibo').value;
@@ -2569,9 +2573,8 @@ window.gerarReciboPagamento = function() {
 
             <h3 style="text-align:center; border-bottom:1px dashed #333; padding-bottom:10px; margin-bottom:15px;">RECIBO DE PAGAMENTO</h3>
             
-            <p><strong>BENEFICIÁRIO (RECEBEDOR):</strong><br> ${funcionario.nome}</p>
+            <p><strong>BENEFICIÁRIO:</strong><br> ${funcionario.nome}</p>
             <p style="font-size:0.9rem;">CPF: ${funcionario.documento || '-'}</p>
-            
             <p><strong>PERÍODO:</strong><br> ${formatarDataParaBrasileiro(dataIni)} A ${formatarDataParaBrasileiro(dataFim)}</p>
             
             <table style="width:100%; border-top:1px solid #333; border-bottom:1px solid #333; margin:10px 0; font-size:0.9rem;">
@@ -2593,9 +2596,12 @@ window.gerarReciboPagamento = function() {
     
     document.getElementById('modalReciboContent').innerHTML = htmlRecibo;
     
-    // Botão para Salvar no Histórico e Enviar
+    // CORREÇÃO CRÍTICA: Tratamento de aspas no nome para não quebrar o botão
+    var nomeSafe = funcionario.nome.replace(/'/g, "\\'"); 
+    
+    // Botão para Salvar no Histórico
     document.getElementById('modalReciboActions').innerHTML = `
-        <button class="btn-success" onclick="salvarReciboNoHistorico('${funcionario.id}', '${funcionario.nome}', '${dataIni}', '${dataFim}', ${totalValor})">
+        <button class="btn-success" onclick="salvarReciboNoHistorico('${funcionario.id}', '${nomeSafe}', '${dataIni}', '${dataFim}', ${totalValor})">
             <i class="fas fa-save"></i> SALVAR E REGISTRAR
         </button>
     `;
@@ -2603,60 +2609,42 @@ window.gerarReciboPagamento = function() {
     document.getElementById('modalRecibo').style.display = 'flex';
 };
 
-// 2. ATUALIZAÇÃO DA VISUALIZAÇÃO DE HISTÓRICO (ADMIN E FUNCIONÁRIO)
-window.visualizarReciboExistente = function(reciboId) {
-    var r = CACHE_RECIBOS.find(x => x.id === reciboId);
-    if(!r) return;
-
-    // Busca dados da Empresa (Pagador)
-    var empresa = CACHE_MINHA_EMPRESA || {};
-    var razaoSocial = empresa.razaoSocial || "EMPRESA NÃO CADASTRADA";
-    var cnpjEmpresa = empresa.cnpj || "-";
-    var telEmpresa = empresa.telefone ? formatarTelefoneBrasil(empresa.telefone) : "-";
-
-    var htmlRecibo = `
-        <div id="printAreaRecibo" style="border:2px solid #333; padding:20px; font-family:'Courier New', monospace; background:#fff; max-width:400px; margin:0 auto;">
-            
-            <div style="text-align:center; border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:15px;">
-                <strong style="font-size:1.1rem; text-transform:uppercase;">${razaoSocial}</strong><br>
-                <span style="font-size:0.85rem;">CNPJ: ${cnpjEmpresa}</span><br>
-                <span style="font-size:0.85rem;">Tel: ${telEmpresa}</span>
-            </div>
-
-            <h3 style="text-align:center; border-bottom:2px dashed #333; padding-bottom:10px;">RECIBO DE PAGAMENTO</h3>
-            <p style="text-align:right; font-size:0.8rem;">Emissão: ${formatarDataParaBrasileiro(r.dataEmissao)}</p>
-            
-            <p><strong>BENEFICIÁRIO:</strong><br> ${r.funcionarioNome}</p>
-            <p><strong>PERÍODO REF.:</strong><br> ${r.periodo}</p>
-            
-            <div style="margin:20px 0; border:1px solid #ccc; padding:10px; text-align:center;">
-                <span style="display:block; font-size:0.9rem;">VALOR LÍQUIDO RECEBIDO</span>
-                <strong style="font-size:1.4rem;">${formatarValorMoeda(r.valorTotal)}</strong>
-            </div>
-
-            <p style="font-size:0.8rem; text-align:justify;">
-                Declaro ter recebido a importância supra citada, referente aos serviços prestados (comissões/diárias) no período descrito.
-            </p>
-            
-            <div style="margin-top:50px; text-align:center;">
-                <div style="border-top:1px solid #333; width:80%; margin:0 auto;"></div>
-                <div style="padding-top:5px; font-size:0.8rem;">ASSINATURA DO BENEFICIÁRIO</div>
-            </div>
-            
-            <div style="text-align:center; margin-top:30px; font-size:0.7rem; color:#999;">LOGIMASTER SYSTEM</div>
-        </div>
-    `;
-
-    document.getElementById('modalReciboContent').innerHTML = htmlRecibo;
-    
-    // Ações do Modal (Apenas Imprimir)
-    document.getElementById('modalReciboActions').innerHTML = `
-        <button class="btn-secondary" onclick="imprimirElemento('printAreaRecibo')">
-            <i class="fas fa-print"></i> IMPRIMIR
-        </button>
-    `;
-    
-    document.getElementById('modalRecibo').style.display = 'flex';
+window.salvarReciboNoHistorico = async function(funcId, funcNome, ini, fim, valor) {
+    try {
+        var novoRecibo = { 
+            id: Date.now().toString(), 
+            dataEmissao: new Date().toISOString(), 
+            funcionarioId: funcId, 
+            funcionarioNome: funcNome, 
+            periodo: `${formatarDataParaBrasileiro(ini)} a ${formatarDataParaBrasileiro(fim)}`, 
+            valorTotal: Number(valor), 
+            enviado: false 
+        };
+        
+        var lista = CACHE_RECIBOS || [];
+        lista.push(novoRecibo);
+        
+        await salvarListaRecibos(lista);
+        
+        alert("Recibo salvo no histórico com sucesso!"); 
+        document.getElementById('modalRecibo').style.display = 'none'; 
+        
+        // Verifica qual função de renderização usar (para compatibilidade)
+        if (typeof renderizarPaginaRecibos === 'function') {
+            renderizarPaginaRecibos(); // Usa a nova lógica centralizada
+        } else if (typeof renderizarHistoricoRecibosAdmin === 'function') {
+            renderizarHistoricoRecibosAdmin(); // Usa a lógica do admin
+        } else {
+            // Fallback (se as partes anteriores não foram carregadas corretamente)
+            if(document.querySelector('#tabelaHistoricoRecibos tbody')) {
+               // Recarrega a página para garantir atualização se as funções não existirem
+               window.location.reload(); 
+            }
+        }
+    } catch (erro) {
+        console.error(erro);
+        alert("Erro ao salvar recibo: " + erro.message);
+    }
 };
 // =============================================================================
 // PARTE 5: SUPER ADMIN, MEUS DADOS E INICIALIZAÇÃO
