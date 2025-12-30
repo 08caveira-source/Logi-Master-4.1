@@ -1599,6 +1599,10 @@ function renderizarTabelaOperacoes() {
 }
 
 // MODAL DE VISUALIZAÇÃO DE OPERAÇÃO (COM CÁLCULO REAL)
+// =============================================================================
+// ATUALIZAÇÃO: MODAL DE VISUALIZAÇÃO (ADMIN) COM CHECK-IN E CUSTO REAL
+// =============================================================================
+
 window.visualizarOperacao = function(id) {
     var op = CACHE_OPERACOES.find(o => String(o.id) === String(id));
     if (!op) return;
@@ -1608,57 +1612,129 @@ window.visualizarOperacao = function(id) {
     var cliente = buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial || 'Não encontrado';
     var servico = buscarAtividadePorId(op.atividadeId)?.nome || '-';
     
-    var htmlAjudantes = 'Nenhum';
+    // --- LÓGICA DE FORMATAÇÃO DO CHECK-IN ---
+    function formatarStatusCheckin(valor, isFalta) {
+        if (isFalta) return '<span style="color:red; font-weight:bold;">FALTA REGISTRADA</span>';
+        
+        if (!valor) return '<span style="color:#999; font-style:italic;">Pendente</span>';
+        
+        if (valor === true) return '<span style="color:green;">Confirmado (Legado)</span>';
+        
+        if (typeof valor === 'string' && valor.includes('T')) {
+            var dataObj = new Date(valor);
+            var dataF = dataObj.toLocaleDateString('pt-BR');
+            var horaF = dataObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            return `<span style="color:green; font-weight:bold;"><i class="fas fa-check-circle"></i> ${dataF} às ${horaF}</span>`;
+        }
+        
+        return valor;
+    }
+
+    var checkinMotData = (op.checkins && op.checkins.motorista) ? op.checkins.motorista : null;
+    var faltaMot = (op.checkins && op.checkins.faltaMotorista);
+    var textoCheckinMot = formatarStatusCheckin(checkinMotData, faltaMot);
+
+    // Lista de Ajudantes com Status
+    var htmlAjudantes = '<span style="color:#888;">Nenhum ajudante.</span>';
+    
     if (op.ajudantes && op.ajudantes.length > 0) {
-        htmlAjudantes = '<ul style="margin:5px 0 0 20px; padding:0;">' + 
+        htmlAjudantes = '<ul style="margin:5px 0 0 0; padding:0; list-style:none;">' + 
             op.ajudantes.map(aj => {
                 var f = buscarFuncionarioPorId(aj.id);
-                return `<li>${f ? f.nome : 'Excluído'} (Diária: ${formatarValorMoeda(aj.diaria)})</li>`;
+                var checkAj = (op.checkins && op.checkins.ajudantes) ? op.checkins.ajudantes[aj.id] : null;
+                var faltaAj = (op.checkins && op.checkins.faltas) ? op.checkins.faltas[aj.id] : false;
+                
+                return `
+                    <li style="padding:4px 0; border-bottom:1px dashed #eee;">
+                        <div><strong>${f ? f.nome : 'Excluído'}</strong> <small>(Diária: ${formatarValorMoeda(aj.diaria)})</small></div>
+                        <div style="font-size:0.8rem;">Status: ${formatarStatusCheckin(checkAj, faltaAj)}</div>
+                    </li>`;
             }).join('') + '</ul>';
     }
 
-    // CÁLCULO REAL (PROPORCIONAL) PARA O MODAL
+    // --- CÁLCULO REAL (PROPORCIONAL / MÉDIA GLOBAL) ---
+    // Esta função já consulta a média histórica do veículo no banco
     var custoComb = window.calcularCustoCombustivelOperacao(op);
-    var custoTotal = (Number(op.despesas)||0) + custoComb + (Number(op.comissao)||0);
-    if(op.ajudantes) op.ajudantes.forEach(aj => custoTotal += (Number(aj.diaria)||0));
+    
+    var custoTotal = (Number(op.despesas)||0) + custoComb;
+    
+    // Soma comissão apenas se não faltou
+    if (!faltaMot) {
+        custoTotal += (Number(op.comissao)||0);
+    }
+    
+    // Soma diárias dos ajudantes que não faltaram
+    if(op.ajudantes) {
+        op.ajudantes.forEach(aj => { 
+            if(!(op.checkins?.faltas?.[aj.id])) {
+                custoTotal += (Number(aj.diaria)||0);
+            }
+        });
+    }
+    
     var lucro = (Number(op.faturamento)||0) - custoTotal;
 
+    // --- RENDERIZAÇÃO DO MODAL ---
     var html = `
         <div style="font-size: 0.9rem; color:#333;">
             <div style="background:#f8f9fa; padding:15px; border-radius:6px; margin-bottom:15px; border-left: 5px solid var(--primary-color);">
-                <h3 style="margin:0 0 5px 0; color:var(--primary-color);">OPERAÇÃO #${op.id.substr(-4)}</h3>
+                <div style="display:flex; justify-content:space-between;">
+                    <h3 style="margin:0 0 5px 0; color:var(--primary-color);">OPERAÇÃO #${op.id.substr(-4)}</h3>
+                    <span style="background:#eee; padding:2px 8px; border-radius:4px; font-size:0.8rem;">${op.status}</span>
+                </div>
                 <p><strong>DATA:</strong> ${formatarDataParaBrasileiro(op.data)}</p>
-                <p><strong>STATUS:</strong> ${op.status}</p>
                 <p><strong>CLIENTE:</strong> ${cliente}</p>
                 <p><strong>SERVIÇO:</strong> ${servico}</p>
             </div>
 
-            <div style="margin-bottom:15px;">
-                <h4 style="border-bottom:1px solid #eee; padding-bottom:5px; margin-bottom:10px;">VEÍCULO & EQUIPE</h4>
-                <p><strong>VEÍCULO:</strong> ${op.veiculoPlaca}</p>
-                <p><strong>MOTORISTA:</strong> ${nomeMot}</p>
-                <p><strong>AJUDANTES:</strong></p>
-                ${htmlAjudantes}
-            </div>
+            <div style="margin-bottom:15px; display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                <div>
+                    <h4 style="border-bottom:1px solid #eee; padding-bottom:5px; margin-bottom:10px; color:#555;">EQUIPE & CHECK-IN</h4>
+                    
+                    <div style="margin-bottom:10px;">
+                        <small style="display:block; color:#888;">VEÍCULO</small>
+                        <strong>${op.veiculoPlaca}</strong>
+                    </div>
 
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:15px;">
-                <div style="background:#e8f5e9; padding:10px; border-radius:6px;">
-                    <h4 style="margin:0 0 5px 0; color:var(--success-color);">RECEITA</h4>
-                    <p style="font-size:1.1rem; font-weight:bold;">${formatarValorMoeda(op.faturamento)}</p>
-                    <small>Adiantamento: ${formatarValorMoeda(op.adiantamento)}</small>
+                    <div style="margin-bottom:10px;">
+                        <small style="display:block; color:#888;">MOTORISTA</small>
+                        <strong>${nomeMot}</strong><br>
+                        <small>${textoCheckinMot}</small>
+                    </div>
+
+                    <div>
+                        <small style="display:block; color:#888;">AJUDANTES</small>
+                        ${htmlAjudantes}
+                    </div>
                 </div>
-                <div style="background:#ffebee; padding:10px; border-radius:6px;">
-                    <h4 style="margin:0 0 5px 0; color:var(--danger-color);">CUSTOS REAIS</h4>
-                    <p>Combustível (Est.): ${formatarValorMoeda(custoComb)}</p>
-                    <p>Despesas: ${formatarValorMoeda(op.despesas)}</p>
-                    <hr>
-                    <p><strong>TOTAL: ${formatarValorMoeda(custoTotal)}</strong></p>
+
+                <div>
+                    <h4 style="border-bottom:1px solid #eee; padding-bottom:5px; margin-bottom:10px; color:#555;">FINANCEIRO DA OPERAÇÃO</h4>
+                    
+                    <div style="background:#e8f5e9; padding:10px; border-radius:6px; margin-bottom:10px;">
+                        <h4 style="margin:0 0 5px 0; color:var(--success-color);">RECEITA</h4>
+                        <p style="font-size:1.1rem; font-weight:bold; margin:0;">${formatarValorMoeda(op.faturamento)}</p>
+                        ${op.adiantamento > 0 ? `<small style="color:#d32f2f;">(Adiantamento: ${formatarValorMoeda(op.adiantamento)})</small>` : ''}
+                    </div>
+
+                    <div style="background:#ffebee; padding:10px; border-radius:6px;">
+                        <h4 style="margin:0 0 5px 0; color:var(--danger-color);">CUSTOS REAIS</h4>
+                        <div style="font-size:0.85rem;">
+                            <div style="display:flex; justify-content:space-between;"><span>Combustível (Proporcional):</span> <strong>${formatarValorMoeda(custoComb)}</strong></div>
+                            <div style="display:flex; justify-content:space-between;"><span>Despesas / Pedágios:</span> <strong>${formatarValorMoeda(op.despesas)}</strong></div>
+                            <div style="display:flex; justify-content:space-between;"><span>Comissões / Diárias:</span> <strong>${formatarValorMoeda(custoTotal - custoComb - (Number(op.despesas)||0))}</strong></div>
+                        </div>
+                        <hr style="margin:5px 0; border-color:rgba(0,0,0,0.1);">
+                        <p style="text-align:right; margin:0;"><strong>TOTAL: ${formatarValorMoeda(custoTotal)}</strong></p>
+                    </div>
                 </div>
             </div>
             
-            <div style="background:#e3f2fd; padding:10px; border-radius:6px; text-align:center;">
-                <small>LUCRO LÍQUIDO</small><br>
-                <strong style="font-size:1.3rem; color:${lucro>=0?'#007bff':'red'}">${formatarValorMoeda(lucro)}</strong>
+            <div style="background:#e3f2fd; padding:15px; border-radius:6px; text-align:center; margin-top:10px;">
+                <small style="text-transform:uppercase; color:#1565c0; font-weight:bold;">Lucro Líquido Real</small><br>
+                <strong style="font-size:1.5rem; color:${lucro>=0?'#007bff':'red'}">${formatarValorMoeda(lucro)}</strong>
+                <br>
+                <small style="color:#666;">(Considerando a média km/l do veículo e não o abastecimento cheio)</small>
             </div>
         </div>
     `;
