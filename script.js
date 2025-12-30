@@ -321,8 +321,16 @@ window.toggleDashboardPrivacy = function() {
  * @param {string} placa - Placa do veículo
  * @returns {number} - Média em Km/L
  */
+// =============================================================================
+// CORREÇÃO: CÁLCULO DE MÉDIA DE CONSUMO GLOBAL (HISTÓRICO VITALÍCIO)
+// =============================================================================
+
+/**
+ * Calcula a média global do veículo somando TODO o histórico de KM e TODO o histórico de Litros.
+ * Isso garante que dias onde só houve "KM Rodado" (sem abastecimento) sejam contabilizados na eficiência.
+ */
 window.calcularMediaGlobalVeiculo = function(placa) {
-    // Filtra viagens válidas deste veículo
+    // 1. Filtra todas as viagens válidas (CONFIRMADA ou FINALIZADA) deste veículo
     var ops = CACHE_OPERACOES.filter(function(o) {
         var matchPlaca = (o.veiculoPlaca === placa);
         var matchStatus = (o.status === 'CONFIRMADA' || o.status === 'FINALIZADA');
@@ -330,31 +338,71 @@ window.calcularMediaGlobalVeiculo = function(placa) {
     });
 
     if (ops.length === 0) {
-        return 0;
+        return 0; // Sem histórico
     }
 
-    var totalKm = 0;
-    var totalLitros = 0;
+    var totalKmAcumulado = 0;
+    var totalLitrosAcumulado = 0;
 
-    // Itera sobre as operações para somar KM e Litros
+    // 2. Itera sobre o histórico completo para somar totais
     ops.forEach(function(op) {
-        var km = Number(op.kmRodado) || 0;
+        // Soma TODO km rodado registrado na vida do veículo
+        // Mesmo que o dia não tenha abastecimento, o KM entra na conta da eficiência
+        totalKmAcumulado += (Number(op.kmRodado) || 0);
+
+        // Soma TODO abastecimento registrado na vida do veículo
         var valorAbastecido = Number(op.combustivel) || 0;
         var precoLitro = Number(op.precoLitro) || 0;
         
-        // Só considera para a média se houve abastecimento real E rodagem registrada
-        // Isso evita distorções com lançamentos parciais
-        if (km > 0 && valorAbastecido > 0 && precoLitro > 0) {
-            totalKm += km;
-            totalLitros += (valorAbastecido / precoLitro);
+        // Só soma litros se houve abastecimento e temos o preço para converter R$ em Litros
+        if (valorAbastecido > 0 && precoLitro > 0) {
+            totalLitrosAcumulado += (valorAbastecido / precoLitro);
         }
     });
 
-    if (totalLitros > 0) {
-        return totalKm / totalLitros;
+    // 3. Cálculo da Média Global Real (Km Totais / Litros Totais)
+    if (totalLitrosAcumulado > 0) {
+        var media = totalKmAcumulado / totalLitrosAcumulado;
+        
+        // Trava de segurança para evitar médias absurdas (ex: erro de digitação de 1km com 1000 litros)
+        // Se a média for muito fora da realidade, você pode ajustar aqui, mas deixaremos puro por enquanto.
+        return media;
     } else {
-        return 0;
+        return 0; // Ainda não abasteceu o suficiente para formar uma média
     }
+};
+
+/**
+ * Calcula o custo da viagem atual baseando-se na MÉDIA GLOBAL do veículo.
+ * Se o dia só teve KM rodado, ele pega a média histórica e estima quanto gastou.
+ */
+window.calcularCustoCombustivelOperacao = function(op) {
+    // Cenário 1: Se não tem KM rodado informado, usamos o valor real do abastecimento do dia (se houver)
+    if (!op.kmRodado || op.kmRodado <= 0) {
+        return Number(op.combustivel) || 0; 
+    }
+    
+    if (!op.veiculoPlaca) {
+        return Number(op.combustivel) || 0;
+    }
+
+    // Cenário 2: Tem KM rodado. Vamos calcular o consumo estimado.
+    
+    // Busca a média histórica corrigida (Global)
+    var mediaConsumo = window.calcularMediaGlobalVeiculo(op.veiculoPlaca);
+    
+    // Se não tem histórico suficiente (veículo novo), usa o abastecimento lançado nesta operação como custo
+    if (mediaConsumo <= 0) {
+        return Number(op.combustivel) || 0;
+    }
+
+    // Define o preço do litro para o cálculo (usa o da operação ou a média histórica de preço)
+    var precoLitro = Number(op.precoLitro) || window.obterPrecoMedioCombustivel(op.veiculoPlaca);
+    
+    // CÁLCULO FINAL: (Km da Viagem / Média Global Km/L) * Preço do Litro
+    var custoEstimado = (op.kmRodado / mediaConsumo) * precoLitro;
+    
+    return custoEstimado;
 };
 
 /**
