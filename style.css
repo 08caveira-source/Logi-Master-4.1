@@ -261,3 +261,51 @@ button:hover { filter: brightness(0.9); }
 
 /* 3. Gráfico (Chart) */
 .chart-container canvas { max-width: 100%; }
+/* =============================================================================
+   ADICIONAR AO FINAL DO style.css (NOVOS ESTILOS VERSÃO 4.0)
+   ============================================================================= */
+
+/* Botões de Ação Extras */
+.btn-info {
+    background-color: #17a2b8; /* Azul Claro (Info/Status) */
+    color: white;
+}
+.btn-info:hover {
+    background-color: #138496;
+}
+
+.btn-warning {
+    background-color: #ffc107; /* Amarelo (Reset Senha/Finalizar) */
+    color: #212529;
+}
+.btn-warning:hover {
+    background-color: #e0a800;
+}
+
+/* Status Pills (Etiquetas Coloridas) Atualizadas */
+.status-pill.pill-blocked {
+    background-color: #dc3545; /* Vermelho (Bloqueado) */
+    color: white;
+}
+
+.status-pill.pill-active {
+    background-color: #28a745; /* Verde (Ativo/Vitalício) */
+    color: white;
+}
+
+.status-pill.pill-paused {
+    background-color: #6c757d; /* Cinza (Pausado/Bloqueado) */
+    color: white;
+}
+
+/* Ajuste para os botões ficarem alinhados na tabela */
+.data-table td button {
+    margin-right: 5px;
+    margin-bottom: 2px;
+}
+
+/* Estilo do Modal de Status (Texto Grande) */
+#statusFuncionarioBody h3 {
+    margin-top: 0;
+    color: var(--primary-color);
+}
