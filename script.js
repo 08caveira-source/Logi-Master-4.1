@@ -4525,98 +4525,134 @@ window.excluirUsuarioGlobal = function(uid) {
 };
 
 // =============================================================================
-// CORREÇÃO FINAL: EVENTO DE CLIQUE ROBUSTO PARA "ZERAR SISTEMA"
+// CORREÇÃO DEFINITIVA: SEGURANÇA E RESET DO SISTEMA
 // =============================================================================
 
-// Escuta cliques em QUALQUER lugar do documento
-document.addEventListener('click', function(e) {
-    // Verifica se o elemento clicado é o botão "btnZerarSistema" 
-    // ou se é algum ícone/texto dentro dele (usando .closest)
-    var target = e.target.closest('#btnZerarSistema');
+// 1. GARANTE QUE O MODAL DE SENHA EXISTA NO HTML
+(function garantirModalSenha() {
+    if (document.getElementById('modalSecurityConfirm')) return;
 
-    if (target) {
-        e.preventDefault(); // Evita recarregamentos indesejados
-        console.log(">>> Botão ZERAR SISTEMA detectado.");
-        
-        // Chama a função de segurança
-        if (typeof window.zerarSistemaCompleto === 'function') {
-            window.zerarSistemaCompleto();
-        } else {
-            alert("Erro: A função de zerar sistema não foi carregada corretamente.");
-        }
-    }
-});
-
-// Garante que a função zerarSistemaCompleto esteja definida globalmente
-window.zerarSistemaCompleto = function() {
-    window.solicitarConfirmacaoSenha(
-        "ATENÇÃO MÁXIMA:\n\nVocê está prestes a APAGAR TODOS OS DADOS DA EMPRESA.\nIsso inclui funcionários, veículos, clientes, histórico financeiro e operações.\n\nEsta ação é irreversível.",
-        async function() {
-            var btnZerar = document.getElementById('btnZerarSistema');
-            var textoOriginal = "";
+    var html = `
+    <div id="modalSecurityConfirm" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; align-items:center; justify-content:center;">
+        <div style="background:white; padding:30px; border-radius:10px; width:90%; max-width:450px; text-align:center; box-shadow:0 0 20px rgba(0,0,0,0.5);">
+            <div style="font-size:3rem; color:#dc3545; margin-bottom:15px;"><i class="fas fa-lock"></i></div>
+            <h3 style="margin-bottom:10px; color:#333; font-weight:bold;">CONFIRMAÇÃO DE SEGURANÇA</h3>
+            <p id="securityActionText" style="color:#555; font-size:1rem; margin-bottom:20px;">Esta ação requer permissão administrativa.</p>
             
-            if(btnZerar) {
-                textoOriginal = btnZerar.innerHTML;
-                btnZerar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> LIMPANDO...';
-                btnZerar.disabled = true;
-            }
+            <label style="display:block; text-align:left; margin-bottom:5px; font-weight:bold; font-size:0.8rem;">SUA SENHA DE LOGIN:</label>
+            <input type="password" id="securityPasswordInput" style="width:100%; padding:12px; border:2px solid #ccc; border-radius:6px; font-size:1.1rem; margin-bottom:20px; outline:none;">
+            
+            <div style="display:flex; gap:10px;">
+                <button type="button" class="btn-secondary" style="flex:1; padding:12px;" onclick="document.getElementById('modalSecurityConfirm').style.display='none'">CANCELAR</button>
+                <button type="button" class="btn-danger" style="flex:1; padding:12px;" id="btnConfirmSecurity">CONFIRMAR</button>
+            </div>
+        </div>
+    </div>`;
+
+    var div = document.createElement('div');
+    div.innerHTML = html;
+    document.body.appendChild(div.firstElementChild);
+})();
+
+// 2. FUNÇÃO GLOBAL DE CONFIRMAÇÃO
+window.solicitarConfirmacaoSenha = function(textoAcao, callback) {
+    var modal = document.getElementById('modalSecurityConfirm');
+    var texto = document.getElementById('securityActionText');
+    var input = document.getElementById('securityPasswordInput');
+    var btn = document.getElementById('btnConfirmSecurity');
+
+    if(!modal) return alert("Erro: Modal de segurança não carregado. Recarregue a página.");
+
+    texto.textContent = textoAcao || "Digite sua senha para continuar.";
+    input.value = '';
+    modal.style.display = 'flex';
+    input.focus();
+
+    // Remove event listeners antigos para não duplicar ações
+    var novoBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(novoBtn, btn);
+
+    novoBtn.onclick = async function() {
+        var senha = input.value;
+        if (!senha) return alert("Por favor, digite a senha.");
+
+        var originalHtml = novoBtn.innerHTML;
+        novoBtn.disabled = true;
+        novoBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> VERIFICANDO...';
+
+        try {
+            // Reautenticação Firebase
+            const user = window.dbRef.auth.currentUser;
+            if(!user) throw new Error("Usuário não autenticado.");
+
+            const credential = window.dbRef.EmailAuthProvider.credential(user.email, senha);
+            await window.dbRef.reauthenticateWithCredential(user, credential);
+            
+            // Sucesso
+            modal.style.display = 'none';
+            novoBtn.disabled = false;
+            novoBtn.innerHTML = originalHtml;
+            
+            if (callback) callback();
+
+        } catch (error) {
+            console.error("Erro Auth:", error);
+            novoBtn.disabled = false;
+            novoBtn.innerHTML = originalHtml;
+            alert("SENHA INCORRETA. Ação negada.");
+            input.value = '';
+            input.focus();
+        }
+    };
+};
+
+// 3. FUNÇÃO ZERAR SISTEMA (GLOBAL)
+window.zerarSistemaCompleto = function() {
+    console.log(">>> Solicitando reset do sistema...");
+    
+    window.solicitarConfirmacaoSenha(
+        "ATENÇÃO CRÍTICA:\nVocê está prestes a APAGAR TODOS OS DADOS DA EMPRESA e resetar o sistema para o estado inicial.\n\nEssa ação é irreversível.",
+        async function() {
+            var btn = document.getElementById('btnZerarSistema');
+            if(btn) btn.innerHTML = 'LIMPANDO...';
 
             try {
-                console.log("Iniciando limpeza...");
+                // Limpa LocalStorage
+                localStorage.clear();
+                
+                // Limpa Variáveis
+                CACHE_FUNCIONARIOS = []; CACHE_VEICULOS = []; CACHE_OPERACOES = [];
+                CACHE_CONTRATANTES = []; CACHE_DESPESAS = []; CACHE_RECIBOS = [];
 
-                // 1. Limpa Cache Local (Memória RAM)
-                CACHE_FUNCIONARIOS = [];
-                CACHE_VEICULOS = [];
-                CACHE_CONTRATANTES = [];
-                CACHE_OPERACOES = [];
-                CACHE_DESPESAS = [];
-                CACHE_ATIVIDADES = [];
-                CACHE_PROFILE_REQUESTS = [];
-                CACHE_RECIBOS = [];
-
-                // 2. Limpa LocalStorage
-                localStorage.setItem(CHAVE_DB_FUNCIONARIOS, '[]');
-                localStorage.setItem(CHAVE_DB_VEICULOS, '[]');
-                localStorage.setItem(CHAVE_DB_CONTRATANTES, '[]');
-                localStorage.setItem(CHAVE_DB_OPERACOES, '[]');
-                localStorage.setItem(CHAVE_DB_DESPESAS, '[]');
-                localStorage.setItem(CHAVE_DB_ATIVIDADES, '[]');
-                localStorage.setItem(CHAVE_DB_RECIBOS, '[]');
-
-                // 3. Limpa no Firebase
+                // Limpa Firebase
                 if (window.dbRef && window.USUARIO_ATUAL && window.USUARIO_ATUAL.company) {
                     const { db, doc, writeBatch } = window.dbRef;
                     const batch = writeBatch(db);
                     const companyPath = `companies/${window.USUARIO_ATUAL.company}/data`;
 
                     const chaves = [
-                        CHAVE_DB_FUNCIONARIOS, CHAVE_DB_VEICULOS, CHAVE_DB_CONTRATANTES, 
-                        CHAVE_DB_OPERACOES, CHAVE_DB_DESPESAS, CHAVE_DB_ATIVIDADES, 
-                        CHAVE_DB_PROFILE_REQUESTS, CHAVE_DB_RECIBOS
+                        'db_funcionarios', 'db_veiculos', 'db_contratantes', 
+                        'db_operacoes', 'db_despesas_gerais', 'db_atividades', 
+                        'db_profile_requests', 'db_recibos'
                     ];
 
                     chaves.forEach(chave => {
-                        const ref = doc(db, companyPath, chave);
-                        batch.set(ref, { 
+                        batch.set(doc(db, companyPath, chave), { 
                             items: [], 
                             lastUpdate: new Date().toISOString(), 
                             updatedBy: window.USUARIO_ATUAL.email 
                         });
                     });
-
+                    
                     await batch.commit();
                 }
 
-                alert("SISTEMA ZERADO COM SUCESSO!\nA página será recarregada.");
+                alert("SISTEMA RESETADO COM SUCESSO!\n\nA página será recarregada.");
                 window.location.reload();
 
-            } catch (erro) {
-                console.error(erro);
-                alert("Erro ao zerar sistema: " + erro.message);
-                if(btnZerar) {
-                    btnZerar.innerHTML = textoOriginal;
-                    btnZerar.disabled = false;
-                }
+            } catch(e) {
+                alert("Erro ao resetar: " + e.message);
+                if(btn) btn.innerHTML = 'ERRO';
             }
         }
     );
