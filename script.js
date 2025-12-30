@@ -4524,21 +4524,100 @@ window.excluirUsuarioGlobal = function(uid) {
     );
 };
 
-// 4. VINCULAÇÃO DO BOTÃO "ZERAR SISTEMA" NA UI
-// Procura o botão no carregamento e adiciona o evento
-document.addEventListener('DOMContentLoaded', function() {
-    // Tenta encontrar o botão pelo ID ou classe caso tenha sido criado no HTML
-    var btnZerar = document.getElementById('btnZerarSistema');
-    if (btnZerar) {
-        btnZerar.onclick = window.zerarSistemaCompleto;
-    } else {
-        // Caso o botão não exista no HTML estático, procura se ele é renderizado dinamicamente
-        // ou adiciona um listener global para delegação se necessário
-        document.addEventListener('click', function(e) {
-            if (e.target && e.target.id === 'btnZerarSistema') {
-                e.preventDefault();
-                window.zerarSistemaCompleto();
-            }
-        });
+// =============================================================================
+// CORREÇÃO FINAL: EVENTO DE CLIQUE ROBUSTO PARA "ZERAR SISTEMA"
+// =============================================================================
+
+// Escuta cliques em QUALQUER lugar do documento
+document.addEventListener('click', function(e) {
+    // Verifica se o elemento clicado é o botão "btnZerarSistema" 
+    // ou se é algum ícone/texto dentro dele (usando .closest)
+    var target = e.target.closest('#btnZerarSistema');
+
+    if (target) {
+        e.preventDefault(); // Evita recarregamentos indesejados
+        console.log(">>> Botão ZERAR SISTEMA detectado.");
+        
+        // Chama a função de segurança
+        if (typeof window.zerarSistemaCompleto === 'function') {
+            window.zerarSistemaCompleto();
+        } else {
+            alert("Erro: A função de zerar sistema não foi carregada corretamente.");
+        }
     }
 });
+
+// Garante que a função zerarSistemaCompleto esteja definida globalmente
+window.zerarSistemaCompleto = function() {
+    window.solicitarConfirmacaoSenha(
+        "ATENÇÃO MÁXIMA:\n\nVocê está prestes a APAGAR TODOS OS DADOS DA EMPRESA.\nIsso inclui funcionários, veículos, clientes, histórico financeiro e operações.\n\nEsta ação é irreversível.",
+        async function() {
+            var btnZerar = document.getElementById('btnZerarSistema');
+            var textoOriginal = "";
+            
+            if(btnZerar) {
+                textoOriginal = btnZerar.innerHTML;
+                btnZerar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> LIMPANDO...';
+                btnZerar.disabled = true;
+            }
+
+            try {
+                console.log("Iniciando limpeza...");
+
+                // 1. Limpa Cache Local (Memória RAM)
+                CACHE_FUNCIONARIOS = [];
+                CACHE_VEICULOS = [];
+                CACHE_CONTRATANTES = [];
+                CACHE_OPERACOES = [];
+                CACHE_DESPESAS = [];
+                CACHE_ATIVIDADES = [];
+                CACHE_PROFILE_REQUESTS = [];
+                CACHE_RECIBOS = [];
+
+                // 2. Limpa LocalStorage
+                localStorage.setItem(CHAVE_DB_FUNCIONARIOS, '[]');
+                localStorage.setItem(CHAVE_DB_VEICULOS, '[]');
+                localStorage.setItem(CHAVE_DB_CONTRATANTES, '[]');
+                localStorage.setItem(CHAVE_DB_OPERACOES, '[]');
+                localStorage.setItem(CHAVE_DB_DESPESAS, '[]');
+                localStorage.setItem(CHAVE_DB_ATIVIDADES, '[]');
+                localStorage.setItem(CHAVE_DB_RECIBOS, '[]');
+
+                // 3. Limpa no Firebase
+                if (window.dbRef && window.USUARIO_ATUAL && window.USUARIO_ATUAL.company) {
+                    const { db, doc, writeBatch } = window.dbRef;
+                    const batch = writeBatch(db);
+                    const companyPath = `companies/${window.USUARIO_ATUAL.company}/data`;
+
+                    const chaves = [
+                        CHAVE_DB_FUNCIONARIOS, CHAVE_DB_VEICULOS, CHAVE_DB_CONTRATANTES, 
+                        CHAVE_DB_OPERACOES, CHAVE_DB_DESPESAS, CHAVE_DB_ATIVIDADES, 
+                        CHAVE_DB_PROFILE_REQUESTS, CHAVE_DB_RECIBOS
+                    ];
+
+                    chaves.forEach(chave => {
+                        const ref = doc(db, companyPath, chave);
+                        batch.set(ref, { 
+                            items: [], 
+                            lastUpdate: new Date().toISOString(), 
+                            updatedBy: window.USUARIO_ATUAL.email 
+                        });
+                    });
+
+                    await batch.commit();
+                }
+
+                alert("SISTEMA ZERADO COM SUCESSO!\nA página será recarregada.");
+                window.location.reload();
+
+            } catch (erro) {
+                console.error(erro);
+                alert("Erro ao zerar sistema: " + erro.message);
+                if(btnZerar) {
+                    btnZerar.innerHTML = textoOriginal;
+                    btnZerar.disabled = false;
+                }
+            }
+        }
+    );
+};
