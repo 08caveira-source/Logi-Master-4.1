@@ -976,6 +976,10 @@ document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
 // -----------------------------------------------------------------------------
 // 1. CADASTRO DE FUNCIONÁRIOS (COM TRATAMENTO DE EMAIL DUPLICADO)
 // -----------------------------------------------------------------------------
+// =============================================================================
+// ATUALIZAÇÃO: CADASTRO COM RECUPERAÇÃO DE PERFIL PERDIDO
+// =============================================================================
+
 document.addEventListener('submit', async function(e) {
     if (e.target.id === 'formFuncionario') {
         e.preventDefault();
@@ -983,7 +987,7 @@ document.addEventListener('submit', async function(e) {
         var btnSubmit = e.target.querySelector('button[type="submit"]');
         var textoOriginal = btnSubmit.innerHTML;
         btnSubmit.disabled = true;
-        btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
+        btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> SALVANDO...';
 
         try {
             var id = document.getElementById('funcionarioId').value || Date.now().toString();
@@ -992,44 +996,10 @@ document.addEventListener('submit', async function(e) {
             var funcao = document.getElementById('funcFuncao').value;
             var nome = document.getElementById('funcNome').value.toUpperCase();
             
-            // Verifica se é criação de novo login (Sem ID prévio + Senha preenchida)
             var criarLogin = (!document.getElementById('funcionarioId').value && senha);
             var novoUID = id; 
 
-            if (criarLogin) {
-                if(senha.length < 6) throw new Error("A senha deve ter no mínimo 6 dígitos.");
-                
-                try {
-                    // Tenta criar usuário no Auth
-                    novoUID = await window.dbRef.criarAuthUsuario(email, senha);
-                    
-                    // Salva metadados do usuário
-                    await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "users", novoUID), {
-                        uid: novoUID, 
-                        name: nome, 
-                        email: email, 
-                        role: funcao,
-                        company: window.USUARIO_ATUAL.company, 
-                        createdAt: new Date().toISOString(), 
-                        approved: true, 
-                        senhaVisual: senha
-                    });
-
-                } catch (authError) {
-                    // SE O EMAIL JÁ EXISTE: Permite salvar apenas os dados cadastrais
-                    if (authError.code === 'auth/email-already-in-use') {
-                        var confirmar = confirm(`O e-mail "${email}" JÁ POSSUI UM LOGIN no sistema.\n\nDeseja cadastrar apenas os dados do funcionário? (O login antigo será mantido).`);
-                        
-                        if (!confirmar) {
-                            throw new Error("Operação cancelada pelo usuário.");
-                        }
-                        // Segue usando o ID gerado por data, sem criar novo Auth
-                    } else {
-                        throw authError; // Outros erros (ex: senha fraca) param o processo
-                    }
-                }
-            }
-
+            // Objeto base do funcionário
             var funcionarioObj = {
                 id: novoUID, 
                 nome: nome, 
@@ -1044,25 +1014,74 @@ document.addEventListener('submit', async function(e) {
                 categoriaCNH: document.getElementById('funcCategoriaCNH').value, 
                 cursoDescricao: document.getElementById('funcCursoDescricao').value
             };
-            
-            if (senha) { 
-                funcionarioObj.senhaVisual = senha; 
+            if (senha) funcionarioObj.senhaVisual = senha;
+
+            if (criarLogin) {
+                if(senha.length < 6) throw new Error("A senha deve ter no mínimo 6 dígitos.");
+                
+                try {
+                    // 1. Tenta criar novo usuário
+                    novoUID = await window.dbRef.criarAuthUsuario(email, senha);
+                    funcionarioObj.id = novoUID; // Atualiza ID com o UID real do Auth
+
+                    // 2. Cria o Perfil no Firestore (Sucesso)
+                    await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "users", novoUID), {
+                        uid: novoUID, name: nome, email: email, role: funcao,
+                        company: window.USUARIO_ATUAL.company, createdAt: new Date().toISOString(),
+                        approved: true, isBlocked: false, senhaVisual: senha
+                    });
+
+                } catch (authError) {
+                    // SE O EMAIL JÁ EXISTE NO AUTH (Erro comum após resetar sistema)
+                    if (authError.code === 'auth/email-already-in-use') {
+                        
+                        var confirmar = confirm(`O e-mail "${email}" já possui login no sistema (provavelmente de um cadastro anterior).\n\nDeseja restaurar o acesso deste usuário com os dados informados agora?`);
+                        
+                        if (confirmar) {
+                            // TENTATIVA DE RECUPERAÇÃO:
+                            // Como não temos o UID do usuário antigo (segurança do firebase),
+                            // Vamos salvar com o ID gerado (timestamp) localmente,
+                            // MAS avisar que o login pode precisar de reset de senha ou backup.
+                            
+                            // Porém, se o usuário estiver no Cache (backup), usamos o ID dele!
+                            var usuarioExistenteCache = CACHE_FUNCIONARIOS.find(f => f.email === email);
+                            if (usuarioExistenteCache) {
+                                funcionarioObj.id = usuarioExistenteCache.id; // Usa o UID correto
+                                
+                                // Recria o documento na nuvem usando o ID correto do backup/cache
+                                await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "users", funcionarioObj.id), {
+                                    uid: funcionarioObj.id, name: nome, email: email, role: funcao,
+                                    company: window.USUARIO_ATUAL.company, approved: true, isBlocked: false,
+                                    senhaVisual: senha
+                                }, { merge: true });
+                                
+                                alert("Perfil de acesso restaurado com sucesso! O usuário deve conseguir logar agora.");
+                            } else {
+                                alert("ATENÇÃO: O login existe no servidor, mas não foi possível recuperar o ID original automaticamente.\n\nRecomendação: Use a opção 'IMPORTAR BACKUP' para restaurar os usuários corretamente ou contate o suporte para limpeza do banco.");
+                            }
+                        } else {
+                            throw new Error("Operação cancelada.");
+                        }
+                    } else {
+                        throw authError;
+                    }
+                }
             }
 
-            // Atualiza lista local (Remove anterior e adiciona novo)
-            var lista = CACHE_FUNCIONARIOS.filter(f => f.email !== email && f.id !== id);
+            // Atualiza lista local
+            var lista = CACHE_FUNCIONARIOS.filter(f => f.email !== email && f.id !== funcionarioObj.id);
             lista.push(funcionarioObj);
             
             await salvarListaFuncionarios(lista);
             
-            alert("Funcionário Salvo com Sucesso!");
+            alert("Dados salvos com sucesso!");
             e.target.reset(); 
             document.getElementById('funcionarioId').value = '';
             toggleDriverFields(); 
             preencherTodosSelects();
 
         } catch (erro) { 
-            if (erro.message !== "Operação cancelada pelo usuário.") {
+            if (erro.message !== "Operação cancelada.") {
                 alert("Erro: " + erro.message); 
             }
         } finally { 
@@ -1071,6 +1090,7 @@ document.addEventListener('submit', async function(e) {
         }
     }
 });
+
 
 // -----------------------------------------------------------------------------
 // 2. CADASTRO DE VEÍCULOS
@@ -3329,34 +3349,37 @@ window.exportDataBackup = function() {
 // CORREÇÃO: IMPORTAÇÃO DE BACKUP COM RESTAURAÇÃO NA NUVEM (FIREBASE)
 // =============================================================================
 
+// =============================================================================
+// CORREÇÃO CRÍTICA: RESTAURAÇÃO DE BACKUP COM RECRIAÇÃO DE PERFIS DE USUÁRIO
+// =============================================================================
+
 window.importDataBackup = function(event) {
     var file = event.target.files[0];
     if (!file) return;
 
     var reader = new FileReader();
     reader.onload = async function(e) {
-        if(!confirm("ATENÇÃO: A restauração substituirá os dados ATUAIS (Locais e na Nuvem) pelos dados do arquivo de backup.\n\nDeseja continuar?")) {
-            event.target.value = ''; // Limpa o input file
+        if(!confirm("ATENÇÃO: Isso irá restaurar TODOS os dados e recriar os perfis de acesso dos funcionários.\n\nDeseja continuar?")) {
+            event.target.value = '';
             return;
         }
         
-        // Mostra indicador de carregamento
+        // Overlay de Carregamento
         var statusDiv = document.createElement('div');
         statusDiv.id = 'restoreStatusOverlay';
-        statusDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(255,255,255,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;';
-        statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin fa-3x" style="color:var(--primary-color);"></i><h3 style="margin-top:20px;">Restaurando Dados... Por favor, aguarde.</h3><p>Não feche esta janela.</p>';
+        statusDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(255,255,255,0.95);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;';
+        statusDiv.innerHTML = '<i class="fas fa-sync fa-spin fa-3x" style="color:var(--primary-color); margin-bottom:20px;"></i><h3>Restaurando Sistema...</h3><p id="restoreStatusText">Lendo arquivo...</p>';
         document.body.appendChild(statusDiv);
+        
+        var statusText = document.getElementById('restoreStatusText');
 
         try {
             var json = JSON.parse(e.target.result);
+            if(!json.data) throw new Error("Arquivo inválido.");
 
-            if(!json.data || !json.meta) {
-                throw new Error("Arquivo de backup inválido ou corrompido.");
-            }
+            statusText.textContent = "Recuperando dados locais...";
 
-            console.log("Iniciando restauração do backup de:", json.meta.date);
-
-            // 1. Restaura no LocalStorage
+            // 1. Restaura LocalStorage
             localStorage.setItem(CHAVE_DB_FUNCIONARIOS, JSON.stringify(json.data.funcionarios || []));
             localStorage.setItem(CHAVE_DB_VEICULOS, JSON.stringify(json.data.veiculos || []));
             localStorage.setItem(CHAVE_DB_OPERACOES, JSON.stringify(json.data.operacoes || []));
@@ -3364,57 +3387,70 @@ window.importDataBackup = function(event) {
             localStorage.setItem(CHAVE_DB_CONTRATANTES, JSON.stringify(json.data.contratantes || []));
             localStorage.setItem(CHAVE_DB_ATIVIDADES, JSON.stringify(json.data.atividades || []));
             localStorage.setItem(CHAVE_DB_RECIBOS, JSON.stringify(json.data.recibos || []));
-            
-            // Se houver dados da empresa no backup, restaura também
-            if(json.data.minhaEmpresa) {
-                localStorage.setItem(CHAVE_DB_MINHA_EMPRESA, JSON.stringify(json.data.minhaEmpresa));
-            }
+            if(json.data.minhaEmpresa) localStorage.setItem(CHAVE_DB_MINHA_EMPRESA, JSON.stringify(json.data.minhaEmpresa));
 
-            // 2. Sincroniza TUDO de volta para o Firebase (Se estiver online e logado)
+            // 2. Sincroniza Dados da Empresa na Nuvem
             if (window.dbRef && window.USUARIO_ATUAL && window.USUARIO_ATUAL.company) {
+                statusText.textContent = "Sincronizando banco de dados...";
                 const { db, doc, writeBatch } = window.dbRef;
                 const batch = writeBatch(db);
                 const companyPath = `companies/${window.USUARIO_ATUAL.company}/data`;
-                const metaInfo = { lastUpdate: new Date().toISOString(), updatedBy: 'RESTORE_BACKUP' };
+                
+                // Helper de sanitização
+                const sanitizar = (d) => JSON.parse(JSON.stringify(d || []));
 
-                // Helper para sanitizar dados antes de enviar (evita erros de undefined)
-                const sanitizar = (dados) => JSON.parse(JSON.stringify(dados));
-
-                batch.set(doc(db, companyPath, CHAVE_DB_FUNCIONARIOS), { items: sanitizar(json.data.funcionarios || []), ...metaInfo });
-                batch.set(doc(db, companyPath, CHAVE_DB_VEICULOS), { items: sanitizar(json.data.veiculos || []), ...metaInfo });
-                batch.set(doc(db, companyPath, CHAVE_DB_OPERACOES), { items: sanitizar(json.data.operacoes || []), ...metaInfo });
-                batch.set(doc(db, companyPath, CHAVE_DB_DESPESAS), { items: sanitizar(json.data.despesas || []), ...metaInfo });
-                batch.set(doc(db, companyPath, CHAVE_DB_CONTRATANTES), { items: sanitizar(json.data.contratantes || []), ...metaInfo });
-                batch.set(doc(db, companyPath, CHAVE_DB_ATIVIDADES), { items: sanitizar(json.data.atividades || []), ...metaInfo });
-                batch.set(doc(db, companyPath, CHAVE_DB_RECIBOS), { items: sanitizar(json.data.recibos || []), ...metaInfo });
+                batch.set(doc(db, companyPath, CHAVE_DB_FUNCIONARIOS), { items: sanitizar(json.data.funcionarios) });
+                batch.set(doc(db, companyPath, CHAVE_DB_VEICULOS), { items: sanitizar(json.data.veiculos) });
+                batch.set(doc(db, companyPath, CHAVE_DB_OPERACOES), { items: sanitizar(json.data.operacoes) });
+                batch.set(doc(db, companyPath, CHAVE_DB_DESPESAS), { items: sanitizar(json.data.despesas) });
+                batch.set(doc(db, companyPath, CHAVE_DB_CONTRATANTES), { items: sanitizar(json.data.contratantes) });
+                batch.set(doc(db, companyPath, CHAVE_DB_ATIVIDADES), { items: sanitizar(json.data.atividades) });
+                batch.set(doc(db, companyPath, CHAVE_DB_RECIBOS), { items: sanitizar(json.data.recibos) });
                 
                 if(json.data.minhaEmpresa) {
-                    batch.set(doc(db, companyPath, CHAVE_DB_MINHA_EMPRESA), { items: sanitizar(json.data.minhaEmpresa), ...metaInfo });
+                    batch.set(doc(db, companyPath, CHAVE_DB_MINHA_EMPRESA), { items: sanitizar(json.data.minhaEmpresa) });
                 }
 
-                console.log("Enviando dados restaurados para a nuvem...");
                 await batch.commit();
-                console.log("Sincronização na nuvem concluída.");
+
+                // 3. CRÍTICO: RECRIA PERFIS DE USUÁRIO NA RAIZ (CORREÇÃO DO ERRO DE LOGIN)
+                statusText.textContent = "Restaurando perfis de acesso dos funcionários...";
+                
+                var listaFunc = json.data.funcionarios || [];
+                // Processa em lotes pequenos para não estourar limite
+                for (let i = 0; i < listaFunc.length; i++) {
+                    let f = listaFunc[i];
+                    // Só recria perfil se tiver ID e Email válidos
+                    if (f.id && f.email && f.email.includes('@')) {
+                        try {
+                            // Tenta atualizar ou criar o documento do usuário
+                            // Isso "conserta" o erro de Perfil Não Encontrado
+                            await window.dbRef.setDoc(window.dbRef.doc(db, "users", f.id), {
+                                uid: f.id,
+                                name: f.nome,
+                                email: f.email,
+                                role: f.funcao,
+                                company: window.USUARIO_ATUAL.company,
+                                isBlocked: f.isBlocked || false,
+                                approved: true,
+                                senhaVisual: f.senhaVisual || '******' // Restaura a senha visual se existir
+                            }, { merge: true });
+                        } catch(errProfile) {
+                            console.warn("Erro ao restaurar perfil de " + f.nome, errProfile);
+                        }
+                    }
+                }
             }
 
-            alert("SUCESSO!\nTodos os dados foram restaurados e sincronizados.\nO sistema será recarregado.");
+            alert("RESTAURAÇÃO COMPLETA!\n\nOs dados foram recuperados e os perfis de acesso corrigidos.\nA página será recarregada.");
             window.location.reload();
 
         } catch(err) {
-            console.error("Erro na restauração:", err);
-            alert("FALHA AO RESTAURAR BACKUP:\n" + err.message);
-            if(document.getElementById('restoreStatusOverlay')) {
-                document.body.removeChild(document.getElementById('restoreStatusOverlay'));
-            }
-            event.target.value = ''; // Limpa o input file
+            console.error(err);
+            alert("Erro fatal na restauração: " + err.message);
+            if(document.getElementById('restoreStatusOverlay')) document.body.removeChild(document.getElementById('restoreStatusOverlay'));
         }
     };
-    
-    reader.onerror = function() {
-        alert("Erro ao ler o arquivo.");
-        event.target.value = '';
-    };
-    
     reader.readAsText(file);
 };
 
