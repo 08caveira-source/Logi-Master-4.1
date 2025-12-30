@@ -3146,3 +3146,288 @@ window.importDataBackup = function(event) {
     };
     reader.readAsText(event.target.files[0]);
 };
+
+// =============================================================================
+// PARTE 6: FUNÇÕES DO PAINEL DO FUNCIONÁRIO (CORREÇÃO CHECK-IN)
+// =============================================================================
+
+/**
+ * Renderiza o Painel de Check-in do Funcionário (Motorista ou Ajudante).
+ * Mostra viagens agendadas ou em andamento vinculadas ao usuário logado.
+ */
+window.renderizarCheckinFuncionario = function() {
+    var container = document.getElementById('checkin-container');
+    if (!container || !window.USUARIO_ATUAL) return;
+
+    var uid = window.USUARIO_ATUAL.uid;
+    container.innerHTML = '';
+
+    // Filtra operações onde o usuário é motorista ou ajudante
+    // E que não estejam canceladas ou finalizadas (apenas ativas)
+    var minhasOps = CACHE_OPERACOES.filter(function(op) {
+        var souMotorista = (String(op.motoristaId) === String(uid));
+        var souAjudante = (op.ajudantes && op.ajudantes.some(a => String(a.id) === String(uid)));
+        
+        var isAtiva = (op.status === 'AGENDADA' || op.status === 'EM_ANDAMENTO');
+        
+        return (souMotorista || souAjudante) && isAtiva;
+    });
+
+    if (minhasOps.length === 0) {
+        container.innerHTML = `
+            <div style="text-align:center; padding:40px; color:#888;">
+                <i class="fas fa-clipboard-check" style="font-size:3rem; margin-bottom:15px; opacity:0.5;"></i>
+                <p>Nenhuma viagem agendada ou em andamento para você no momento.</p>
+            </div>`;
+        return;
+    }
+
+    minhasOps.forEach(function(op) {
+        var souMotorista = (String(op.motoristaId) === String(uid));
+        var cliente = buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial || 'Cliente não identificado';
+        var veiculo = op.veiculoPlaca || 'Sem Veículo';
+        
+        // Determina o estado do botão de ação
+        var btnHtml = '';
+        var statusLabel = '';
+
+        // Lógica para MOTORISTA
+        if (souMotorista) {
+            var checkInFeito = (op.checkins && op.checkins.motorista);
+            
+            if (!checkInFeito) {
+                // Cenário 1: Viagem Agendada, precisa Iniciar
+                statusLabel = '<span class="status-pill pill-pending">AGUARDANDO INÍCIO</span>';
+                btnHtml = `<button class="btn-primary" style="width:100%; padding:15px; font-size:1.1rem;" onclick="abrirModalCheckin('${op.id}', 'INICIO')"><i class="fas fa-play"></i> INICIAR VIAGEM (CHECK-IN)</button>`;
+            } else {
+                // Cenário 2: Viagem em Andamento, precisa Finalizar
+                statusLabel = '<span class="status-pill" style="background:orange; color:white;">EM ROTA</span>';
+                btnHtml = `<button class="btn-warning" style="width:100%; padding:15px; font-size:1.1rem;" onclick="abrirModalCheckin('${op.id}', 'FIM')"><i class="fas fa-flag-checkered"></i> FINALIZAR VIAGEM</button>`;
+            }
+        } 
+        // Lógica para AJUDANTE
+        else {
+            var jaConfirmou = (op.checkins && op.checkins.ajudantes && op.checkins.ajudantes[uid]);
+            
+            if (!jaConfirmou) {
+                statusLabel = '<span class="status-pill pill-pending">PENDENTE</span>';
+                btnHtml = `<button class="btn-success" style="width:100%; padding:15px;" onclick="confirmarCheckinAjudante('${op.id}')"><i class="fas fa-check-circle"></i> CONFIRMAR PRESENÇA</button>`;
+            } else {
+                statusLabel = '<span class="status-pill pill-active">PRESENÇA CONFIRMADA</span>';
+                btnHtml = `<button disabled class="btn-secondary" style="width:100%; opacity:0.7;"><i class="fas fa-check"></i> VOCÊ JÁ FEZ O CHECK-IN</button>`;
+            }
+        }
+
+        // Renderiza o Card
+        var card = document.createElement('div');
+        card.style.border = '1px solid #ddd';
+        card.style.borderRadius = '8px';
+        card.style.padding = '15px';
+        card.style.marginBottom = '20px';
+        card.style.background = '#fff';
+        card.style.boxShadow = '0 2px 5px rgba(0,0,0,0.05)';
+        
+        card.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+                <div>
+                    <h3 style="margin:0; color:var(--primary-color); font-size:1.1rem;">${cliente}</h3>
+                    <small style="color:#666;">Data: ${formatarDataParaBrasileiro(op.data)}</small>
+                </div>
+                ${statusLabel}
+            </div>
+            
+            <div style="background:#f8f9fa; padding:10px; border-radius:5px; margin-bottom:15px; font-size:0.95rem;">
+                <p style="margin:5px 0;"><i class="fas fa-truck"></i> <strong>Veículo:</strong> ${veiculo}</p>
+                <p style="margin:5px 0;"><i class="fas fa-user-tag"></i> <strong>Sua Função:</strong> ${souMotorista ? 'MOTORISTA' : 'AJUDANTE'}</p>
+            </div>
+            
+            ${btnHtml}
+        `;
+        
+        container.appendChild(card);
+    });
+};
+
+/**
+ * Abre o Modal de Confirmação de Check-in para o Motorista.
+ * @param {string} opId - ID da Operação
+ * @param {string} step - 'INICIO' ou 'FIM'
+ */
+window.abrirModalCheckin = function(opId, step) {
+    var op = CACHE_OPERACOES.find(o => String(o.id) === String(opId));
+    if (!op) return;
+
+    var cliente = buscarContratantePorCnpj(op.contratanteCNPJ)?.razaoSocial || '-';
+
+    // Preenche dados do modal
+    document.getElementById('checkinOpId').value = opId;
+    document.getElementById('checkinStep').value = step;
+    
+    document.getElementById('checkinDisplayData').textContent = formatarDataParaBrasileiro(op.data);
+    document.getElementById('checkinDisplayContratante').textContent = cliente;
+    document.getElementById('checkinDisplayVeiculo').textContent = op.veiculoPlaca;
+    
+    var divDriver = document.getElementById('checkinDriverFields');
+    var divKmIni = document.getElementById('divKmInicial');
+    var divKmFim = document.getElementById('divKmFinal');
+    var btn = document.getElementById('btnConfirmCheckin');
+
+    divDriver.style.display = 'block';
+
+    if (step === 'INICIO') {
+        document.getElementById('checkinModalTitle').textContent = "INICIAR VIAGEM";
+        divKmIni.style.display = 'block';
+        divKmFim.style.display = 'none';
+        btn.innerHTML = '<i class="fas fa-play"></i> CONFIRMAR INÍCIO';
+        btn.className = 'btn-primary';
+        
+        // Tenta preencher KM inicial com base no KM final da última viagem do veículo
+        var kmSugerido = op.veiculoPlaca ? buscarUltimoKmVeiculo(op.veiculoPlaca) : '';
+        document.getElementById('checkinKmInicial').value = kmSugerido;
+        
+    } else {
+        document.getElementById('checkinModalTitle').textContent = "FINALIZAR VIAGEM";
+        divKmIni.style.display = 'none';
+        divKmFim.style.display = 'block';
+        btn.innerHTML = '<i class="fas fa-flag-checkered"></i> CONFIRMAR TÉRMINO';
+        btn.className = 'btn-warning';
+        
+        // Passa o KM inicial que foi salvo para validação
+        document.getElementById('checkinKmInicialReadonly').value = op.kmInicial || 0;
+    }
+
+    document.getElementById('modalCheckinConfirm').style.display = 'flex';
+};
+
+/**
+ * Busca o último KM registrado de um veículo para sugerir no input.
+ */
+function buscarUltimoKmVeiculo(placa) {
+    var opsDoVeiculo = CACHE_OPERACOES.filter(o => o.veiculoPlaca === placa && o.kmFinal > 0);
+    if (opsDoVeiculo.length === 0) return '';
+    
+    // Ordena para pegar a mais recente
+    opsDoVeiculo.sort((a,b) => new Date(b.data) - new Date(a.data));
+    return opsDoVeiculo[0].kmFinal;
+}
+
+/**
+ * Processa o formulário de Check-in do Motorista (Início ou Fim).
+ */
+document.getElementById('formCheckinConfirm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    var opId = document.getElementById('checkinOpId').value;
+    var step = document.getElementById('checkinStep').value;
+    var op = CACHE_OPERACOES.find(o => String(o.id) === String(opId));
+    
+    if (!op) return;
+
+    if (!op.checkins) op.checkins = {};
+
+    // Atualização dos dados
+    if (step === 'INICIO') {
+        var kmIni = Number(document.getElementById('checkinKmInicial').value);
+        if (kmIni <= 0) return alert("Informe o KM Inicial válido.");
+
+        op.kmInicial = kmIni;
+        op.checkins.motorista = true; // Marca que iniciou
+        op.status = 'EM_ANDAMENTO';
+        
+    } else { // FIM
+        var kmFinal = Number(document.getElementById('checkinKmFinal').value);
+        var kmIni = Number(document.getElementById('checkinKmInicialReadonly').value);
+        var abastecido = Number(document.getElementById('checkinValorAbastecido').value);
+        var preco = Number(document.getElementById('checkinPrecoLitroConfirm').value);
+
+        if (kmFinal <= kmIni) return alert(`O KM Final deve ser maior que o Inicial (${kmIni}).`);
+
+        op.kmFinal = kmFinal;
+        op.kmRodado = kmFinal - (op.kmInicial || 0); // Calcula KM Rodado automaticamente
+        
+        if (abastecido > 0) op.combustivel = abastecido;
+        if (preco > 0) op.precoLitro = preco;
+
+        op.status = 'FINALIZADA'; // Ou 'CONFIRMADA' se preferir fluxo de aprovação
+    }
+
+    await salvarListaOperacoes(CACHE_OPERACOES);
+    
+    alert(step === 'INICIO' ? "Viagem Iniciada!" : "Viagem Finalizada com Sucesso!");
+    closeCheckinConfirmModal();
+    renderizarCheckinFuncionario();
+});
+
+/**
+ * Ajudante confirma presença com um clique.
+ */
+window.confirmarCheckinAjudante = async function(opId) {
+    if (!confirm("Confirmar sua presença nesta operação?")) return;
+
+    var op = CACHE_OPERACOES.find(o => String(o.id) === String(opId));
+    if (!op) return;
+
+    if (!op.checkins) op.checkins = {};
+    if (!op.checkins.ajudantes) op.checkins.ajudantes = {};
+
+    var uid = window.USUARIO_ATUAL.uid;
+    op.checkins.ajudantes[uid] = true;
+
+    await salvarListaOperacoes(CACHE_OPERACOES);
+    
+    alert("Presença Confirmada!");
+    renderizarCheckinFuncionario();
+};
+
+/**
+ * Filtra e exibe o histórico de serviços do funcionário.
+ */
+window.filtrarServicosFuncionario = function(uid) {
+    var tbody = document.querySelector('#tabelaMeusServicos tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    var ini = document.getElementById('dataInicioServicosFunc').value;
+    var fim = document.getElementById('dataFimServicosFunc').value;
+    
+    if (!ini || !fim) return alert("Selecione o período.");
+
+    var totalGanho = 0;
+
+    CACHE_OPERACOES.forEach(op => {
+        if (op.status === 'CANCELADA' || op.data < ini || op.data > fim) return;
+        
+        var valor = 0;
+        var funcao = '-';
+        
+        if (String(op.motoristaId) === String(uid)) {
+            // Se não teve falta, soma comissão
+            if (!op.checkins || !op.checkins.faltaMotorista) {
+                valor = Number(op.comissao) || 0;
+                funcao = 'MOTORISTA';
+            }
+        } else if (op.ajudantes && op.ajudantes.some(a => String(a.id) === String(uid))) {
+            // Se não teve falta, soma diária
+            if (!op.checkins || !op.checkins.faltas || !op.checkins.faltas[uid]) {
+                var ajData = op.ajudantes.find(a => String(a.id) === String(uid));
+                valor = Number(ajData.diaria) || 0;
+                funcao = 'AJUDANTE';
+            }
+        }
+
+        if (valor > 0) {
+            totalGanho += valor;
+            var tr = document.createElement('tr');
+            tr.innerHTML = `<td>${formatarDataParaBrasileiro(op.data)}</td><td>${op.veiculoPlaca}</td><td>${funcao}</td><td>${formatarValorMoeda(valor)}</td>`;
+            tbody.appendChild(tr);
+        }
+    });
+    
+    // Linha de Total
+    var trTotal = document.createElement('tr');
+    trTotal.style.fontWeight = 'bold';
+    trTotal.style.background = '#f0f0f0';
+    trTotal.innerHTML = `<td colspan="3" style="text-align:right;">TOTAL NO PERÍODO:</td><td>${formatarValorMoeda(totalGanho)}</td>`;
+    tbody.appendChild(trTotal);
+};
