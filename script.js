@@ -77,6 +77,15 @@ function formatarValorMoeda(valor) {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numero);
 }
 
+function parseValorBrasileiro(valor) {
+    if (typeof valor === 'number') return valor;
+    if (!valor) return 0;
+    var str = String(valor).trim();
+    if (str.includes(',') && str.includes('.')) str = str.replace(/\./g, '').replace(',', '.');
+    else if (str.includes(',')) str = str.replace(',', '.');
+    return parseFloat(str) || 0;
+}
+
 // Converte data ISO (YYYY-MM-DD) para Brasileiro (DD/MM/YYYY)
 function formatarDataParaBrasileiro(dataIso) {
     if (!dataIso) {
@@ -536,7 +545,10 @@ window.atualizarDashboard = function() {
 
     // Cálculos Finais de Lucro e Margem
     var lucroMes = faturamentoMes - custosMes;
-    var margem = faturamentoMes > 0 ? ((lucroMes / faturamentoMes) * 100) : 0;
+    var margem = 0;
+    if (faturamentoMes > 0) {
+        margem = (lucroMes / faturamentoMes) * 100;
+    }
 
     // Atualiza Elementos do DOM (Cards Coloridos)
     // Verifica se o elemento existe antes de tentar atualizar para evitar erros
@@ -556,6 +568,50 @@ window.atualizarDashboard = function() {
         document.getElementById('receitaTotalHistorico').textContent = formatarValorMoeda(receitaHistorico); 
         document.getElementById('margemLucroMedia').textContent = margem.toFixed(1) + '%';
     }
+
+    // --- NOVO: GRÁFICO DE PERFORMANCE OPERACIONAL ---
+window.renderizarGraficoPerformance = function() {
+    var ctx = document.getElementById('performanceChart');
+    if (!ctx) return;
+
+    // Agrupa dados por veículo
+    var dadosVeiculos = {};
+    CACHE_OPERACOES.forEach(op => {
+        if (op.status === 'CANCELADA') return;
+        if (!dadosVeiculos[op.veiculoPlaca]) dadosVeiculos[op.veiculoPlaca] = { fat: 0, cust: 0 };
+        
+        var fat = Number(op.faturamento) || 0;
+        var cust = (Number(op.despesas)||0) + window.calcularCustoCombustivelOperacao(op);
+        
+        if (!op.checkins || !op.checkins.faltaMotorista) cust += (Number(op.comissao)||0);
+        if (op.ajudantes) op.ajudantes.forEach(aj => { if(!op.checkins?.faltas?.[aj.id]) cust += (Number(aj.diaria)||0); });
+
+        dadosVeiculos[op.veiculoPlaca].fat += fat;
+        dadosVeiculos[op.veiculoPlaca].cust += cust;
+    });
+
+    var labels = Object.keys(dadosVeiculos);
+    var dataFat = labels.map(k => dadosVeiculos[k].fat);
+    var dataCust = labels.map(k => dadosVeiculos[k].cust);
+
+    if (window.chartPerformanceInstance) window.chartPerformanceInstance.destroy();
+
+    window.chartPerformanceInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                { label: 'Faturamento', data: dataFat, backgroundColor: '#28a745' },
+                { label: 'Custos', data: dataCust, backgroundColor: '#dc3545' }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+};
 
     // Atualiza o Gráfico após calcular os dados numéricos
     atualizarGraficoPrincipal(mesAtual, anoAtual);
@@ -3115,8 +3171,11 @@ document.querySelectorAll('.nav-item').forEach(item => {
                 renderizarCalendario();
             }, 100);
         }
+        // Atualizações específicas por página
+        if (targetId === 'home') atualizarDashboard();
         if (targetId === 'meus-dados') renderizarMeusDados();
         if (targetId === 'employee-checkin') renderizarCheckinFuncionario();
+        if (targetId === 'performance') setTimeout(renderizarGraficoPerformance, 200);
     });
 });
 
