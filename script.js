@@ -4322,3 +4322,223 @@ window.renderizarTabelaContratantes = function() {
 // Força a atualização imediata das tabelas caso já esteja na tela
 if (document.getElementById('tabelaVeiculos')) renderizarTabelaVeiculos();
 if (document.getElementById('tabelaContratantes')) renderizarTabelaContratantes();
+// =============================================================================
+// PARTE FINAL: SEGURANÇA CRÍTICA, CONFIRMAÇÃO POR SENHA E RESET DO SISTEMA
+// =============================================================================
+
+// 1. CRIAÇÃO DINÂMICA DO MODAL DE SENHA (UI)
+// Injeta o HTML do modal de senha no corpo da página se ele não existir
+(function criarModalSenha() {
+    if (document.getElementById('modalSecurityConfirm')) return;
+
+    var modalHtml = `
+    <div id="modalSecurityConfirm" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center;">
+        <div style="background:white; padding:25px; border-radius:8px; width:90%; max-width:400px; text-align:center; box-shadow:0 4px 15px rgba(0,0,0,0.3);">
+            <div style="font-size:3rem; color:var(--danger-color); margin-bottom:15px;"><i class="fas fa-lock"></i></div>
+            <h3 style="margin-bottom:10px; color:#333;">CONFIRMAÇÃO DE SEGURANÇA</h3>
+            <p id="securityActionText" style="color:#666; font-size:0.9rem; margin-bottom:20px;">Esta ação é irreversível. Digite sua senha para confirmar.</p>
+            
+            <input type="password" id="securityPasswordInput" placeholder="Sua senha de login" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:5px; font-size:1rem; margin-bottom:20px;">
+            
+            <div style="display:flex; gap:10px;">
+                <button class="btn-secondary" style="flex:1;" onclick="fecharModalSeguranca()">CANCELAR</button>
+                <button class="btn-danger" style="flex:1;" id="btnConfirmSecurity">CONFIRMAR</button>
+            </div>
+        </div>
+    </div>`;
+
+    var div = document.createElement('div');
+    div.innerHTML = modalHtml;
+    document.body.appendChild(div.firstElementChild);
+})();
+
+// Variável para armazenar a função que será executada após a senha correta
+window._acaoPendenteCallback = null;
+
+window.fecharModalSeguranca = function() {
+    document.getElementById('modalSecurityConfirm').style.display = 'none';
+    document.getElementById('securityPasswordInput').value = '';
+    window._acaoPendenteCallback = null;
+};
+
+/**
+ * Função Central de Segurança.
+ * Abre o modal, pede a senha, valida no Firebase e executa o callback se sucesso.
+ */
+window.solicitarConfirmacaoSenha = function(textoAcao, callback) {
+    var modal = document.getElementById('modalSecurityConfirm');
+    var texto = document.getElementById('securityActionText');
+    var input = document.getElementById('securityPasswordInput');
+    var btn = document.getElementById('btnConfirmSecurity');
+
+    texto.textContent = textoAcao || "Para continuar, digite sua senha de login.";
+    input.value = '';
+    window._acaoPendenteCallback = callback;
+    
+    modal.style.display = 'flex';
+    input.focus();
+
+    // Define o evento de clique do botão confirmar
+    btn.onclick = async function() {
+        var senha = input.value;
+        if (!senha) return alert("Digite a senha.");
+
+        var originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> VERIFICANDO...';
+
+        try {
+            // Lógica de Reautenticação do Firebase
+            const user = window.dbRef.auth.currentUser;
+            const credential = window.dbRef.EmailAuthProvider.credential(user.email, senha);
+            
+            await window.dbRef.reauthenticateWithCredential(user, credential);
+            
+            // Se chegou aqui, a senha está correta
+            fecharModalSeguranca();
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            
+            // Executa a ação destrutiva
+            if (window._acaoPendenteCallback) window._acaoPendenteCallback();
+
+        } catch (error) {
+            console.error(error);
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            alert("SENHA INCORRETA. Ação bloqueada.");
+        }
+    };
+};
+
+
+// 2. FUNÇÃO ZERAR SISTEMA (RECUPERADA E PROTEGIDA)
+window.zerarSistemaCompleto = function() {
+    window.solicitarConfirmacaoSenha(
+        "ATENÇÃO: Você está prestes a APAGAR TODOS OS DADOS DA EMPRESA (Funcionários, Veículos, Operações, Financeiro). Esta ação não pode ser desfeita.",
+        async function() {
+            // Callback executado apenas se a senha estiver correta
+            var btnZerar = document.getElementById('btnZerarSistema'); // Se houver botão na tela
+            if(btnZerar) btnZerar.innerHTML = "LIMPANDO...";
+
+            try {
+                // Limpa Cache Local (Memória RAM)
+                CACHE_FUNCIONARIOS = [];
+                CACHE_VEICULOS = [];
+                CACHE_CONTRATANTES = [];
+                CACHE_OPERACOES = [];
+                CACHE_DESPESAS = [];
+                CACHE_ATIVIDADES = [];
+                CACHE_PROFILE_REQUESTS = [];
+                CACHE_RECIBOS = [];
+                // Nota: Não limpamos CACHE_MINHA_EMPRESA para não perder o CNPJ/Cadastro raiz
+
+                // Limpa LocalStorage
+                localStorage.setItem(CHAVE_DB_FUNCIONARIOS, '[]');
+                localStorage.setItem(CHAVE_DB_VEICULOS, '[]');
+                localStorage.setItem(CHAVE_DB_CONTRATANTES, '[]');
+                localStorage.setItem(CHAVE_DB_OPERACOES, '[]');
+                localStorage.setItem(CHAVE_DB_DESPESAS, '[]');
+                localStorage.setItem(CHAVE_DB_ATIVIDADES, '[]');
+                localStorage.setItem(CHAVE_DB_RECIBOS, '[]');
+
+                // Limpa no Firebase (Define arrays vazios)
+                if (window.dbRef && window.USUARIO_ATUAL.company) {
+                    const { db, doc, writeBatch } = window.dbRef;
+                    const batch = writeBatch(db);
+                    const companyPath = `companies/${window.USUARIO_ATUAL.company}/data`;
+
+                    // Mapeia todas as coleções para resetar
+                    const chaves = [
+                        CHAVE_DB_FUNCIONARIOS, CHAVE_DB_VEICULOS, CHAVE_DB_CONTRATANTES, 
+                        CHAVE_DB_OPERACOES, CHAVE_DB_DESPESAS, CHAVE_DB_ATIVIDADES, 
+                        CHAVE_DB_PROFILE_REQUESTS, CHAVE_DB_RECIBOS
+                    ];
+
+                    chaves.forEach(chave => {
+                        const ref = doc(db, companyPath, chave);
+                        // Define items como array vazio
+                        batch.set(ref, { 
+                            items: [], 
+                            lastUpdate: new Date().toISOString(), 
+                            updatedBy: window.USUARIO_ATUAL.email 
+                        });
+                    });
+
+                    await batch.commit();
+                }
+
+                alert("SISTEMA ZERADO COM SUCESSO!\nTodos os dados operacionais foram removidos.");
+                window.location.reload();
+
+            } catch (erro) {
+                alert("Erro ao zerar sistema: " + erro.message);
+            }
+        }
+    );
+};
+
+
+// 3. ATUALIZAÇÃO DAS FUNÇÕES CRÍTICAS DO SUPER ADMIN (SUBSTITUIÇÃO)
+// Agora usam a senha em vez de digitar "DELETAR"
+
+window.excluirEmpresaTotal = function(companyId) {
+    window.solicitarConfirmacaoSenha(
+        `PERIGO: Você vai excluir a empresa "${companyId}" e TODOS os seus usuários e dados.`,
+        async function() {
+            try {
+                const { db, collection, query, where, getDocs, doc, writeBatch } = window.dbRef;
+                const batch = writeBatch(db);
+                
+                // 1. Deleta usuários da empresa
+                const q = query(collection(db, "users"), where("company", "==", companyId));
+                const snap = await getDocs(q);
+                snap.forEach(d => batch.delete(d.ref));
+                
+                // 2. Deleta o documento da empresa
+                batch.delete(doc(db, "companies", companyId));
+                
+                await batch.commit();
+                
+                alert("Empresa excluída definitivamente.");
+                if(typeof carregarPainelSuperAdmin === 'function') carregarPainelSuperAdmin();
+            } catch (e) { 
+                alert("Erro: " + e.message); 
+            }
+        }
+    );
+};
+
+window.excluirUsuarioGlobal = function(uid) {
+    window.solicitarConfirmacaoSenha(
+        "Tem certeza que deseja EXCLUIR PERMANENTEMENTE este usuário?",
+        async function() {
+            try { 
+                await window.dbRef.deleteDoc(window.dbRef.doc(window.dbRef.db, "users", uid)); 
+                alert("Usuário removido.");
+                if(typeof carregarPainelSuperAdmin === 'function') carregarPainelSuperAdmin(); 
+            } catch(e) { 
+                alert(e.message); 
+            }
+        }
+    );
+};
+
+// 4. VINCULAÇÃO DO BOTÃO "ZERAR SISTEMA" NA UI
+// Procura o botão no carregamento e adiciona o evento
+document.addEventListener('DOMContentLoaded', function() {
+    // Tenta encontrar o botão pelo ID ou classe caso tenha sido criado no HTML
+    var btnZerar = document.getElementById('btnZerarSistema');
+    if (btnZerar) {
+        btnZerar.onclick = window.zerarSistemaCompleto;
+    } else {
+        // Caso o botão não exista no HTML estático, procura se ele é renderizado dinamicamente
+        // ou adiciona um listener global para delegação se necessário
+        document.addEventListener('click', function(e) {
+            if (e.target && e.target.id === 'btnZerarSistema') {
+                e.preventDefault();
+                window.zerarSistemaCompleto();
+            }
+        });
+    }
+});
