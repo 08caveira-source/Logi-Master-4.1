@@ -3903,3 +3903,40 @@ document.querySelectorAll('.nav-item[data-page="recibos"]').forEach(btn => {
         setTimeout(renderizarPaginaRecibos, 100);
     });
 });
+
+// =============================================================================
+// CORREÇÃO: FUNÇÃO DE ENVIAR RECIBO (ADMIN -> FUNCIONÁRIO)
+// =============================================================================
+
+window.enviarReciboFuncionario = async function(reciboId) {
+    // 1. Confirmação de Segurança
+    if(!confirm("Deseja disponibilizar este recibo para o funcionário visualizar?")) {
+        return;
+    }
+    
+    // 2. Busca o recibo no Cache
+    var rec = CACHE_RECIBOS.find(r => String(r.id) === String(reciboId));
+    
+    if(rec) {
+        // 3. Marca como enviado
+        rec.enviado = true;
+        
+        // 4. Salva no Banco de Dados
+        await salvarListaRecibos(CACHE_RECIBOS);
+        
+        alert("Recibo enviado com sucesso! O funcionário já pode visualizar.");
+        
+        // 5. Atualiza a Tabela na Tela
+        // Verifica qual função de renderização está disponível para atualizar a tela sem recarregar
+        if (typeof renderizarPaginaRecibos === 'function') {
+            renderizarPaginaRecibos(); 
+        } else if (typeof renderizarHistoricoRecibosAdmin === 'function') {
+            renderizarHistoricoRecibosAdmin();
+        } else {
+            // Se as funções de renderização falharem, recarrega a página
+            window.location.reload();
+        }
+    } else {
+        alert("Erro: Recibo não encontrado no sistema.");
+    }
+};
