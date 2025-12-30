@@ -1,12 +1,13 @@
 // =============================================================================
 // ARQUIVO: script.js
-// SISTEMA LOGIMASTER - VERSÃO 5.0 (INTEGRAL, LEGÍVEL E EXPANDIDA)
+// SISTEMA LOGIMASTER - VERSÃO 5.0 (CORREÇÃO DASHBOARD E GRÁFICO)
+// =============================================================================
+// PARTE 1 DE 5: CONSTANTES, VARIÁVEIS GLOBAIS, HELPERS E CAMADA DE DADOS
 // =============================================================================
 
 // -----------------------------------------------------------------------------
 // 1. CONSTANTES DE ARMAZENAMENTO (CHAVES DO BANCO DE DADOS)
 // -----------------------------------------------------------------------------
-// Estas chaves são usadas tanto no LocalStorage quanto nas coleções do Firebase
 const CHAVE_DB_FUNCIONARIOS = 'db_funcionarios';
 const CHAVE_DB_VEICULOS = 'db_veiculos';
 const CHAVE_DB_CONTRATANTES = 'db_contratantes';
@@ -53,7 +54,6 @@ window.SYSTEM_STATUS = {
 // -----------------------------------------------------------------------------
 // 3. CACHE LOCAL (Sincronizado com a memória RAM)
 // -----------------------------------------------------------------------------
-// Estas variáveis mantêm os dados carregados para acesso rápido sem ler o disco/rede toda hora
 var CACHE_FUNCIONARIOS = [];
 var CACHE_VEICULOS = [];
 var CACHE_CONTRATANTES = [];
@@ -113,7 +113,6 @@ function removerAcentos(texto) {
 // 5. CAMADA DE DADOS (PERSISTÊNCIA LOCAL + FIREBASE)
 // -----------------------------------------------------------------------------
 
-// Remove valores 'undefined' de objetos, pois o Firestore não aceita
 function sanitizarObjetoParaFirebase(obj) {
     return JSON.parse(JSON.stringify(obj, (key, value) => {
         if (value === undefined) {
@@ -123,8 +122,6 @@ function sanitizarObjetoParaFirebase(obj) {
     }));
 }
 
-// FUNÇÃO CRÍTICA: Baixa TODOS os dados da nuvem ao iniciar o sistema
-// Isso garante que o usuário veja os dados mais recentes ao abrir a tela
 async function sincronizarDadosComFirebase() {
     console.log(">>> INICIANDO SINCRONIA COMPLETA COM A NUVEM...");
     
@@ -137,7 +134,6 @@ async function sincronizarDadosComFirebase() {
     const { db, doc, getDoc } = window.dbRef;
     const companyId = window.USUARIO_ATUAL.company;
 
-    // Função auxiliar interna para baixar uma coleção específica
     async function baixarColecao(chave, setter) {
         try {
             const docRef = doc(db, 'companies', companyId, 'data', chave);
@@ -147,17 +143,14 @@ async function sincronizarDadosComFirebase() {
                 const data = docSnap.data();
                 const lista = data.items || [];
                 
-                // Define se é objeto único (dados da empresa) ou lista (cadastros)
                 if (chave === CHAVE_DB_MINHA_EMPRESA) {
                     setter(data.items || {});
                 } else {
                     setter(lista);
                 }
                 
-                // Atualiza o localStorage como backup para uso offline
                 localStorage.setItem(chave, JSON.stringify(data.items || []));
             } else {
-                // Se não existe na nuvem, define como vazio
                 setter([]); 
             }
         } catch (e) {
@@ -165,7 +158,6 @@ async function sincronizarDadosComFirebase() {
         }
     }
 
-    // Executa todos os downloads simultaneamente para agilizar o carregamento
     await Promise.all([
         baixarColecao(CHAVE_DB_FUNCIONARIOS, (d) => CACHE_FUNCIONARIOS = d),
         baixarColecao(CHAVE_DB_VEICULOS, (d) => CACHE_VEICULOS = d),
@@ -181,7 +173,6 @@ async function sincronizarDadosComFirebase() {
     console.log(">>> SINCRONIA CONCLUÍDA. Memória atualizada.");
 }
 
-// Carrega dados do LocalStorage (Fallback caso esteja offline ou erro no firebase)
 function carregarTodosDadosLocais() {
     function load(chave) {
         try {
@@ -204,15 +195,11 @@ function carregarTodosDadosLocais() {
     CACHE_RECIBOS = load(CHAVE_DB_RECIBOS);
 }
 
-// Função Genérica de Salvamento (Atualiza Memória -> LocalStorage -> Firebase)
 async function salvarDadosGenerico(chave, dados, atualizarCacheCallback) {
-    // 1. Atualiza Memória e LocalStorage imediatamente
     atualizarCacheCallback(dados);
     localStorage.setItem(chave, JSON.stringify(dados));
     
-    // 2. Atualiza Nuvem (Se estiver logado e com empresa ativa)
     if (window.dbRef && window.USUARIO_ATUAL && window.USUARIO_ATUAL.company) {
-        // Bloqueio de escrita se o sistema estiver bloqueado/vencido (exceto super admin)
         if (window.SYSTEM_STATUS.bloqueado && window.USUARIO_ATUAL.role !== 'admin_master') {
              console.warn("Salvamento na nuvem bloqueado: Sistema sem créditos ou bloqueado.");
              return;
@@ -220,14 +207,12 @@ async function salvarDadosGenerico(chave, dados, atualizarCacheCallback) {
 
         const { db, doc, setDoc } = window.dbRef;
         try {
-            // Sanitiza para garantir que não vão campos inválidos
             var dadosLimpos = sanitizarObjetoParaFirebase({ 
                 items: dados, 
                 lastUpdate: new Date().toISOString(),
                 updatedBy: window.USUARIO_ATUAL.email
             });
             
-            // Salva no caminho: companies/{empresa}/data/{colecao}
             await setDoc(doc(db, 'companies', window.USUARIO_ATUAL.company, 'data', chave), dadosLimpos);
         } catch (erro) {
             console.error("Erro ao salvar no Firebase (" + chave + "):", erro);
@@ -236,7 +221,6 @@ async function salvarDadosGenerico(chave, dados, atualizarCacheCallback) {
     }
 }
 
-// Funções Específicas de Salvamento (Atalhos para facilitar o uso no código)
 async function salvarListaFuncionarios(lista) { 
     await salvarDadosGenerico(CHAVE_DB_FUNCIONARIOS, lista, (d) => CACHE_FUNCIONARIOS = d); 
 }
@@ -273,7 +257,6 @@ async function salvarProfileRequests(lista) {
     await salvarDadosGenerico(CHAVE_DB_PROFILE_REQUESTS, lista, (d) => CACHE_PROFILE_REQUESTS = d); 
 }
 
-// Buscas Helpers (Para evitar repetição de código de busca)
 function buscarFuncionarioPorId(id) { 
     return CACHE_FUNCIONARIOS.find(f => String(f.id) === String(id)); 
 }
@@ -290,7 +273,7 @@ function buscarAtividadePorId(id) {
     return CACHE_ATIVIDADES.find(a => String(a.id) === String(id)); 
 }
 // =============================================================================
-// PARTE 2: DASHBOARD E FINANCEIRO (LÓGICA FINANCEIRA CORRIGIDA)
+// PARTE 2: DASHBOARD E FINANCEIRO (LÓGICA FINANCEIRA E GRÁFICOS CORRIGIDOS)
 // =============================================================================
 
 // -----------------------------------------------------------------------------
@@ -442,12 +425,8 @@ window.calcularCustoCombustivelOperacao = function(op) {
  * Filtra dados pelo mês atual.
  */
 window.atualizarDashboard = function() {
-    // Bloqueia execução se for Super Admin (para não misturar dados globais da plataforma)
-    // O Super Admin tem seu próprio painel separado.
-    if (window.USUARIO_ATUAL && (window.USUARIO_ATUAL.role === 'admin_master' || window.EMAILS_MESTRES && window.EMAILS_MESTRES.includes(window.USUARIO_ATUAL.email))) {
-        return;
-    }
-
+    // [CORREÇÃO]: Removida a trava que impedia Admins Mestres de verem o dashboard operacional
+    
     console.log("Calculando métricas do Dashboard (Lógica de Consumo Real)...");
     
     var mesAtual = window.currentDate.getMonth(); 
@@ -553,7 +532,10 @@ window.atualizarDashboard = function() {
             elLucro.style.color = "var(--danger-color)";
         }
 
-        document.getElementById('receitaTotalHistorico').textContent = formatarValorMoeda(receitaHistorico); 
+        // Se existir o elemento de histórico total, atualiza
+        if(document.getElementById('receitaTotalHistorico')) {
+             document.getElementById('receitaTotalHistorico').textContent = formatarValorMoeda(receitaHistorico); 
+        }
         document.getElementById('margemLucroMedia').textContent = margem.toFixed(1) + '%';
     }
 
@@ -566,10 +548,7 @@ window.atualizarDashboard = function() {
 // -----------------------------------------------------------------------------
 
 function atualizarGraficoPrincipal(mes, ano) {
-    // Proteção contra execução no painel Master
-    if (window.USUARIO_ATUAL && (window.USUARIO_ATUAL.role === 'admin_master' || window.EMAILS_MESTRES && window.EMAILS_MESTRES.includes(window.USUARIO_ATUAL.email))) {
-        return;
-    }
+    // [CORREÇÃO]: Removida a trava que impedia a renderização do gráfico para Admins Mestres
 
     var ctx = document.getElementById('mainChart');
     if (!ctx) return; 
@@ -794,7 +773,7 @@ function atualizarGraficoPrincipal(mes, ano) {
 // -----------------------------------------------------------------------------
 
 window.renderizarCalendario = function() {
-    if (window.USUARIO_ATUAL && window.USUARIO_ATUAL.role === 'admin_master') return;
+    // [CORREÇÃO]: Removida a trava do calendário para Admins Mestres
 
     var grid = document.getElementById('calendarGrid');
     var label = document.getElementById('currentMonthYear');
