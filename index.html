@@ -283,7 +283,24 @@
             </div>
 
             <div class="card">
-                <h3>HISTÓRICO RECENTE</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                    <h3>HISTÓRICO RECENTE</h3>
+                    
+                    <div class="pagination-controls" style="display:flex; align-items:center; gap:10px;">
+                        <select id="itemsPerPageOp" onchange="mudarQtdPaginaOperacoes()" style="width:auto; padding:5px;">
+                            <option value="10">10 por pág.</option>
+                            <option value="30">30 por pág.</option>
+                            <option value="50">50 por pág.</option>
+                            <option value="1000">Todas</option>
+                        </select>
+                        <div style="display:flex; gap:5px;">
+                            <button class="btn-secondary btn-mini" onclick="mudarPaginaOperacoes(-1)"><i class="fas fa-chevron-left"></i></button>
+                            <span id="pageIndicatorOp" style="padding:0 10px; font-weight:bold;">1/1</span>
+                            <button class="btn-secondary btn-mini" onclick="mudarPaginaOperacoes(1)"><i class="fas fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="table-responsive">
                     <table id="tabelaOperacoes" class="data-table">
                         <thead>
@@ -336,14 +353,23 @@
             <div class="section-header"><h2>GESTÃO DE EQUIPE</h2></div>
             
             <div class="card-grid">
-                <div class="card" style="border-top-color: var(--warning-color);">
-                    <h3 style="color:var(--warning-color);">PENDENTES DE APROVAÇÃO</h3>
-                    <div class="table-responsive">
-                        <table class="data-table" id="tabelaCompanyPendentes">
-                            <thead><tr><th>NOME</th><th>EMAIL</th><th>AÇÃO</th></tr></thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
+                <div class="card" style="border-top-color: #6f42c1;">
+                    <h3 style="color:#6f42c1;">ENVIAR MENSAGEM / AVISO</h3>
+                    <p style="font-size:0.8rem; color:#666; margin-bottom:10px;">Envie recados importantes para toda a equipe ou funcionários.</p>
+                    
+                    <form id="formEnviarMensagemEquipe">
+                        <div class="form-row">
+                            <div class="form-col col-full">
+                                <label>MENSAGEM</label>
+                                <input type="text" id="msgEquipeTexto" required placeholder="Ex: Reunião sexta-feira às 18h..." style="width:100%;">
+                            </div>
+                        </div>
+                        <div class="form-actions" style="margin-top:10px;">
+                            <button type="submit" class="btn-primary" style="background:#6f42c1; width:100%;">
+                                <i class="fas fa-paper-plane"></i> ENVIAR AVISO
+                            </button>
+                        </div>
+                    </form>
                 </div>
                 
                 <div class="card">
@@ -830,6 +856,22 @@
             </div>
             
             <button onclick="salvarCreditosEmpresa()" class="btn-success" style="width:100%; margin-top:15px;">SALVAR ALTERAÇÕES</button>
+        </div>
+    </div>
+
+    <div id="modalSecurityConfirm" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; align-items:center; justify-content:center;">
+        <div style="background:white; padding:30px; border-radius:10px; width:90%; max-width:450px; text-align:center; box-shadow:0 0 20px rgba(0,0,0,0.5);">
+            <div style="font-size:3rem; color:#dc3545; margin-bottom:15px;"><i class="fas fa-lock"></i></div>
+            <h3 style="margin-bottom:10px; color:#333; font-weight:bold;">CONFIRMAÇÃO DE SEGURANÇA</h3>
+            <p id="securityActionText" style="color:#555; font-size:1rem; margin-bottom:20px;">Esta ação requer permissão administrativa.</p>
+            
+            <label style="display:block; text-align:left; margin-bottom:5px; font-weight:bold; font-size:0.8rem;">SUA SENHA DE LOGIN:</label>
+            <input type="password" id="securityPasswordInput" style="width:100%; padding:12px; border:2px solid #ccc; border-radius:6px; font-size:1.1rem; margin-bottom:20px; outline:none;">
+            
+            <div style="display:flex; gap:10px;">
+                <button type="button" class="btn-secondary" style="flex:1; padding:12px;" onclick="document.getElementById('modalSecurityConfirm').style.display='none'">CANCELAR</button>
+                <button type="button" class="btn-danger" style="flex:1; padding:12px;" id="btnConfirmSecurity">CONFIRMAR</button>
+            </div>
         </div>
     </div>
 
