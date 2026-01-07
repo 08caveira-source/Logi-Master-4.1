@@ -2139,6 +2139,61 @@ window.renderizarPainelEquipe = async function() {
                     btnBloquear = `<button class="btn-mini btn-success" onclick="toggleBloqueioFunc('${f.id}')" title="BLOQUEAR ACESSO"><i class="fas fa-unlock"></i></button>`;
                 }
 
+window.aprovarProfileRequest = async function(id) {
+    // 1. Busca a solicitação na lista
+    var req = CACHE_PROFILE_REQUESTS.find(r => r.id === id);
+    if (!req) return;
+
+    // 2. Busca o funcionário correspondente
+    var func = CACHE_FUNCIONARIOS.find(f => f.id === req.funcionarioId);
+    if (!func) return alert("Erro: Funcionário vinculado não encontrado.");
+
+    // 3. Confirmação
+    if(!confirm(`Confirma a alteração do campo ${req.campo}?\n\nDe: ${req.valorAntigo}\nPara: ${req.valorNovo}`)) return;
+
+    // 4. Aplica a alteração no objeto do funcionário (Mapeamento de Campos)
+    switch(req.campo) {
+        case 'TELEFONE': 
+            func.telefone = req.valorNovo; 
+            break;
+        case 'ENDERECO': 
+            func.endereco = req.valorNovo; 
+            break;
+        case 'PIX': 
+            func.pix = req.valorNovo; 
+            break;
+        case 'CNH': 
+            func.cnh = req.valorNovo; 
+            break;
+        case 'VALIDADE_CNH': 
+            func.validadeCNH = req.valorNovo; 
+            break;
+        case 'CATEGORIA_CNH': 
+            func.categoriaCNH = req.valorNovo; 
+            break;
+        default: 
+            return alert("Erro: Campo desconhecido (" + req.campo + ")");
+    }
+
+    // 5. Atualiza o status da solicitação para não aparecer mais como pendente
+    req.status = 'APROVADO';
+
+    try {
+        // 6. Salva as alterações no banco (Funcionários e Solicitações)
+        await salvarListaFuncionarios(CACHE_FUNCIONARIOS);
+        await salvarProfileRequests(CACHE_PROFILE_REQUESTS);
+
+        alert("Alteração realizada com sucesso!");
+        
+        // 7. Atualiza a tabela na tela
+        renderizarPainelEquipe();
+
+    } catch (erro) {
+        console.error(erro);
+        alert("Erro ao salvar alterações: " + erro.message);
+    }
+};
+
                 var btnStatus = `<button class="btn-mini btn-info" onclick="verStatusFunc('${f.id}')" title="VER STATUS DETALHADO"><i class="fas fa-eye"></i></button>`;
 
                 var statusTexto = isBlocked ? 
