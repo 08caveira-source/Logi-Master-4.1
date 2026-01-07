@@ -2114,30 +2114,35 @@ window.renderizarTabelaFaltas = function() {
 // 2. GESTÃO DE EQUIPE (BOTÕES PERSONALIZADOS: BLOQUEAR E STATUS)
 // -----------------------------------------------------------------------------
 
-window.renderizarPainelEquipe = async function() {
-    // 1. Tabela de Funcionários Ativos
-    var tbodyAtivos = document.querySelector('#tabelaCompanyAtivos tbody');
-    
-    if (tbodyAtivos) {
-        tbodyAtivos.innerHTML = '';
+// 3. Tabela de Solicitações de Alteração de Dados (Profile Requests)
+    var tbodyReq = document.getElementById('tabelaProfileRequests')?.querySelector('tbody');
+    if(tbodyReq) {
+        tbodyReq.innerHTML = '';
         
-        if (CACHE_FUNCIONARIOS.length === 0) {
-            tbodyAtivos.innerHTML = '<tr><td colspan="4" style="text-align:center;">Nenhum funcionário cadastrado.</td></tr>';
+        var pendentes = CACHE_PROFILE_REQUESTS.filter(r => r.status === 'PENDENTE');
+        
+        if (pendentes.length === 0) {
+            tbodyReq.innerHTML = '<tr><td colspan="5" style="text-align:center;">Nenhuma solicitação pendente.</td></tr>';
         } else {
-            CACHE_FUNCIONARIOS.forEach(f => {
+            pendentes.forEach(req => {
+                var f = buscarFuncionarioPorId(req.funcionarioId);
+                var nomeFunc = f ? f.nome : 'Desconhecido';
+                
                 var tr = document.createElement('tr');
-                
-                var isBlocked = f.isBlocked || false;
-                
-                // Botões Exclusivos Solicitados: Bloquear e Status
-                // (Sem Editar/Excluir aqui, pois já existem na aba Cadastros)
-                
-                var btnBloquear = '';
-                if (isBlocked) {
-                    btnBloquear = `<button class="btn-mini btn-danger" onclick="toggleBloqueioFunc('${f.id}')" title="DESBLOQUEAR ACESSO"><i class="fas fa-lock"></i></button>`;
-                } else {
-                    btnBloquear = `<button class="btn-mini btn-success" onclick="toggleBloqueioFunc('${f.id}')" title="BLOQUEAR ACESSO"><i class="fas fa-unlock"></i></button>`;
-                }
+                tr.innerHTML = `
+                    <td>${formatarDataParaBrasileiro(req.data)}</td>
+                    <td>${nomeFunc}</td>
+                    <td>${req.campo}</td>
+                    <td>${req.valorNovo}</td>
+                    <td>
+                        <button class="btn-mini btn-success" onclick="aprovarProfileRequest('${req.id}')" title="Aprovar"><i class="fas fa-check"></i></button>
+                        <button class="btn-mini btn-danger" onclick="excluirProfileRequest('${req.id}')" title="Recusar/Excluir"><i class="fas fa-trash"></i></button>
+                    </td>
+                `;
+                tbodyReq.appendChild(tr);
+            });
+        }
+    }
 
 window.aprovarProfileRequest = async function(id) {
     // 1. Busca a solicitação na lista
@@ -2194,6 +2199,25 @@ window.aprovarProfileRequest = async function(id) {
     }
 };
 
+window.excluirProfileRequest = async function(id) {
+    if(!confirm("Tem certeza que deseja recusar e excluir esta solicitação?")) return;
+
+    // Filtra a lista removendo o item com o ID correspondente
+    var novaLista = CACHE_PROFILE_REQUESTS.filter(r => r.id !== id);
+    
+    try {
+        // Atualiza o cache e salva no banco
+        await salvarProfileRequests(novaLista);
+        
+        // Atualiza a tabela na tela
+        renderizarPainelEquipe();
+        
+    } catch (erro) {
+        console.error(erro);
+        alert("Erro ao excluir solicitação: " + erro.message);
+    }
+};
+
                 var btnStatus = `<button class="btn-mini btn-info" onclick="verStatusFunc('${f.id}')" title="VER STATUS DETALHADO"><i class="fas fa-eye"></i></button>`;
 
                 var statusTexto = isBlocked ? 
@@ -2210,9 +2234,7 @@ window.aprovarProfileRequest = async function(id) {
                     </td>
                 `;
                 tbodyAtivos.appendChild(tr);
-            });
-        }
-    }
+
 
     // 2. Tabela de Pendentes (Aprovação de novos cadastros feitos na tela de login)
     if (window.dbRef && window.USUARIO_ATUAL) {
