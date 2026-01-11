@@ -1876,7 +1876,8 @@ window.closeViewModal = function() { document.getElementById('viewItemModal').st
 window.closeCheckinConfirmModal = function() { document.getElementById('modalCheckinConfirm').style.display = 'none'; };
 window.closeAdicionarAjudanteModal = function() { document.getElementById('modalAdicionarAjudante').style.display = 'none'; };
 // =============================================================================
-// PARTE 4: MONITORAMENTO, EQUIPE, RELATÓRIOS E RECIBOS
+// ARQUIVO: script.js
+// PARTE 4 DE 5: MONITORAMENTO, EQUIPE, RELATÓRIOS E RECIBOS
 // =============================================================================
 
 // -----------------------------------------------------------------------------
@@ -2144,124 +2145,14 @@ window.renderizarPainelEquipe = async function() {
                 
                 var isBlocked = f.isBlocked || false;
                 
-                // Botões Exclusivos Solicitados: Bloquear e Status
-                // (Sem Editar/Excluir aqui, pois já existem na aba Cadastros)
-                
+                // Botões Exclusivos: Bloquear e Status
                 var btnBloquear = '';
                 if (isBlocked) {
                     btnBloquear = `<button class="btn-mini btn-danger" onclick="toggleBloqueioFunc('${f.id}')" title="DESBLOQUEAR ACESSO"><i class="fas fa-lock"></i></button>`;
                 } else {
                     btnBloquear = `<button class="btn-mini btn-success" onclick="toggleBloqueioFunc('${f.id}')" title="BLOQUEAR ACESSO"><i class="fas fa-unlock"></i></button>`;
                 }
-window.aprovarProfileRequest = async function(id) {
-    // 1. Busca a solicitação na lista
-    var req = CACHE_PROFILE_REQUESTS.find(r => r.id === id);
-    if (!req) return;
 
-    // 2. Busca o funcionário correspondente
-    var func = CACHE_FUNCIONARIOS.find(f => f.id === req.funcionarioId);
-    if (!func) return alert("Erro: Funcionário vinculado não encontrado.");
-
-    // 3. Confirmação
-    if(!confirm(`Confirma a alteração do campo ${req.campo}?\n\nDe: ${req.valorAntigo}\nPara: ${req.valorNovo}`)) return;
-
-    // 4. Aplica a alteração no objeto do funcionário (Mapeamento de Campos)
-    switch(req.campo) {
-        case 'TELEFONE': 
-            func.telefone = req.valorNovo; 
-            break;
-        case 'ENDERECO': 
-            func.endereco = req.valorNovo; 
-            break;
-        case 'PIX': 
-            func.pix = req.valorNovo; 
-            break;
-        case 'CNH': 
-            func.cnh = req.valorNovo; 
-            break;
-        case 'VALIDADE_CNH': 
-            func.validadeCNH = req.valorNovo; 
-            break;
-        case 'CATEGORIA_CNH': 
-            func.categoriaCNH = req.valorNovo; 
-            break;
-        default: 
-            return alert("Erro: Campo desconhecido (" + req.campo + ")");
-    }
-
-    // 5. Atualiza o status da solicitação para não aparecer mais como pendente
-    req.status = 'APROVADO';
-
-    try {
-        // 6. Salva as alterações no banco (Funcionários e Solicitações)
-        await salvarListaFuncionarios(CACHE_FUNCIONARIOS);
-        await salvarProfileRequests(CACHE_PROFILE_REQUESTS);
-
-        alert("Alteração realizada com sucesso!");
-        
-        // 7. Atualiza a tabela na tela
-        renderizarPainelEquipe();
-
-    } catch (erro) {
-        console.error(erro);
-        alert("Erro ao salvar alterações: " + erro.message);
-    }
-};
-
-    window.aprovarProfileRequest = async function(id) {
-    // 1. Busca a solicitação na lista
-    var req = CACHE_PROFILE_REQUESTS.find(r => r.id === id);
-    if (!req) return;
-
-    // 2. Busca o funcionário correspondente
-    var func = CACHE_FUNCIONARIOS.find(f => f.id === req.funcionarioId);
-    if (!func) return alert("Erro: Funcionário vinculado não encontrado.");
-
-    // 3. Confirmação
-    if(!confirm(`Confirma a alteração do campo ${req.campo}?\n\nDe: ${req.valorAntigo}\nPara: ${req.valorNovo}`)) return;
-
-    // 4. Aplica a alteração no objeto do funcionário (Mapeamento de Campos)
-    switch(req.campo) {
-        case 'TELEFONE': 
-            func.telefone = req.valorNovo; 
-            break;
-        case 'ENDERECO': 
-            func.endereco = req.valorNovo; 
-            break;
-        case 'PIX': 
-            func.pix = req.valorNovo; 
-            break;
-        case 'CNH': 
-            func.cnh = req.valorNovo; 
-            break;
-        case 'VALIDADE_CNH': 
-            func.validadeCNH = req.valorNovo; 
-            break;
-        case 'CATEGORIA_CNH': 
-            func.categoriaCNH = req.valorNovo; 
-            break;
-        default: 
-            return alert("Erro: Campo desconhecido (" + req.campo + ")");
-    }
-
-    // 5. Atualiza o status da solicitação para não aparecer mais como pendente
-    req.status = 'APROVADO';
-
-    try {
-        // 6. Salva as alterações no banco (Funcionários e Solicitações)
-        await salvarListaFuncionarios(CACHE_FUNCIONARIOS);
-        await salvarProfileRequests(CACHE_PROFILE_REQUESTS);
-
-        alert("Alteração realizada com sucesso!");
-        
-        // 7. Atualiza a tabela na tela
-        renderizarPainelEquipe();
-
-    } catch (erro) {
-        console.error(erro);
-        alert("Erro ao salvar alterações: " + erro.message);
-    }
-};
                 var btnStatus = `<button class="btn-mini btn-info" onclick="verStatusFunc('${f.id}')" title="VER STATUS DETALHADO"><i class="fas fa-eye"></i></button>`;
 
                 var statusTexto = isBlocked ? 
@@ -2335,16 +2226,96 @@ window.aprovarProfileRequest = async function(id) {
                 var nomeFunc = f ? f.nome : 'Desconhecido';
                 
                 var tr = document.createElement('tr');
+                
+                // [ALTERAÇÃO] Adicionado botão de REJEITAR ao lado do APROVAR
                 tr.innerHTML = `
                     <td>${formatarDataParaBrasileiro(req.data)}</td>
                     <td>${nomeFunc}</td>
                     <td>${req.campo}</td>
                     <td>${req.valorNovo}</td>
-                    <td><button class="btn-mini btn-success" onclick="aprovarProfileRequest('${req.id}')">APROVAR</button></td>
+                    <td>
+                        <button class="btn-mini btn-success" onclick="aprovarProfileRequest('${req.id}')" title="Aprovar"><i class="fas fa-check"></i></button>
+                        <button class="btn-mini btn-danger" onclick="rejeitarProfileRequest('${req.id}')" title="Rejeitar"><i class="fas fa-times"></i></button>
+                    </td>
                 `;
                 tbodyReq.appendChild(tr);
             });
         }
+    }
+};
+
+window.aprovarProfileRequest = async function(id) {
+    // 1. Busca a solicitação na lista
+    var req = CACHE_PROFILE_REQUESTS.find(r => r.id === id);
+    if (!req) return;
+
+    // 2. Busca o funcionário correspondente
+    var func = CACHE_FUNCIONARIOS.find(f => f.id === req.funcionarioId);
+    if (!func) return alert("Erro: Funcionário vinculado não encontrado.");
+
+    // 3. Confirmação
+    if(!confirm(`Confirma a alteração do campo ${req.campo}?\n\nDe: ${req.valorAntigo}\nPara: ${req.valorNovo}`)) return;
+
+    // 4. Aplica a alteração no objeto do funcionário (Mapeamento de Campos)
+    switch(req.campo) {
+        case 'TELEFONE': 
+            func.telefone = req.valorNovo; 
+            break;
+        case 'ENDERECO': 
+            func.endereco = req.valorNovo; 
+            break;
+        case 'PIX': 
+            func.pix = req.valorNovo; 
+            break;
+        case 'CNH': 
+            func.cnh = req.valorNovo; 
+            break;
+        case 'VALIDADE_CNH': 
+            func.validadeCNH = req.valorNovo; 
+            break;
+        case 'CATEGORIA_CNH': 
+            func.categoriaCNH = req.valorNovo; 
+            break;
+        default: 
+            return alert("Erro: Campo desconhecido (" + req.campo + ")");
+    }
+
+    // 5. Atualiza o status da solicitação para não aparecer mais como pendente
+    req.status = 'APROVADO';
+
+    try {
+        // 6. Salva as alterações no banco (Funcionários e Solicitações)
+        await salvarListaFuncionarios(CACHE_FUNCIONARIOS);
+        await salvarProfileRequests(CACHE_PROFILE_REQUESTS);
+
+        alert("Alteração realizada com sucesso!");
+        
+        // 7. Atualiza a tabela na tela
+        renderizarPainelEquipe();
+
+    } catch (erro) {
+        console.error(erro);
+        alert("Erro ao salvar alterações: " + erro.message);
+    }
+};
+
+// [NOVA FUNÇÃO] Rejeitar solicitação de alteração cadastral
+window.rejeitarProfileRequest = async function(id) {
+    var req = CACHE_PROFILE_REQUESTS.find(r => r.id === id);
+    if (!req) return;
+
+    if (!confirm("Tem certeza que deseja REJEITAR esta solicitação?")) return;
+
+    // Apenas marca como rejeitado, não altera os dados do funcionário
+    req.status = 'REJEITADO';
+
+    try {
+        await salvarProfileRequests(CACHE_PROFILE_REQUESTS);
+        alert("Solicitação rejeitada.");
+        renderizarPainelEquipe();
+    } catch (erro) {
+        console.error(erro);
+        alert("Erro ao salvar: " + erro.message);
     }
 };
 
@@ -2418,7 +2389,7 @@ window.verStatusFunc = async function(id) {
 };
 
 // =============================================================================
-// CORREÇÃO: FUNÇÃO DE BLOQUEIO/DESBLOQUEIO (COM VALIDAÇÃO DE EXISTÊNCIA NA NUVEM)
+// FUNÇÃO DE BLOQUEIO/DESBLOQUEIO
 // =============================================================================
 
 window.toggleBloqueioFunc = async function(id) {
@@ -2456,7 +2427,6 @@ window.toggleBloqueioFunc = async function(id) {
             
             if (!docSnap.exists()) {
                 // Se não existe na nuvem, mas existe localmente, é um estado inconsistente
-                // (ex: após um reset onde o usuário foi recriado apenas no cache local)
                 throw new Error("registro do usuário não encontrado na nuvem. Tente recadastrar o funcionário para sincronizar.");
             }
 
@@ -2789,15 +2759,6 @@ window.exportarRelatorioPDF = function() {
 // 4. EMISSÃO DE RECIBOS DE PAGAMENTO
 // -----------------------------------------------------------------------------
 
-// =============================================================================
-// ATUALIZAÇÃO: LAYOUT DO RECIBO COM DADOS DA EMPRESA (PAGADOR)
-// =============================================================================
-
-// 1. ATUALIZAÇÃO DA GERAÇÃO DO NOVO RECIBO (CÁLCULO)
-// =============================================================================
-// CORREÇÃO: BOTÃO SALVAR RECIBO E PROTEÇÃO DE DADOS
-// =============================================================================
-
 window.gerarReciboPagamento = function() {
     var motId = document.getElementById('selectMotoristaRecibo').value;
     var dataIni = document.getElementById('dataInicioRecibo').value;
@@ -2878,7 +2839,7 @@ window.gerarReciboPagamento = function() {
     
     document.getElementById('modalReciboContent').innerHTML = htmlRecibo;
     
-    // CORREÇÃO CRÍTICA: Tratamento de aspas no nome para não quebrar o botão
+    // Tratamento de aspas no nome para não quebrar o botão
     var nomeSafe = funcionario.nome.replace(/'/g, "\\'"); 
     
     // Botão para Salvar no Histórico
@@ -2917,9 +2878,8 @@ window.salvarReciboNoHistorico = async function(funcId, funcNome, ini, fim, valo
         } else if (typeof renderizarHistoricoRecibosAdmin === 'function') {
             renderizarHistoricoRecibosAdmin(); // Usa a lógica do admin
         } else {
-            // Fallback (se as partes anteriores não foram carregadas corretamente)
+            // Fallback
             if(document.querySelector('#tabelaHistoricoRecibos tbody')) {
-               // Recarrega a página para garantir atualização se as funções não existirem
                window.location.reload(); 
             }
         }
