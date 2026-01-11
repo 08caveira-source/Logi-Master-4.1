@@ -2144,124 +2144,13 @@ window.renderizarPainelEquipe = async function() {
                 
                 var isBlocked = f.isBlocked || false;
                 
-                // Botões Exclusivos Solicitados: Bloquear e Status
-                // (Sem Editar/Excluir aqui, pois já existem na aba Cadastros)
-                
                 var btnBloquear = '';
                 if (isBlocked) {
                     btnBloquear = `<button class="btn-mini btn-danger" onclick="toggleBloqueioFunc('${f.id}')" title="DESBLOQUEAR ACESSO"><i class="fas fa-lock"></i></button>`;
                 } else {
                     btnBloquear = `<button class="btn-mini btn-success" onclick="toggleBloqueioFunc('${f.id}')" title="BLOQUEAR ACESSO"><i class="fas fa-unlock"></i></button>`;
                 }
-window.aprovarProfileRequest = async function(id) {
-    // 1. Busca a solicitação na lista
-    var req = CACHE_PROFILE_REQUESTS.find(r => r.id === id);
-    if (!req) return;
 
-    // 2. Busca o funcionário correspondente
-    var func = CACHE_FUNCIONARIOS.find(f => f.id === req.funcionarioId);
-    if (!func) return alert("Erro: Funcionário vinculado não encontrado.");
-
-    // 3. Confirmação
-    if(!confirm(`Confirma a alteração do campo ${req.campo}?\n\nDe: ${req.valorAntigo}\nPara: ${req.valorNovo}`)) return;
-
-    // 4. Aplica a alteração no objeto do funcionário (Mapeamento de Campos)
-    switch(req.campo) {
-        case 'TELEFONE': 
-            func.telefone = req.valorNovo; 
-            break;
-        case 'ENDERECO': 
-            func.endereco = req.valorNovo; 
-            break;
-        case 'PIX': 
-            func.pix = req.valorNovo; 
-            break;
-        case 'CNH': 
-            func.cnh = req.valorNovo; 
-            break;
-        case 'VALIDADE_CNH': 
-            func.validadeCNH = req.valorNovo; 
-            break;
-        case 'CATEGORIA_CNH': 
-            func.categoriaCNH = req.valorNovo; 
-            break;
-        default: 
-            return alert("Erro: Campo desconhecido (" + req.campo + ")");
-    }
-
-    // 5. Atualiza o status da solicitação para não aparecer mais como pendente
-    req.status = 'APROVADO';
-
-    try {
-        // 6. Salva as alterações no banco (Funcionários e Solicitações)
-        await salvarListaFuncionarios(CACHE_FUNCIONARIOS);
-        await salvarProfileRequests(CACHE_PROFILE_REQUESTS);
-
-        alert("Alteração realizada com sucesso!");
-        
-        // 7. Atualiza a tabela na tela
-        renderizarPainelEquipe();
-
-    } catch (erro) {
-        console.error(erro);
-        alert("Erro ao salvar alterações: " + erro.message);
-    }
-};
-
-    window.aprovarProfileRequest = async function(id) {
-    // 1. Busca a solicitação na lista
-    var req = CACHE_PROFILE_REQUESTS.find(r => r.id === id);
-    if (!req) return;
-
-    // 2. Busca o funcionário correspondente
-    var func = CACHE_FUNCIONARIOS.find(f => f.id === req.funcionarioId);
-    if (!func) return alert("Erro: Funcionário vinculado não encontrado.");
-
-    // 3. Confirmação
-    if(!confirm(`Confirma a alteração do campo ${req.campo}?\n\nDe: ${req.valorAntigo}\nPara: ${req.valorNovo}`)) return;
-
-    // 4. Aplica a alteração no objeto do funcionário (Mapeamento de Campos)
-    switch(req.campo) {
-        case 'TELEFONE': 
-            func.telefone = req.valorNovo; 
-            break;
-        case 'ENDERECO': 
-            func.endereco = req.valorNovo; 
-            break;
-        case 'PIX': 
-            func.pix = req.valorNovo; 
-            break;
-        case 'CNH': 
-            func.cnh = req.valorNovo; 
-            break;
-        case 'VALIDADE_CNH': 
-            func.validadeCNH = req.valorNovo; 
-            break;
-        case 'CATEGORIA_CNH': 
-            func.categoriaCNH = req.valorNovo; 
-            break;
-        default: 
-            return alert("Erro: Campo desconhecido (" + req.campo + ")");
-    }
-
-    // 5. Atualiza o status da solicitação para não aparecer mais como pendente
-    req.status = 'APROVADO';
-
-    try {
-        // 6. Salva as alterações no banco (Funcionários e Solicitações)
-        await salvarListaFuncionarios(CACHE_FUNCIONARIOS);
-        await salvarProfileRequests(CACHE_PROFILE_REQUESTS);
-
-        alert("Alteração realizada com sucesso!");
-        
-        // 7. Atualiza a tabela na tela
-        renderizarPainelEquipe();
-
-    } catch (erro) {
-        console.error(erro);
-        alert("Erro ao salvar alterações: " + erro.message);
-    }
-};
                 var btnStatus = `<button class="btn-mini btn-info" onclick="verStatusFunc('${f.id}')" title="VER STATUS DETALHADO"><i class="fas fa-eye"></i></button>`;
 
                 var statusTexto = isBlocked ? 
@@ -2281,6 +2170,75 @@ window.aprovarProfileRequest = async function(id) {
             });
         }
     }
+
+    // 2. Tabela de Pendentes (Aprovação de novos cadastros feitos na tela de login)
+    if (window.dbRef && window.USUARIO_ATUAL) {
+        try {
+            const { db, collection, query, where, getDocs } = window.dbRef;
+            
+            // Busca usuários não aprovados desta empresa
+            const q = query(
+                collection(db, "users"), 
+                where("company", "==", window.USUARIO_ATUAL.company), 
+                where("approved", "==", false)
+            );
+            
+            const snap = await getDocs(q);
+            var tbodyPend = document.querySelector('#tabelaCompanyPendentes tbody');
+            
+            if (tbodyPend) {
+                tbodyPend.innerHTML = '';
+                
+                if (snap.empty) {
+                    tbodyPend.innerHTML = '<tr><td colspan="3" style="text-align:center;">Nenhum cadastro pendente.</td></tr>';
+                } else {
+                    snap.forEach(doc => {
+                        var u = doc.data();
+                        var tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>${u.name}</td>
+                            <td>${u.email}</td>
+                            <td><button class="btn-mini btn-success" onclick="aprovarUsuario('${u.uid}')">APROVAR ACESSO</button></td>
+                        `;
+                        tbodyPend.appendChild(tr);
+                    });
+                }
+            }
+        } catch(e) { 
+            console.error("Erro ao buscar pendentes:", e); 
+        }
+    }
+    
+    // 3. Tabela de Solicitações de Alteração de Dados (Profile Requests) - ATUALIZADA
+    var tbodyReq = document.getElementById('tabelaProfileRequests')?.querySelector('tbody');
+    if(tbodyReq) {
+        tbodyReq.innerHTML = '';
+        
+        var pendentes = CACHE_PROFILE_REQUESTS.filter(r => r.status === 'PENDENTE');
+        
+        if (pendentes.length === 0) {
+            tbodyReq.innerHTML = '<tr><td colspan="5" style="text-align:center;">Nenhuma solicitação.</td></tr>';
+        } else {
+            pendentes.forEach(req => {
+                var f = buscarFuncionarioPorId(req.funcionarioId);
+                var nomeFunc = f ? f.nome : 'Desconhecido';
+                
+                var tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${formatarDataParaBrasileiro(req.data)}</td>
+                    <td>${nomeFunc}</td>
+                    <td>${req.campo}</td>
+                    <td>${req.valorNovo}</td>
+                    <td>
+                        <button class="btn-mini btn-success" onclick="aprovarProfileRequest('${req.id}')" title="Aprovar Alteração"><i class="fas fa-check"></i></button>
+                        <button class="btn-mini btn-danger" onclick="excluirProfileRequest('${req.id}')" title="Rejeitar/Excluir"><i class="fas fa-trash"></i></button>
+                    </td>
+                `;
+                tbodyReq.appendChild(tr);
+            });
+        }
+    }
+};
 
     // 2. Tabela de Pendentes (Aprovação de novos cadastros feitos na tela de login)
     if (window.dbRef && window.USUARIO_ATUAL) {
