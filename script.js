@@ -2974,9 +2974,17 @@ window.carregarPainelSuperAdmin = async function() {
             const usersDaEmpresa = users.filter(u => u.company === comp.id);
             const admin = usersDaEmpresa.find(u => u.role === 'admin');
             
-            // --- PROTEÇÃO DE SEGURANÇA (NOVO) ---
-            // Se o admin desta empresa for um dos "Mestres" (ex: admin@logimaster.com),
-            // PULA esta iteração. O Super Admin não deve aparecer na lista para não ser excluído.
+            // --- PROTEÇÃO DE SEGURANÇA REFORÇADA ---
+            
+            // 1. Filtro por ID da Empresa (Domínio)
+            // Se o ID da empresa for um destes, ela é pulada IMEDIATAMENTE.
+            // Isso resolve o problema mesmo se o usuário "Admin" não for encontrado.
+            const idsProtegidos = ['logimaster.com', 'logimaster', 'suporte'];
+            if (comp.id && idsProtegidos.includes(comp.id.toLowerCase())) {
+                return;
+            }
+
+            // 2. Filtro por Email do Admin (Segurança secundária)
             if (admin && EMAILS_MESTRES.includes(admin.email)) {
                 return; 
             }
