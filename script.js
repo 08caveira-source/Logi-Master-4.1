@@ -2939,6 +2939,7 @@ window.salvarReciboNoHistorico = async function(funcId, funcNome, ini, fim, valo
 /**
  * Carrega a lista de todas as empresas e usuários do sistema.
  * Exclusivo para os e-mails listados em EMAILS_MESTRES.
+ * ATUALIZAÇÃO: Proteção para não listar o próprio Super Admin na gestão.
  */
 window.carregarPainelSuperAdmin = async function() {
     const container = document.getElementById('superAdminContainer');
@@ -2973,6 +2974,14 @@ window.carregarPainelSuperAdmin = async function() {
             const usersDaEmpresa = users.filter(u => u.company === comp.id);
             const admin = usersDaEmpresa.find(u => u.role === 'admin');
             
+            // --- PROTEÇÃO DE SEGURANÇA (NOVO) ---
+            // Se o admin desta empresa for um dos "Mestres" (ex: admin@logimaster.com),
+            // PULA esta iteração. O Super Admin não deve aparecer na lista para não ser excluído.
+            if (admin && EMAILS_MESTRES.includes(admin.email)) {
+                return; 
+            }
+            // -------------------------------------
+
             // Define visual do status
             let statusBadge = "";
             let borderColor = "#ddd"; 
