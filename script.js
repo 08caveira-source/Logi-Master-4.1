@@ -989,7 +989,8 @@ window.abrirModalDetalhesDia = function(dataString) {
     document.getElementById('modalDayOperations').style.display = 'block';
 };
 // =============================================================================
-// PARTE 3: CADASTROS E INTERFACE
+// ARQUIVO: script.js
+// PARTE 3 DE 5: CADASTROS E INTERFACE (COM PAGINAÇÃO DE OPERAÇÕES)
 // =============================================================================
 
 // -----------------------------------------------------------------------------
@@ -1024,10 +1025,6 @@ document.querySelectorAll('.cadastro-tab-btn').forEach(btn => {
 // -----------------------------------------------------------------------------
 // 1. CADASTRO DE FUNCIONÁRIOS (COM TRATAMENTO DE EMAIL DUPLICADO)
 // -----------------------------------------------------------------------------
-// =============================================================================
-// ATUALIZAÇÃO: CADASTRO COM RECUPERAÇÃO DE PERFIL PERDIDO
-// =============================================================================
-
 document.addEventListener('submit', async function(e) {
     if (e.target.id === 'formFuncionario') {
         e.preventDefault();
@@ -1086,17 +1083,10 @@ document.addEventListener('submit', async function(e) {
                         var confirmar = confirm(`O e-mail "${email}" já possui login no sistema (provavelmente de um cadastro anterior).\n\nDeseja restaurar o acesso deste usuário com os dados informados agora?`);
                         
                         if (confirmar) {
-                            // TENTATIVA DE RECUPERAÇÃO:
-                            // Como não temos o UID do usuário antigo (segurança do firebase),
-                            // Vamos salvar com o ID gerado (timestamp) localmente,
-                            // MAS avisar que o login pode precisar de reset de senha ou backup.
-                            
-                            // Porém, se o usuário estiver no Cache (backup), usamos o ID dele!
                             var usuarioExistenteCache = CACHE_FUNCIONARIOS.find(f => f.email === email);
                             if (usuarioExistenteCache) {
                                 funcionarioObj.id = usuarioExistenteCache.id; // Usa o UID correto
                                 
-                                // Recria o documento na nuvem usando o ID correto do backup/cache
                                 await window.dbRef.setDoc(window.dbRef.doc(window.dbRef.db, "users", funcionarioObj.id), {
                                     uid: funcionarioObj.id, name: nome, email: email, role: funcao,
                                     company: window.USUARIO_ATUAL.company, approved: true, isBlocked: false,
@@ -1684,18 +1674,49 @@ function renderizarTabelaAtividades() {
     } 
 }
 
-// TABELA DE HISTÓRICO DE OPERAÇÕES (BOTÕES: VISUALIZAR, EDITAR, EXCLUIR)
-function renderizarTabelaOperacoes() { 
+// -----------------------------------------------------------------------------
+// TABELA DE HISTÓRICO DE OPERAÇÕES (COM PAGINAÇÃO)
+// -----------------------------------------------------------------------------
+
+// Estado global de paginação para operações
+if (!window.OPS_PAGINATION) {
+    window.OPS_PAGINATION = { page: 1, limit: 10 };
+}
+
+window.renderizarTabelaOperacoes = function() {
+    var tableElement = document.querySelector('#tabelaOperacoes');
     var tbody = document.querySelector('#tabelaOperacoes tbody'); 
-    if(tbody) { 
-        tbody.innerHTML=''; 
-        var lista = CACHE_OPERACOES.slice().sort((a,b)=>new Date(b.data)-new Date(a.data)); 
-        
-        lista.forEach(op => { 
-            if(op.status==='CANCELADA') return; 
+    if(!tbody || !tableElement) return; 
+
+    tbody.innerHTML=''; 
+    
+    // 1. Filtra (Remove canceladas) e Ordena (Data decrescente)
+    var listaCompleta = CACHE_OPERACOES
+        .filter(op => op.status !== 'CANCELADA')
+        .sort((a,b) => new Date(b.data) - new Date(a.data));
+    
+    // 2. Lógica de Paginação
+    var totalItems = listaCompleta.length;
+    var totalPages = Math.ceil(totalItems / window.OPS_PAGINATION.limit);
+    
+    // Proteção de limites
+    if (window.OPS_PAGINATION.page > totalPages) window.OPS_PAGINATION.page = totalPages > 0 ? totalPages : 1;
+    if (window.OPS_PAGINATION.page < 1) window.OPS_PAGINATION.page = 1;
+    
+    var startIndex = (window.OPS_PAGINATION.page - 1) * window.OPS_PAGINATION.limit;
+    var endIndex = startIndex + window.OPS_PAGINATION.limit;
+    
+    // Fatia os dados para a página atual
+    var listaPaginada = listaCompleta.slice(startIndex, endIndex);
+
+    // 3. Renderiza Linhas
+    if (listaPaginada.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:15px; color:#666;">Nenhuma operação encontrada.</td></tr>';
+    } else {
+        listaPaginada.forEach(op => { 
             var m = buscarFuncionarioPorId(op.motoristaId)?.nome || 'Excluído'; 
             
-            // Botões de Ação Atualizados
+            // Botões de Ação
             var btns = window.MODO_APENAS_LEITURA ? '' : `
                 <button class="btn-mini btn-info" onclick="visualizarOperacao('${op.id}')" title="Visualizar"><i class="fas fa-eye"></i></button>
                 <button class="btn-mini edit-btn" onclick="preencherFormularioOperacao('${op.id}')" title="Editar"><i class="fas fa-edit"></i></button>
@@ -1705,9 +1726,63 @@ function renderizarTabelaOperacoes() {
             var tr=document.createElement('tr'); 
             tr.innerHTML=`<td>${formatarDataParaBrasileiro(op.data)}</td><td>${m}<br><small>${op.veiculoPlaca}</small></td><td>${op.status}</td><td>${formatarValorMoeda(op.faturamento)}</td><td>${btns}</td>`; 
             tbody.appendChild(tr); 
-        }); 
-    } 
+        });
+    }
+
+    // 4. Renderiza Controles de Paginação (Footer)
+    renderizarControlesPaginacaoOps(tableElement, totalItems, totalPages);
+};
+
+// Função auxiliar para criar/atualizar os controles de paginação
+function renderizarControlesPaginacaoOps(tableElement, totalItems, totalPages) {
+    // Procura se já existe o container de paginação APÓS a tabela (dentro do card ou wrapper)
+    // O container da tabela geralmente é .table-responsive
+    var wrapper = tableElement.closest('.table-responsive');
+    if (!wrapper) return; // Fallback se não achar wrapper
+
+    var containerId = 'opsPaginationContainer';
+    var container = document.getElementById(containerId);
+
+    // Se não existe, cria logo após o wrapper da tabela
+    if (!container) {
+        container = document.createElement('div');
+        container.id = containerId;
+        container.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-top:1px solid #dee2e6; margin-top:10px; flex-wrap:wrap; gap:10px;';
+        wrapper.parentNode.insertBefore(container, wrapper.nextSibling);
+    }
+
+    // HTML dos controles
+    container.innerHTML = `
+        <div style="font-size:0.85rem; color:#666;">
+            Mostrando <strong>${window.OPS_PAGINATION.limit}</strong> por pág. | Total: <strong>${totalItems}</strong> | Pág. <strong>${window.OPS_PAGINATION.page}</strong> de <strong>${totalPages || 1}</strong>
+        </div>
+        <div style="display:flex; gap:5px; align-items:center;">
+            <select onchange="mudarLimiteOperacoes(this.value)" style="padding:5px; border-radius:4px; border:1px solid #ccc; font-size:0.85rem; width:auto;">
+                <option value="10" ${window.OPS_PAGINATION.limit == 10 ? 'selected' : ''}>10 Linhas</option>
+                <option value="30" ${window.OPS_PAGINATION.limit == 30 ? 'selected' : ''}>30 Linhas</option>
+                <option value="50" ${window.OPS_PAGINATION.limit == 50 ? 'selected' : ''}>50 Linhas</option>
+            </select>
+            <button class="btn-mini btn-secondary" onclick="mudarPaginaOperacoes(-1)" ${window.OPS_PAGINATION.page <= 1 ? 'disabled' : ''} title="Anterior">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <button class="btn-mini btn-secondary" onclick="mudarPaginaOperacoes(1)" ${window.OPS_PAGINATION.page >= totalPages ? 'disabled' : ''} title="Próximo">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+    `;
 }
+
+// Funções globais de controle da paginação
+window.mudarLimiteOperacoes = function(val) {
+    window.OPS_PAGINATION.limit = parseInt(val);
+    window.OPS_PAGINATION.page = 1; // Volta para a primeira página ao mudar o limite
+    renderizarTabelaOperacoes();
+};
+
+window.mudarPaginaOperacoes = function(delta) {
+    window.OPS_PAGINATION.page += delta;
+    renderizarTabelaOperacoes();
+};
 
 // MODAL DE VISUALIZAÇÃO DE OPERAÇÃO (COM CÁLCULO REAL)
 // =============================================================================
@@ -1715,7 +1790,7 @@ function renderizarTabelaOperacoes() {
 // =============================================================================
 
 // =============================================================================
-// ATUALIZAÇÃO: VISUALIZAR OPERAÇÃO COM DADOS DE KM E HORÁRIOS (CHECK-IN)
+// ATUALIZAÇÃO: VISUALIZAR OPERAÇÃO COM DADOS DE KM, HORÁRIOS E MÉDIA GLOBAL
 // =============================================================================
 
 window.visualizarOperacao = function(id) {
@@ -1752,8 +1827,6 @@ window.visualizarOperacao = function(id) {
     }
 
     // Tenta obter hora final (Se existir no check-in ou se foi salvo separadamente)
-    // Nota: O check-in deve salvar 'checkins.fim' ou similar para aparecer aqui. 
-    // Se não houver, tentamos pegar da data da operação se estiver finalizada, ou mantemos '-'
     if (op.checkins && op.checkins.fim && typeof op.checkins.fim === 'string') {
         let d = new Date(op.checkins.fim);
         horaFinal = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -1779,9 +1852,13 @@ window.visualizarOperacao = function(id) {
             }).join('') + '</ul>';
     }
 
-    // --- CÁLCULOS FINANCEIROS ---
+    // --- CÁLCULOS FINANCEIROS E MÉDIA ---
     var custoComb = window.calcularCustoCombustivelOperacao(op);
     var custoTotal = (Number(op.despesas)||0) + custoComb;
+    
+    // Cálculo da Média Global Histórica do Veículo
+    var mediaGlobal = op.veiculoPlaca ? window.calcularMediaGlobalVeiculo(op.veiculoPlaca) : 0;
+    var textoMediaGlobal = mediaGlobal > 0 ? mediaGlobal.toFixed(2) + ' Km/L' : 'N/A';
     
     if (!faltaMot) custoTotal += (Number(op.comissao)||0);
     if(op.ajudantes) {
@@ -1805,16 +1882,28 @@ window.visualizarOperacao = function(id) {
                 <p><strong>SERVIÇO:</strong> ${servico}</p>
             </div>
 
-            <div style="background:#e8f5e9; padding:10px; border-radius:6px; margin-bottom:15px; border:1px solid #c8e6c9;">
+            <div style="background:#e8f5e9; padding:15px; border-radius:6px; margin-bottom:15px; border:1px solid #c8e6c9;">
                 <h4 style="margin:0 0 10px 0; color:#2e7d32; font-size:0.85rem; border-bottom:1px solid #a5d6a7; padding-bottom:5px;">
                     <i class="fas fa-tachometer-alt"></i> DADOS DE RODAGEM (CHECK-IN)
                 </h4>
-                <div style="display:grid; grid-template-columns: repeat(5, 1fr); gap:5px; text-align:center; font-size:0.8rem;">
-                    <div><small style="color:#555;">H. INICIAL</small><br><strong>${horaInicial}</strong></div>
+                
+                <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; text-align:center; font-size:0.85rem; margin-bottom:15px;">
+                    <div style="background:white; padding:5px; border-radius:4px;">
+                        <small style="color:#555;">H. INICIAL</small><br><strong>${horaInicial}</strong>
+                    </div>
+                    <div style="background:white; padding:5px; border-radius:4px;">
+                        <small style="color:#555;">H. FINAL</small><br><strong>${horaFinal}</strong>
+                    </div>
+                    <div style="background:white; padding:5px; border-radius:4px; border:1px solid #81c784;">
+                        <small style="color:#2e7d32; font-weight:bold;">MÉDIA GLOBAL</small><br>
+                        <strong style="color:#1b5e20;">${textoMediaGlobal}</strong>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; text-align:center; font-size:0.85rem;">
                     <div><small style="color:#555;">KM INICIAL</small><br><strong>${op.kmInicial || '-'}</strong></div>
                     <div><small style="color:#555;">KM FINAL</small><br><strong>${op.kmFinal || '-'}</strong></div>
-                    <div><small style="color:#555;">KM RODADO</small><br><strong style="color:var(--primary-color);">${op.kmRodado || '-'}</strong></div>
-                    <div><small style="color:#555;">H. FINAL</small><br><strong>${horaFinal}</strong></div>
+                    <div><small style="color:#555;">KM RODADO</small><br><strong style="color:var(--primary-color); font-size:1rem;">${op.kmRodado || '-'}</strong></div>
                 </div>
             </div>
 
