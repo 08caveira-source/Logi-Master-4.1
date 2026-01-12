@@ -63,7 +63,9 @@ var CACHE_DESPESAS = [];
 var CACHE_ATIVIDADES = [];
 var CACHE_PROFILE_REQUESTS = [];
 var CACHE_RECIBOS = [];
-
+var CACHE_AVISOS = [];
+var PAGINA_ATUAL_AVISOS = 1;
+const ITENS_POR_PAGINA_AVISOS = 2;
 // -----------------------------------------------------------------------------
 // 4. FUNÇÕES DE FORMATAÇÃO (HELPERS)
 // -----------------------------------------------------------------------------
@@ -595,19 +597,18 @@ window.atualizarDashboard = function() {
 // GRÁFICOS (Chart.js)
 // -----------------------------------------------------------------------------
 
-function atualizarGraficoPrincipal(mes, ano) {
-    // [CORREÇÃO]: Removida a trava que impedia a renderização do gráfico para Admins Mestres
-
+window.atualizarGraficoPrincipal = function(mes, ano) {
     var ctx = document.getElementById('mainChart');
     if (!ctx) return; 
 
-    // Recupera Filtros da Tela (se existirem)
+    // Recupera Filtros
     var filtroVeiculo = document.getElementById('filtroVeiculoGrafico') ? document.getElementById('filtroVeiculoGrafico').value : "";
-    var filtroMotorista = document.getElementById('filtroMotoristaGrafico') ? document.getElementById('filtroMotoristaGrafico').value : "";
+    
+    // Filtro por Funcionário (Motorista OU Ajudante)
+    var filtroFuncionario = document.getElementById('filtroMotoristaGrafico') ? document.getElementById('filtroMotoristaGrafico').value : "";
     
     var summaryContainer = document.getElementById('chartVehicleSummaryContainer');
 
-    // Inicializa estatísticas
     var stats = {
         faturamento: 0,
         custos: 0, 
@@ -615,37 +616,58 @@ function atualizarGraficoPrincipal(mes, ano) {
         viagens: 0,
         faltas: 0,
         kmTotal: 0,
-        litrosTotal: 0 // Usado apenas para cálculo de média no resumo visual
+        litrosTotal: 0 
     };
 
-    // Categorias do Gráfico
     var gReceita = 0;
     var gCombustivel = 0;
     var gPessoal = 0; 
     var gManutencao = 0; 
 
-    // 1. Processar Operações para o Gráfico
+    // 1. PROCESSAR OPERAÇÕES (VIAGENS)
+    // Aqui calculamos o lucro direto gerado pelo funcionário
     CACHE_OPERACOES.forEach(op => {
         if (op.status === 'CANCELADA') return;
         
-        // Aplica Filtros de Veículo/Motorista
+        // Filtro de Veículo
         if (filtroVeiculo && op.veiculoPlaca !== filtroVeiculo) return;
-        if (filtroMotorista && op.motoristaId !== filtroMotorista) return;
+
+        // Filtro de Funcionário (Lógica: Participou como Motorista OU Ajudante?)
+        if (filtroFuncionario) {
+            var souMotorista = (String(op.motoristaId) === String(filtroFuncionario));
+            var souAjudante = (op.ajudantes && op.ajudantes.some(a => String(a.id) === String(filtroFuncionario)));
+            
+            // Se não estava na equipe desta viagem, ignora
+            if (!souMotorista && !souAjudante) return;
+        }
 
         var d = new Date(op.data + 'T12:00:00');
         if (d.getMonth() === mes && d.getFullYear() === ano) {
             
-            // Contagem de Faltas (relevante se filtro motorista ativo)
-            if (filtroMotorista && op.checkins && op.checkins.faltaMotorista) {
-                stats.faltas++;
+            // Contagem de Faltas (Específica para o funcionário filtrado)
+            if (filtroFuncionario) {
+                if (String(op.motoristaId) === String(filtroFuncionario) && op.checkins && op.checkins.faltaMotorista) {
+                    stats.faltas++;
+                }
+                else if (op.checkins && op.checkins.faltas && op.checkins.faltas[filtroFuncionario]) {
+                    stats.faltas++;
+                }
+            } else {
+                // Visão Geral
+                if (op.checkins && op.checkins.faltaMotorista) stats.faltas++;
             }
 
+            // --- CÁLCULOS FINANCEIROS DA VIAGEM ---
             var receitaOp = Number(op.faturamento) || 0;
             
-            // Custo Combustível (Logica de Média Real)
+            // 1. Custo Combustível Proporcional
             var combustivelOp = window.calcularCustoCombustivelOperacao(op);
 
+            // 2. Despesas da Viagem (Pedágio, Chapa, etc)
             var despesasOp = Number(op.despesas) || 0; 
+            
+            // 3. Custo com Pessoal (Comissões e Diárias da Equipe inteira)
+            // O lucro da viagem deve descontar o pagamento da equipe para ser real
             var comissaoOp = 0;
 
             if (!op.checkins || !op.checkins.faltaMotorista) {
@@ -661,19 +683,19 @@ function atualizarGraficoPrincipal(mes, ano) {
                 });
             }
 
-            // Acumula totais
+            // Acumuladores
             stats.viagens++;
             stats.faturamento += receitaOp;
             stats.custos += (combustivelOp + despesasOp + comissaoOp);
             stats.kmTotal += (Number(op.kmRodado) || 0);
 
-            // Distribui nas categorias do gráfico
+            // Categorias do Gráfico
             gReceita += receitaOp;
             gCombustivel += combustivelOp;
             gPessoal += comissaoOp; 
-            gManutencao += despesasOp; 
+            gManutencao += despesasOp; // Despesas de viagem entram como manutenção/custos diversos
 
-            // Acumula Litros reais para estatística de média no resumo (não custo)
+            // Litros para média
             var precoReal = Number(op.precoLitro) || 0;
             if (precoReal > 0 && Number(op.combustivel) > 0) {
                 stats.litrosTotal += (Number(op.combustivel) / precoReal);
@@ -681,69 +703,67 @@ function atualizarGraficoPrincipal(mes, ano) {
         }
     });
 
-    // 2. Processar Despesas Gerais para o Gráfico
-    CACHE_DESPESAS.forEach(desp => {
-        // Aplica filtro de veículo (despesas gerais não costumam ter motorista vinculado, mas têm veículo)
-        if (filtroVeiculo && desp.veiculoPlaca && desp.veiculoPlaca !== filtroVeiculo) return;
-        
-        var valorComputado = 0;
-        var valorTotal = Number(desp.valor) || 0;
-        var dataDesp = new Date(desp.data + 'T12:00:00');
-
-        // Lógica de parcelamento para o gráfico
-        if (desp.modoPagamento === 'parcelado' && desp.parcelasTotal > 1) {
-            var qtd = Number(desp.parcelasTotal);
-            var valParc = valorTotal / qtd;
-            var intervalo = Number(desp.intervaloDias) || 30;
+    // 2. PROCESSAR DESPESAS GERAIS (IGNORAR SE FILTRAR POR FUNCIONÁRIO)
+    // Se selecionou um funcionário, queremos ver a produtividade operacional dele.
+    // Não faz sentido debitar o aluguel do escritório ou manutenção geral da conta dele.
+    if (!filtroFuncionario) {
+        CACHE_DESPESAS.forEach(desp => {
+            if (filtroVeiculo && desp.veiculoPlaca && desp.veiculoPlaca !== filtroVeiculo) return;
             
-            for (var i = 0; i < qtd; i++) {
-                var dt = new Date(dataDesp);
-                dt.setDate(dt.getDate() + (i * intervalo));
-                if (dt.getMonth() === mes && dt.getFullYear() === ano) {
-                    valorComputado += valParc;
+            var valorComputado = 0;
+            var valorTotal = Number(desp.valor) || 0;
+            var dataDesp = new Date(desp.data + 'T12:00:00');
+
+            if (desp.modoPagamento === 'parcelado' && desp.parcelasTotal > 1) {
+                var qtd = Number(desp.parcelasTotal);
+                var valParc = valorTotal / qtd;
+                var intervalo = Number(desp.intervaloDias) || 30;
+                
+                for (var i = 0; i < qtd; i++) {
+                    var dt = new Date(dataDesp);
+                    dt.setDate(dt.getDate() + (i * intervalo));
+                    if (dt.getMonth() === mes && dt.getFullYear() === ano) {
+                        valorComputado += valParc;
+                    }
+                }
+            } else {
+                if (dataDesp.getMonth() === mes && dataDesp.getFullYear() === ano) {
+                    valorComputado = valorTotal;
                 }
             }
-        } else {
-            if (dataDesp.getMonth() === mes && dataDesp.getFullYear() === ano) {
-                valorComputado = valorTotal;
-            }
-        }
 
-        if (valorComputado > 0) {
-            stats.custos += valorComputado;
-
-            // Categorização simples por palavra-chave na descrição
-            var desc = removerAcentos(desp.descricao || "");
-            
-            if (desc.includes("manutencao") || desc.includes("oleo") || desc.includes("pneu") || desc.includes("peca")) {
-                gManutencao += valorComputado;
-            } 
-            else if (desc.includes("comida") || desc.includes("hotel") || desc.includes("outros") || desc.includes("alimentacao")) {
-                gPessoal += valorComputado;
-            } 
-            else {
-                // Se não identificar, joga em manutenção/geral
-                gManutencao += valorComputado; 
+            if (valorComputado > 0) {
+                stats.custos += valorComputado;
+                var desc = removerAcentos(desp.descricao || "");
+                
+                if (desc.includes("manutencao") || desc.includes("oleo") || desc.includes("pneu")) {
+                    gManutencao += valorComputado;
+                } 
+                else if (desc.includes("comida") || desc.includes("hotel") || desc.includes("alimentacao")) {
+                    gPessoal += valorComputado;
+                } 
+                else {
+                    gManutencao += valorComputado; 
+                }
             }
-        }
-    });
+        });
+    }
 
     stats.lucro = stats.faturamento - stats.custos;
 
-    // Renderiza o Resumo em Texto Acima do Gráfico
+    // Renderiza o Resumo (Cards acima do gráfico)
     if (summaryContainer) {
         summaryContainer.innerHTML = ''; 
         
-        // Só mostra resumo se houver filtro ativo
-        if (filtroVeiculo || filtroMotorista) {
-            var tituloBox = filtroVeiculo ? "VEÍCULO" : "MOTORISTA";
-            var valorTitulo = filtroVeiculo || (CACHE_FUNCIONARIOS.find(f => f.id == filtroMotorista)?.nome || "Desconhecido");
+        if (filtroVeiculo || filtroFuncionario) {
+            var tituloBox = filtroVeiculo ? "VEÍCULO" : "FUNCIONÁRIO";
+            var valorTitulo = filtroVeiculo || (CACHE_FUNCIONARIOS.find(f => f.id == filtroFuncionario)?.nome || "Desconhecido");
             
-            var boxExtraLabel = filtroMotorista ? "FALTAS" : "MÉDIA REAL";
+            var boxExtraLabel = filtroFuncionario ? "FALTAS" : "MÉDIA REAL";
             var boxExtraValue = "";
             var boxExtraColor = "#333";
 
-            if (filtroMotorista) {
+            if (filtroFuncionario) {
                 boxExtraValue = stats.faltas + " Faltas";
                 boxExtraColor = stats.faltas > 0 ? "var(--danger-color)" : "var(--success-color)";
             } else {
@@ -771,7 +791,7 @@ function atualizarGraficoPrincipal(mes, ano) {
                         <span style="color:${boxExtraColor}">${boxExtraValue}</span>
                     </div>
                     <div class="veh-stat-box">
-                        <small>LUCRO EST.</small>
+                        <small>LUCRO GERADO</small>
                         <span style="color:${stats.lucro >= 0 ? 'var(--success-color)' : 'var(--danger-color)'}">${formatarValorMoeda(stats.lucro)}</span>
                     </div>
                 </div>
@@ -779,7 +799,6 @@ function atualizarGraficoPrincipal(mes, ano) {
         }
     }
 
-    // Destrói gráfico antigo se existir e cria um novo
     if (window.chartInstance) {
         window.chartInstance.destroy();
     }
@@ -789,16 +808,16 @@ function atualizarGraficoPrincipal(mes, ano) {
     window.chartInstance = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ['FATURAMENTO', 'COMBUSTÍVEL (REAL)', 'PESSOAL', 'MANUTENÇÃO', 'LUCRO'],
+            labels: ['FATURAMENTO', 'COMBUSTÍVEL', 'PESSOAL', 'MANUTENÇÃO', 'LUCRO'],
             datasets: [{
                 label: 'Valores do Mês',
                 data: [gReceita, gCombustivel, gPessoal, gManutencao, lucroFinal],
                 backgroundColor: [
-                    '#28a745', // Verde (Fat)
-                    '#dc3545', // Vermelho (Combustível)
-                    '#ffc107', // Amarelo (Pessoal)
-                    '#17a2b8', // Azul (Manutenção)
-                    (lucroFinal >= 0 ? '#20c997' : '#e83e8c') // Verde Água (Lucro) ou Rosa (Prejuízo)
+                    '#28a745', // Receita
+                    '#dc3545', // Combustível
+                    '#ffc107', // Pessoal
+                    '#17a2b8', // Manutenção/Despesas Viagem
+                    (lucroFinal >= 0 ? '#20c997' : '#e83e8c') // Lucro
                 ]
             }]
         },
@@ -814,7 +833,7 @@ function atualizarGraficoPrincipal(mes, ano) {
             }
         }
     });
-}
+};
 
 // -----------------------------------------------------------------------------
 // 6. LÓGICA DO CALENDÁRIO OPERACIONAL
@@ -1397,6 +1416,7 @@ window.limparOutroFiltro = function(tipo) {
 function preencherTodosSelects() {
     console.log("Atualizando tabelas e selects...");
     
+    // Helper interno para preencher selects padrões
     const fill = (id, dados, valKey, textKey, defText) => { 
         var el = document.getElementById(id); 
         if (!el) return; 
@@ -1405,7 +1425,7 @@ function preencherTodosSelects() {
         if(atual) el.value = atual; 
     };
     
-    // Selects
+    // --- PREENCHIMENTO DOS SELECTS PADRÕES ---
     fill('selectMotoristaOperacao', CACHE_FUNCIONARIOS.filter(f => f.funcao === 'motorista'), 'id', 'nome', 'SELECIONE MOTORISTA...');
     fill('selectVeiculoOperacao', CACHE_VEICULOS, 'placa', 'placa', 'SELECIONE VEÍCULO...');
     fill('selectContratanteOperacao', CACHE_CONTRATANTES, 'cnpj', 'razaoSocial', 'SELECIONE CLIENTE...');
@@ -1417,13 +1437,34 @@ function preencherTodosSelects() {
     fill('selectContratanteRelatorio', CACHE_CONTRATANTES, 'cnpj', 'razaoSocial', 'TODOS OS CLIENTES');
     fill('selectAtividadeRelatorio', CACHE_ATIVIDADES, 'id', 'nome', 'TODAS AS ATIVIDADES');
     fill('filtroVeiculoGrafico', CACHE_VEICULOS, 'placa', 'placa', 'TODOS OS VEÍCULOS');
-    fill('filtroMotoristaGrafico', CACHE_FUNCIONARIOS, 'id', 'nome', 'TODOS OS MOTORISTAS');
+    fill('filtroMotoristaGrafico', CACHE_FUNCIONARIOS, 'id', 'nome', 'TODOS OS FUNCIONÁRIOS');
     fill('selectMotoristaRecibo', CACHE_FUNCIONARIOS, 'id', 'nome', 'SELECIONE O FUNCIONÁRIO...');
     fill('selectVeiculoRecibo', CACHE_VEICULOS, 'placa', 'placa', 'TODOS');
     fill('selectContratanteRecibo', CACHE_CONTRATANTES, 'cnpj', 'razaoSocial', 'TODOS');
     fill('selectVeiculoDespesaGeral', CACHE_VEICULOS, 'placa', 'placa', 'SEM VÍNCULO (GERAL)');
 
-    // Tabelas
+    // --- CORREÇÃO: SELECT DE DESTINATÁRIOS DE AVISOS ---
+    // Este precisa ser manual para garantir que o valor do "TODOS" seja "TODOS" e não vazio
+    var selAvisos = document.getElementById('selectDestinatarioAviso');
+    if(selAvisos) {
+        var atualAviso = selAvisos.value;
+        selAvisos.innerHTML = '<option value="TODOS">TODOS OS FUNCIONÁRIOS</option>';
+        
+        if (CACHE_FUNCIONARIOS) {
+            CACHE_FUNCIONARIOS.forEach(f => {
+                // Lista apenas quem não está inativo/excluído (se houver essa flag)
+                if (f.ativo !== false) {
+                     var opt = document.createElement('option');
+                     opt.value = f.id;
+                     opt.textContent = f.nome;
+                     selAvisos.appendChild(opt);
+                }
+            });
+        }
+        if(atualAviso) selAvisos.value = atualAviso;
+    }
+
+    // --- RENDERIZAÇÃO DAS TABELAS ---
     renderizarTabelaFuncionarios();
     renderizarTabelaVeiculos();
     renderizarTabelaContratantes();
@@ -1431,12 +1472,18 @@ function preencherTodosSelects() {
     renderizarTabelaOperacoes();
     renderizarInformacoesEmpresa();
     
+    // Verifica se as funções existem antes de chamar (segurança)
     if(typeof renderizarTabelaDespesasGerais === 'function') renderizarTabelaDespesasGerais();
     if(typeof renderizarTabelaMonitoramento === 'function') { 
         renderizarTabelaMonitoramento(); 
         renderizarTabelaFaltas(); 
     }
     if(typeof renderizarPainelEquipe === 'function') renderizarPainelEquipe();
+    
+    // Se for admin, atualiza o histórico de avisos também
+    if(typeof renderizarHistoricoAvisosAdmin === 'function' && window.USUARIO_ATUAL && window.USUARIO_ATUAL.role === 'admin') {
+        renderizarHistoricoAvisosAdmin(1);
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -3418,6 +3465,47 @@ window.initSystemByRole = async function(user) {
     console.log(">>> INIT SISTEMA:", user.role);
     window.USUARIO_ATUAL = user;
 
+// --- CORREÇÃO: CARREGAMENTO DE AVISOS COM AS REFERÊNCIAS CORRETAS ---
+    if (window.dbRef && window.USUARIO_ATUAL && window.USUARIO_ATUAL.company) {
+        // 1. Desestruturar as funções necessárias do window.dbRef
+        const { db, doc, onSnapshot } = window.dbRef;
+        
+        // 2. Definir o caminho base da empresa
+        const pathBase = `companies/${window.USUARIO_ATUAL.company}/data`;
+
+        // 3. Listener (Ouvinte) dos Avisos
+        onSnapshot(doc(db, pathBase, 'db_avisos'), (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                CACHE_AVISOS = data.items || [];
+                
+                // Ordenar por data (mais recente primeiro)
+                CACHE_AVISOS.sort((a, b) => new Date(b.data) - new Date(a.data));
+                
+                // Atualiza a interface
+                // Usa window.USUARIO_ATUAL para garantir que pegamos o usuário correto
+                if(window.USUARIO_ATUAL.role === 'admin' || window.USUARIO_ATUAL.role === 'super_admin') {
+                    if(typeof renderizarHistoricoAvisosAdmin === 'function') {
+                       renderizarHistoricoAvisosAdmin(PAGINA_ATUAL_AVISOS);
+                    }
+                    if(typeof carregarOpcoesDestinatariosAviso === 'function') {
+                       carregarOpcoesDestinatariosAviso();
+                } 
+            }    
+                } else if (window.USUARIO_ATUAL.role === 'employee') {
+                    console.log("SOU FUNCIONÁRIO E RECEBI ATUALIZAÇÃO!");
+    if (typeof verificarAvisosPendentesFuncionario === 'function') {
+        verificarAvisosPendentesFuncionario();
+    }
+    
+    if (typeof renderizarMeusAvisosFuncionario === 'function') {
+        renderizarMeusAvisosFuncionario();
+    }
+} 
+
+}); // Fecha o onSnapshot
+    }
+
     // --- NOVO: MONITORAMENTO DE BLOQUEIO EM TEMPO REAL ---
     if (window.dbRef && user.uid) {
         // Cria um listener no documento do usuário
@@ -3432,6 +3520,41 @@ window.initSystemByRole = async function(user) {
             } else {
                 // Se o usuário foi deletado
                 window.logoutSystem();
+            }
+        });
+    }
+    // -----------------------------------------------------
+
+    // -----------------------------------------------------
+    // CORREÇÃO: LISTENER DE AVISOS (MENSAGENS)
+    // -----------------------------------------------------
+    if (window.dbRef && window.USUARIO_ATUAL.company) {
+        const pathBase = `companies/${window.USUARIO_ATUAL.company}/data`;
+        
+        window.dbRef.onSnapshot(window.dbRef.doc(window.dbRef.db, pathBase, 'db_avisos'), (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                window.CACHE_AVISOS = data.items || [];
+
+                // Ordena por data (mais recente primeiro)
+                window.CACHE_AVISOS.sort((a, b) => new Date(b.data) - new Date(a.data));
+
+                // Se for FUNCIONÁRIO, atualiza o mural dele
+                if (window.USUARIO_ATUAL.role !== 'admin' && window.USUARIO_ATUAL.role !== 'admin_master') {
+                    if (typeof renderizarMeusAvisosFuncionario === 'function') {
+                        renderizarMeusAvisosFuncionario();
+                    }
+                    if (typeof verificarAvisosPendentesFuncionario === 'function') {
+                        verificarAvisosPendentesFuncionario();
+                    }
+                }
+                
+                // Se for ADMIN, atualiza o histórico (se estiver na tela)
+                if (window.USUARIO_ATUAL.role === 'admin' && typeof renderizarHistoricoAvisosAdmin === 'function') {
+                    renderizarHistoricoAvisosAdmin(window.PAGINA_ATUAL_AVISOS || 1);
+                }
+            } else {
+                window.CACHE_AVISOS = [];
             }
         });
     }
@@ -5002,4 +5125,385 @@ window.zerarSistemaCompleto = function() {
             }
         }
     );
+};
+// =============================================================================
+// MÓDULO DE GESTÃO DE AVISOS E MENSAGENS (CORRIGIDO)
+// =============================================================================
+
+// --- ADMIN: PREPARAR SELECT DE DESTINATÁRIOS ---
+window.carregarOpcoesDestinatariosAviso = function() {
+    const select = document.getElementById('selectDestinatarioAviso');
+    if(!select) return;
+    
+    // Salva a seleção atual se houver
+    const valorAtual = select.value;
+
+    select.innerHTML = '<option value="TODOS">TODOS OS FUNCIONÁRIOS</option>';
+    
+    if(CACHE_FUNCIONARIOS) {
+        CACHE_FUNCIONARIOS.forEach(f => {
+            if(f.ativo !== false) {
+                let opt = document.createElement('option');
+                opt.value = f.id;
+                opt.textContent = f.nome;
+                select.appendChild(opt);
+            }
+        });
+    }
+
+    // Tenta restaurar a seleção
+    if(valorAtual) select.value = valorAtual;
+};
+
+// --- ADMIN: ENVIAR NOVO AVISO (LISTENER) ---
+// Adicionamos verificação para não duplicar listener se a função for recarregada
+var formAviso = document.getElementById('formEnviarAviso');
+if(formAviso) {
+    // Removemos listener antigo clonando o elemento (truque simples para limpar eventos)
+    var novoForm = formAviso.cloneNode(true);
+    formAviso.parentNode.replaceChild(novoForm, formAviso);
+    
+    novoForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const texto = document.getElementById('avisoTexto').value.trim();
+        const destinatario = document.getElementById('selectDestinatarioAviso').value;
+        
+        if(!texto) return alert("Digite uma mensagem.");
+
+        const btn = this.querySelector('button[type="submit"]');
+        const txtOriginal = btn.innerHTML;
+        btn.disabled = true; btn.innerHTML = 'ENVIANDO...';
+
+        try {
+            const novoAviso = {
+                id: 'aviso_' + Date.now(),
+                data: new Date().toISOString(),
+                mensagem: texto,
+                destinatarioId: destinatario,
+                autor: window.USUARIO_ATUAL.email,
+                leituras: {} 
+            };
+
+            // Adiciona no topo da lista local
+            let novaLista = [novoAviso, ...CACHE_AVISOS];
+            
+            // --- CORREÇÃO AQUI: Usando salvarDadosGenerico ---
+            await salvarDadosGenerico('db_avisos', novaLista, (d) => CACHE_AVISOS = d);
+
+            alert("Aviso enviado com sucesso!");
+            document.getElementById('avisoTexto').value = ''; // Limpa só o texto
+            renderizarHistoricoAvisosAdmin(1); 
+
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao enviar aviso: " + error.message);
+        } finally {
+            btn.disabled = false; btn.innerHTML = txtOriginal;
+        }
+    });
+}
+
+// =============================================================================
+// FUNÇÃO DE RENDERIZAÇÃO CORRIGIDA (PAGINAÇÃO + BOTÕES ALINHADOS)
+// =============================================================================
+window.renderizarHistoricoAvisosAdmin = function(pagina) {
+    if (!pagina || pagina < 1) pagina = 1;
+    const ITENS_POR_PAGINA = 2; // Mantém fixo em 2 avisos
+
+    // --- 1. LOCALIZAÇÃO ROBUSTA DA TABELA ---
+    // Tenta achar a tabela pelo ID novo ou antigo
+    let table = document.getElementById('tabelaHistoricoAvisosAdmin');
+    if (!table) table = document.getElementById('tabelaHistoricoAvisos');
+    
+    if (!table) return console.error("ERRO: Tabela de avisos não encontrada.");
+    
+    let tbody = table.querySelector('tbody');
+    if (!tbody) return;
+
+    // --- 2. LOCALIZAÇÃO OU CRIAÇÃO DA PAGINAÇÃO (AUTO-FIX) ---
+    // Tenta achar o container. Se não achar, CRIA UM NOVO logo após a tabela.
+    let containerPag = document.getElementById('paginacaoAvisosContainer');
+    if (!containerPag) containerPag = document.getElementById('paginacaoAvisos');
+    
+    if (!containerPag) {
+        console.warn("Container de paginação não encontrado. Criando um automaticamente...");
+        containerPag = document.createElement('div');
+        containerPag.id = 'paginacaoAvisosContainer';
+        // Insere logo após a tabela (ou seu container responsivo se houver)
+        if (table.parentElement.classList.contains('table-responsive')) {
+            table.parentElement.after(containerPag);
+        } else {
+            table.after(containerPag);
+        }
+    }
+
+    // Limpa o conteúdo e força visibilidade
+    tbody.innerHTML = '';
+    containerPag.innerHTML = '';
+    containerPag.style.display = 'flex'; // Força aparecer
+    containerPag.style.justifyContent = 'flex-end';
+    containerPag.style.alignItems = 'center';
+    containerPag.style.gap = '10px';
+    containerPag.style.marginTop = '10px';
+    containerPag.style.padding = '5px';
+
+    // --- 3. DADOS E CÁLCULOS ---
+    const lista = window.CACHE_AVISOS || [];
+    const totalItens = lista.length;
+    const totalPaginas = Math.ceil(totalItens / ITENS_POR_PAGINA);
+    
+    if (pagina > totalPaginas && totalPaginas > 0) pagina = totalPaginas;
+
+    const inicio = (pagina - 1) * ITENS_POR_PAGINA;
+    const fim = inicio + ITENS_POR_PAGINA;
+    const itensVisiveis = lista.slice(inicio, fim);
+
+    // --- 4. RENDERIZA LINHAS ---
+    if (itensVisiveis.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#666;">Nenhum aviso enviado.</td></tr>';
+        containerPag.style.display = 'none'; // Esconde paginação se não tiver itens
+    } else {
+        itensVisiveis.forEach(aviso => {
+            const tr = document.createElement('tr');
+            
+            let dataF = aviso.data;
+            if(typeof formatarDataParaBrasileiro === 'function') dataF = formatarDataParaBrasileiro(aviso.data);
+
+            const botoesHtml = `
+                <div style="display: flex; gap: 5px; justify-content: center; align-items: center;">
+                    <button class="btn-mini btn-info" 
+                        style="width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px;"
+                        onclick="abrirModalLeituras('${aviso.id}')" 
+                        title="Ver Leituras">
+                        <i class="fas fa-eye" style="font-size: 12px;"></i>
+                    </button>
+                    <button class="btn-mini btn-danger" 
+                        style="width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px;"
+                        onclick="excluirAviso('${aviso.id}')" 
+                        title="Excluir">
+                        <i class="fas fa-trash" style="font-size: 12px;"></i>
+                    </button>
+                </div>`;
+
+            let contagem = (aviso.lidoPor && Array.isArray(aviso.lidoPor)) ? aviso.lidoPor.length : 0;
+            let destino = aviso.destinatario === 'todos' ? 'TODOS' : (aviso.destinatarioNome || 'Individual');
+
+            tr.innerHTML = `
+                <td style="vertical-align: middle; font-size:0.9rem;">${dataF}</td>
+                <td style="vertical-align: middle; font-size:0.9rem;">${aviso.mensagem || '-'}</td>
+                <td style="vertical-align: middle; font-size:0.85rem;">${destino}</td>
+                <td style="vertical-align: middle; text-align:center; font-size:0.85rem;">${contagem} leituras</td>
+                <td style="vertical-align: middle;">${botoesHtml}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // --- 5. RENDERIZA OS BOTÕES DE PAGINAÇÃO ---
+    if (totalPaginas > 1) {
+        containerPag.innerHTML = `
+            <button class="btn-mini btn-secondary" 
+                ${pagina === 1 ? 'disabled' : ''} 
+                onclick="renderizarHistoricoAvisosAdmin(${pagina - 1})"
+                style="padding: 5px 10px; cursor: pointer;">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            
+            <span style="font-size: 0.9rem; font-weight: bold; color: #555;">
+                Pág ${pagina} de ${totalPaginas}
+            </span>
+            
+            <button class="btn-mini btn-secondary" 
+                ${pagina === totalPaginas ? 'disabled' : ''} 
+                onclick="renderizarHistoricoAvisosAdmin(${pagina + 1})"
+                style="padding: 5px 10px; cursor: pointer;">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        `;
+    } else {
+        containerPag.style.display = 'none';
+    }
+
+    window.PAGINA_ATUAL_AVISOS = pagina;
+};
+// --- ATUALIZAÇÃO: ADMIN - EXCLUIR AVISO ---
+window.excluirAviso = async function(id) {
+    if(!confirm("Tem certeza que deseja excluir esta mensagem?\nEla desaparecerá imediatamente do painel dos funcionários.")) return;
+    
+    // Filtra removendo o item selecionado
+    var novaLista = CACHE_AVISOS.filter(a => a.id !== id);
+    
+    // Salva no Firebase (Isso aciona o onSnapshot dos funcionários, removendo a msg da tela deles)
+    await salvarDadosGenerico('db_avisos', novaLista, (d) => CACHE_AVISOS = d);
+    
+    renderizarHistoricoAvisosAdmin(PAGINA_ATUAL_AVISOS);
+};
+
+// --- ADMIN: VER QUEM LEU (MODAL) ---
+window.verLeiturasAviso = function(avisoId) {
+    const aviso = CACHE_AVISOS.find(a => a.id === avisoId);
+    if(!aviso) return;
+
+    const listaDiv = document.getElementById('listaLeiturasAviso');
+    listaDiv.innerHTML = '';
+
+    if(!aviso.leituras || Object.keys(aviso.leituras).length === 0) {
+        listaDiv.innerHTML = '<p style="text-align:center; color:#777;">Ninguém visualizou ainda.</p>';
+    } else {
+        const ul = document.createElement('ul');
+        ul.style.listStyle = 'none';
+        ul.style.padding = '0';
+
+        Object.entries(aviso.leituras).forEach(([funcId, dataLeitura]) => {
+            const f = buscarFuncionarioPorId(funcId);
+            const nome = f ? f.nome : 'ID: ' + funcId;
+            const dataF = new Date(dataLeitura).toLocaleString('pt-BR');
+            
+            const li = document.createElement('li');
+            li.style.borderBottom = '1px solid #eee';
+            li.style.padding = '8px 0';
+            li.innerHTML = `<strong>${nome}</strong> - <small>${dataF}</small>`;
+            ul.appendChild(li);
+        });
+        listaDiv.appendChild(ul);
+    }
+    document.getElementById('modalLeiturasAviso').style.display = 'block';
+};
+
+// --- FUNCIONÁRIO: VERIFICAR E CONFIRMAR ---
+window.verificarAvisosPendentesFuncionario = function() {
+    if(!window.USUARIO_ATUAL) return;
+    const meuId = window.USUARIO_ATUAL.uid;
+    
+    const avisosPendentes = CACHE_AVISOS.filter(aviso => {
+        const ehPraMim = (aviso.destinatarioId === 'TODOS' || aviso.destinatarioId === meuId);
+        const jaLi = (aviso.leituras && aviso.leituras[meuId]);
+        return ehPraMim && !jaLi;
+    });
+
+    const badge = document.getElementById('badgeAvisosFunc');
+    if(avisosPendentes.length > 0) {
+        abrirModalLeituraAviso(avisosPendentes[0]); // Abre o primeiro pendente
+        if(badge) { badge.textContent = avisosPendentes.length; badge.style.display = 'inline-block'; }
+    } else {
+        if(badge) badge.style.display = 'none';
+    }
+};
+
+window.abrirModalLeituraAviso = function(aviso) {
+    document.getElementById('modalAvisoContent').textContent = aviso.mensagem;
+    document.getElementById('modalAvisoData').textContent = formatarDataParaBrasileiro(aviso.data);
+    
+    // Configura o botão para confirmar este ID
+    const btn = document.getElementById('btnConfirmarLeituraAviso');
+    // Remove listeners antigos
+    var novoBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(novoBtn, btn);
+    
+    novoBtn.onclick = function() { confirmarLeituraAvisoAction(aviso.id); };
+
+    document.getElementById('modalAvisoDisplay').style.display = 'block';
+};
+
+window.confirmarLeituraAvisoAction = async function(avisoId) {
+    const meuId = window.USUARIO_ATUAL.uid;
+    
+    // Clona a lista atual para modificar
+    let novaLista = JSON.parse(JSON.stringify(CACHE_AVISOS));
+    const avisoIndex = novaLista.findIndex(a => a.id === avisoId);
+    
+    if(avisoIndex !== -1) {
+        if(!novaLista[avisoIndex].leituras) novaLista[avisoIndex].leituras = {};
+        novaLista[avisoIndex].leituras[meuId] = new Date().toISOString();
+
+        // --- CORREÇÃO AQUI TAMBÉM ---
+        await salvarDadosGenerico('db_avisos', novaLista, (d) => CACHE_AVISOS = d);
+        
+        document.getElementById('modalAvisoDisplay').style.display = 'none';
+        
+        // Verifica se tem mais
+        verificarAvisosPendentesFuncionario();
+        renderizarMeusAvisosFuncionario();
+    }
+};
+
+window.renderizarMeusAvisosFuncionario = function() {
+    const tbody = document.querySelector('#tabelaMeusAvisos tbody');
+    if(!tbody) return;
+    tbody.innerHTML = '';
+    
+    if(!window.USUARIO_ATUAL) return;
+    const meuId = window.USUARIO_ATUAL.uid;
+    
+    const meusAvisos = CACHE_AVISOS.filter(aviso => aviso.destinatarioId === 'TODOS' || aviso.destinatarioId === meuId);
+
+    if(meusAvisos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Nenhum aviso.</td></tr>';
+        return;
+    }
+
+    meusAvisos.forEach(aviso => {
+        const jaLi = (aviso.leituras && aviso.leituras[meuId]);
+        const status = jaLi 
+            ? '<span class="status-pill pill-success">LIDO</span>' 
+            : '<span class="status-pill pill-blocked" style="cursor:pointer" onclick="abrirModalLeituraAviso(\''+aviso.id+'\')">LER</span>';
+        
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${formatarDataParaBrasileiro(aviso.data)}</td><td>${aviso.mensagem}</td><td>${status}</td>`;
+        tbody.appendChild(tr);
+    });
+};
+// =============================================================================
+// FUNÇÃO NECESSÁRIA PARA O BOTÃO 'VISUALIZAR' FUNCIONAR
+// =============================================================================
+window.abrirModalLeituras = function(avisoId) {
+    // Busca o aviso na memória
+    const aviso = window.CACHE_AVISOS.find(a => String(a.id) === String(avisoId));
+    
+    if (!aviso) return alert("Erro: Aviso não encontrado na memória.");
+
+    // Monta a lista de nomes
+    let htmlContent = '';
+    
+    if (!aviso.lidoPor || aviso.lidoPor.length === 0) {
+        htmlContent = '<div style="padding:15px; text-align:center; color:#666;">Ninguém leu este aviso ainda.</div>';
+    } else {
+        htmlContent = '<ul style="list-style:none; padding:0; margin:0;">';
+        aviso.lidoPor.forEach(uid => {
+            // Tenta achar o nome do funcionário pelo ID
+            let nome = "Usuário Desconhecido";
+            if (window.CACHE_FUNCIONARIOS) {
+                const f = window.CACHE_FUNCIONARIOS.find(func => String(func.id) === String(uid));
+                if (f) nome = f.nome;
+            }
+            htmlContent += `
+                <li style="padding:10px; border-bottom:1px solid #eee; display:flex; align-items:center;">
+                    <i class="fas fa-check-double" style="color:var(--success-color); margin-right:10px;"></i>
+                    <span style="font-weight:bold; color:#333;">${nome}</span>
+                </li>`;
+        });
+        htmlContent += '</ul>';
+    }
+
+    // Abre o Modal Genérico (viewItemModal)
+    const modal = document.getElementById('viewItemModal');
+    const body = document.getElementById('viewItemBody');
+    const title = document.getElementById('viewItemTitle');
+
+    if (modal && body) {
+        if(title) title.textContent = "RELATÓRIO DE LEITURA";
+        
+        body.innerHTML = `
+            <div style="background:#f0f2f5; padding:10px; border-radius:5px; margin-bottom:10px; font-size:0.9rem;">
+                <strong>Mensagem:</strong> ${aviso.mensagem || aviso.titulo}
+            </div>
+            <div style="max-height:300px; overflow-y:auto; border:1px solid #ddd; border-radius:4px; background:white;">
+                ${htmlContent}
+            </div>
+        `;
+        modal.style.display = 'flex';
+    } else {
+        alert("Erro: O modal de visualização (viewItemModal) não existe no seu HTML.");
+    }
 };
